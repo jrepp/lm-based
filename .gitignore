@@ -20,6 +20,7 @@ __pycache__/
 # Tool caches
 .uv-cache/
 .cache/
+.claude/
 
 # Virtual environments
 .venv/
