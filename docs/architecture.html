@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Local LLM Routing Architecture</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: #0a0a0f;
+    color: #e0e0e8;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px;
+  }
+  h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+    color: #fff;
+  }
+  .subtitle {
+    font-size: 0.85rem;
+    color: #888;
+    margin-bottom: 24px;
+  }
+  #chart {
+    width: 100%;
+    max-width: 960px;
+  }
+  svg {
+    width: 100%;
+    height: auto;
+  }
+  .layer-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    fill: #666;
+  }
+  .layer-bg {
+    fill: none;
+    stroke: #1e1e2e;
+    stroke-width: 1;
+    rx: 8;
+  }
+  .layer-tag {
+    font-size: 9px;
+    fill: #555;
+    font-weight: 500;
+  }
+  .node rect {
+    rx: 6;
+    stroke-width: 1.5;
+    transition: filter 0.15s;
+  }
+  .node:hover rect {
+    filter: brightness(1.3);
+  }
+  .node text {
+    font-size: 12px;
+    font-weight: 600;
+    fill: #fff;
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
+  }
+  .node .tag {
+    font-size: 9px;
+    font-weight: 400;
+    fill: #aaa;
+  }
+  .link {
+    fill: none;
+    stroke: #2a2a3a;
+    stroke-width: 1.5;
+    stroke-dasharray: 4 3;
+  }
+  .link-flow {
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    opacity: 0.7;
+  }
+  .legend {
+    margin-top: 24px;
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #888;
+  }
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+  }
+  @media (prefers-color-scheme: light) {
+    body { background: #f8f8fb; color: #333; }
+    h1 { color: #111; }
+    .subtitle { color: #888; }
+    .layer-label { fill: #aaa; }
+    .layer-bg { stroke: #e0e0e8; }
+    .layer-tag { fill: #aaa; }
+    .node text { fill: #fff; }
+    .node .tag { fill: #666; }
+    .link { stroke: #d0d0d8; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Local LLM Routing Architecture</h1>
+<p class="subtitle">Tailscale / Telegram &rarr; Agents &rarr; ClawRouter &rarr; Local + Cloud Models</p>
+<div id="chart"></div>
+<div class="legend" id="legend"></div>
+
+<script>
+const LAYER_COLORS = {
+  ingress:    { bg: '#1a1525', stroke: '#7c3aed', fill: '#7c3aed' },
+  agent:      { bg: '#1a1520', stroke: '#ec4899', fill: '#ec4899' },
+  router:     { bg: '#151a25', stroke: '#3b82f6', fill: '#3b82f6' },
+  local:      { bg: '#15201a', stroke: '#10b981', fill: '#10b981' },
+  cloud:      { bg: '#201a15', stroke: '#f59e0b', fill: '#f59e0b' },
+};
+
+const layers = [
+  { id: 'ingress', label: 'L0  INGRESS',  tag: 'Entry Points' },
+  { id: 'agent',   label: 'L1  AGENT',    tag: 'Orchestration' },
+  { id: 'router',  label: 'L2  ROUTER',   tag: 'Smart Routing' },
+  { id: 'local',   label: 'L3  LOCAL',    tag: 'GGUF / llama-server' },
+  { id: 'cloud',   label: 'L4  CLOUD',    tag: 'x402 / USDC' },
+];
+
+const nodes = [
+  { id: 'tailscale',  layer: 'ingress', label: 'Tailscale',  tag: 'VPN' },
+  { id: 'telegram',   layer: 'ingress', label: 'Telegram',   tag: 'Bot' },
+  { id: 'openwebui',  layer: 'ingress', label: 'open-webui', tag: 'Chat UX' },
+  { id: 'claw',       layer: 'agent',   label: 'Claw',       tag: 'Agent' },
+  { id: 'hermes',     layer: 'agent',   label: 'Hermes',     tag: 'Agent' },
+  { id: 'clawrouter', layer: 'router',  label: 'ClawRouter', tag: '<1ms routing' },
+  { id: 'local',      layer: 'local',   label: 'llama-server', tag: 'Local GGUF' },
+  { id: 'glm',        layer: 'cloud',   label: 'GLM-5',       tag: 'zai/glm-5' },
+  { id: 'chatgpt',    layer: 'cloud',   label: 'ChatGPT',     tag: 'openai/gpt-4o' },
+  { id: 'minimax',    layer: 'cloud',   label: 'MiniMax',     tag: 'minimax-m2.7' },
+  { id: 'deepseek',   layer: 'cloud',   label: 'DeepSeek',    tag: 'deepseek-chat' },
+  { id: 'claude',     layer: 'cloud',   label: 'Claude',      tag: 'sonnet-4.6' },
+  { id: 'grok',       layer: 'cloud',   label: 'Grok',        tag: 'grok-4-1-fast' },
+  { id: 'gemini',     layer: 'cloud',   label: 'Gemini',      tag: 'gemini-2.5-pro' },
+];
+
+const links = [
+  { source: 'tailscale',  target: 'openwebui',  type: 'down' },
+  { source: 'tailscale',  target: 'claw',       type: 'across' },
+  { source: 'telegram',   target: 'claw',       type: 'across' },
+  { source: 'telegram',   target: 'hermes',     type: 'across' },
+  { source: 'openwebui',  target: 'clawrouter', type: 'across' },
+  { source: 'claw',       target: 'clawrouter', type: 'across' },
+  { source: 'hermes',     target: 'clawrouter', type: 'across' },
+  { source: 'clawrouter', target: 'local',      type: 'across' },
+  { source: 'clawrouter', target: 'glm',        type: 'across' },
+  { source: 'clawrouter', target: 'chatgpt',    type: 'across' },
+  { source: 'clawrouter', target: 'minimax',    type: 'across' },
+  { source: 'clawrouter', target: 'deepseek',   type: 'across' },
+  { source: 'clawrouter', target: 'claude',     type: 'across' },
+  { source: 'clawrouter', target: 'grok',       type: 'across' },
+  { source: 'clawrouter', target: 'gemini',     type: 'across' },
+];
+
+const W = 920, H = 640;
+const LAYER_X0 = 40, LAYER_GAP = 176;
+const NODE_W = 128, NODE_H = 40;
+
+const svg = d3.select('#chart')
+  .append('svg')
+  .attr('viewBox', `0 0 ${W} ${H}`)
+  .attr('preserveAspectRatio', 'xMidYMid meet');
+
+const defs = svg.append('defs');
+const marker = defs.append('marker')
+  .attr('id', 'arrow')
+  .attr('viewBox', '0 0 6 6')
+  .attr('refX', 6).attr('refY', 3)
+  .attr('markerWidth', 6).attr('markerHeight', 6)
+  .attr('orient', 'auto')
+  .append('path')
+  .attr('d', 'M0,0 L6,3 L0,6 Z')
+  .attr('fill', '#3a3a4a');
+
+const layerIdx = {};
+layers.forEach((l, i) => layerIdx[l.id] = i);
+const nodePositions = {};
+
+layers.forEach((layer, i) => {
+  const lx = LAYER_X0 + i * LAYER_GAP;
+  const layerNodes = nodes.filter(n => n.layer === layer.id);
+  const lh = layerNodes.length * (NODE_H + 14) + 50;
+  const ly = (H - lh) / 2;
+
+  const g = svg.append('g').attr('class', 'layer');
+
+  g.append('rect')
+    .attr('class', 'layer-bg')
+    .attr('x', lx - 10).attr('y', ly - 10)
+    .attr('width', NODE_W + 20).attr('height', lh + 20)
+    .attr('fill', LAYER_COLORS[layer.id].bg)
+    .attr('stroke', LAYER_COLORS[layer.id].stroke)
+    .attr('stroke-opacity', 0.25);
+
+  g.append('text')
+    .attr('class', 'layer-label')
+    .attr('x', lx + NODE_W / 2).attr('y', ly + 6)
+    .attr('text-anchor', 'middle')
+    .text(layer.label);
+
+  g.append('text')
+    .attr('class', 'layer-tag')
+    .attr('x', lx + NODE_W / 2).attr('y', ly + 20)
+    .attr('text-anchor', 'middle')
+    .text(layer.tag);
+
+  layerNodes.forEach((node, j) => {
+    const nx = lx;
+    const ny = ly + 36 + j * (NODE_H + 14);
+    nodePositions[node.id] = { x: nx, y: ny };
+
+    const ng = g.append('g')
+      .attr('class', 'node')
+      .attr('transform', `translate(${nx}, ${ny})`);
+
+    ng.append('rect')
+      .attr('width', NODE_W).attr('height', NODE_H)
+      .attr('fill', LAYER_COLORS[layer.id].fill)
+      .attr('stroke', LAYER_COLORS[layer.id].stroke)
+      .attr('fill-opacity', 0.15)
+      .attr('stroke-opacity', 0.6);
+
+    ng.append('text')
+      .attr('x', NODE_W / 2).attr('y', NODE_H / 2 - 5)
+      .text(node.label);
+
+    ng.append('text')
+      .attr('class', 'tag')
+      .attr('x', NODE_W / 2).attr('y', NODE_H / 2 + 9)
+      .text(node.tag);
+  });
+});
+
+const linkGroup = svg.append('g').attr('class', 'links');
+
+links.forEach(link => {
+  const s = nodePositions[link.source];
+  const t = nodePositions[link.target];
+  if (!s || !t) return;
+
+  const sNode = nodes.find(n => n.id === link.source);
+  const tNode = nodes.find(n => n.id === link.target);
+  const srcLayer = sNode ? layerIdx[sNode.layer] : 0;
+  const tgtLayer = tNode ? layerIdx[tNode.layer] : 0;
+
+  let path;
+  const color = LAYER_COLORS[sNode?.layer]?.fill || '#666';
+
+  if (srcLayer === tgtLayer) {
+    const sx = s.x + NODE_W / 2;
+    const sy = s.y + NODE_H;
+    const tx = t.x + NODE_W / 2;
+    const ty = t.y;
+    const my = (sy + ty) / 2;
+    path = `M${sx},${sy} C${sx},${my} ${tx},${my} ${tx},${ty}`;
+  } else {
+    const sx = s.x + NODE_W;
+    const sy = s.y + NODE_H / 2;
+    const tx = t.x;
+    const ty = t.y + NODE_H / 2;
+    const dx = tx - sx;
+    const cx1 = sx + dx * 0.4;
+    const cx2 = tx - dx * 0.4;
+    path = `M${sx},${sy} C${cx1},${sy} ${cx2},${ty} ${tx},${ty}`;
+  }
+
+  linkGroup.append('path')
+    .attr('class', 'link')
+    .attr('d', path)
+    .attr('marker-end', 'url(#arrow)');
+
+  const flow = linkGroup.append('path')
+    .attr('class', 'link-flow')
+    .attr('d', path)
+    .attr('stroke', color)
+    .attr('stroke-dasharray', '6 18')
+    .attr('stroke-dashoffset', 0);
+
+  function animate() {
+    flow
+      .attr('stroke-dashoffset', 0)
+      .transition()
+      .duration(2000)
+      .ease(d3.easeLinear)
+      .attr('stroke-dashoffset', -24)
+      .on('end', animate);
+  }
+  animate();
+});
+
+const legendEl = document.getElementById('legend');
+Object.entries(LAYER_COLORS).forEach(([key, c]) => {
+  const layer = layers.find(l => l.id === key);
+  const item = document.createElement('div');
+  item.className = 'legend-item';
+  item.innerHTML = `<span class="legend-dot" style="background:${c.fill}"></span>${layer.label}`;
+  legendEl.appendChild(item);
+});
+</script>
+</body>
+</html>

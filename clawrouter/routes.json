@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "generated_by": "clawrouter_config.py",
+  "proxy_port": 8402,
+  "routing_profile": "auto",
+  "layers": {
+    "L0_ingress": {
+      "description": "Client entry points",
+      "endpoints": [
+        {
+          "name": "tailscale",
+          "type": "vpn",
+          "port": "dynamic"
+        },
+        {
+          "name": "telegram",
+          "type": "bot",
+          "port": "webhook"
+        },
+        {
+          "name": "open-webui",
+          "type": "chat_ux",
+          "port": 8080
+        }
+      ]
+    },
+    "L1_agent": {
+      "description": "AI agent orchestration",
+      "endpoints": [
+        {
+          "name": "claw",
+          "type": "agent"
+        },
+        {
+          "name": "hermes",
+          "type": "agent"
+        }
+      ]
+    },
+    "L2_router": {
+      "description": "ClawRouter smart routing (<1ms, local)",
+      "proxy_port": 8402,
+      "routing_profile": "auto",
+      "scoring_dimensions": 15
+    },
+    "L3_local_backend": {
+      "description": "Local GGUF models via llama-server",
+      "backends": [
+        {
+          "slug": "gemma4-e2b-uncensored-aggressive-q4kp",
+          "family": "Gemma-4",
+          "name": "Gemma-4-E2B-Uncensored-HauhauCS-Aggressive",
+          "filename": "Gemma-4-E2B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf",
+          "local_port": 8001,
+          "local_host": "127.0.0.1",
+          "openai_base": "http://127.0.0.1:8001/v1",
+          "profile": "gemma4"
+        },
+        {
+          "slug": "qwen3-coder-next-iq4xs",
+          "family": "Qwen3-Coder-Next",
+          "name": "Qwen3-Coder-Next",
+          "filename": "Qwen3-Coder-Next-IQ4_XS.gguf",
+          "local_port": 8001,
+          "local_host": "127.0.0.1",
+          "openai_base": "http://127.0.0.1:8001/v1",
+          "profile": "qwen3-coder-next"
+        },
+        {
+          "slug": "qwen35-35b-a3b-q4km",
+          "family": "Qwen3.5",
+          "name": "Qwen3.5-35B-A3B",
+          "filename": "Qwen3.5-35B-A3B-Q4_K_M.gguf",
+          "local_port": 8001,
+          "local_host": "127.0.0.1",
+          "openai_base": "http://127.0.0.1:8001/v1",
+          "profile": "qwen3.5"
+        }
+      ]
+    },
+    "L4_cloud_backend": {
+      "description": "Remote models via x402/USDC",
+      "backends": [
+        {
+          "model": "zai/glm-5",
+          "via": "clawrouter-x402",
+          "openai_base": "http://127.0.0.1:8402/v1",
+          "api_key": "x402"
+        },
+        {
+          "model": "openai/gpt-4o",
+          "via": "clawrouter-x402",
+          "openai_base": "http://127.0.0.1:8402/v1",
+          "api_key": "x402"
+        },
+        {
+          "model": "minimax/minimax-m2.7",
+          "via": "clawrouter-x402",
+          "openai_base": "http://127.0.0.1:8402/v1",
+          "api_key": "x402"
+        },
+        {
+          "model": "deepseek/deepseek-chat",
+          "via": "clawrouter-x402",
+          "openai_base": "http://127.0.0.1:8402/v1",
+          "api_key": "x402"
+        },
+        {
+          "model": "anthropic/claude-sonnet-4.6",
+          "via": "clawrouter-x402",
+          "openai_base": "http://127.0.0.1:8402/v1",
+          "api_key": "x402"
+        },
+        {
+          "model": "xai/grok-4-1-fast",
+          "via": "clawrouter-x402",
+          "openai_base": "http://127.0.0.1:8402/v1",
+          "api_key": "x402"
+        },
+        {
+          "model": "google/gemini-2.5-pro",
+          "via": "clawrouter-x402",
+          "openai_base": "http://127.0.0.1:8402/v1",
+          "api_key": "x402"
+        }
+      ]
+    }
+  }
+}
