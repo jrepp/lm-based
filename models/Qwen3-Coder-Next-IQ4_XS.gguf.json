@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-04-13",
+  "artifact": {
+    "filename": "Qwen3-Coder-Next-IQ4_XS.gguf",
+    "local_path": "/Users/jrepp/d/qwen/Qwen3-Coder-Next-IQ4_XS.gguf",
+    "format": "gguf",
+    "quantization": "IQ4_XS",
+    "size_bytes": null,
+    "sha256": null
+  },
+  "model": {
+    "slug": "qwen3-coder-next-iq4xs",
+    "family": "Qwen3-Coder-Next",
+    "name": "Qwen3-Coder-Next",
+    "canonical_model_card": "https://huggingface.co/Qwen/Qwen3-Coder-Next"
+  },
+  "source": {
+    "gguf_model_card": "https://huggingface.co/unsloth/Qwen3-Coder-Next-GGUF",
+    "publisher": "unsloth",
+    "provenance_status": "planned_download"
+  },
+  "download": {
+    "provider": "huggingface",
+    "repo_id": "unsloth/Qwen3-Coder-Next-GGUF",
+    "filename": "Qwen3-Coder-Next-IQ4_XS.gguf",
+    "revision": null
+  },
+  "launcher": {
+    "script": "/Users/jrepp/d/qwen/run-qwen35-server.py",
+    "profile": "qwen3-coder-next",
+    "recommended_env": {
+      "MODEL_FILE": "Qwen3-Coder-Next-IQ4_XS.gguf",
+      "PROFILE": "qwen3-coder-next"
+    }
+  },
+  "notes": [
+    "Selected as the first practical Qwen3-Coder-Next download target because it is a single-file GGUF and materially smaller than Q4_K_M-family options.",
+    "Upstream Qwen recommends YaRN-based RoPE scaling for 1M-token experiments in llama.cpp."
+  ]
+}

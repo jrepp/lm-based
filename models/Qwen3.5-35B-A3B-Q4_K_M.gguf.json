@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-04-13",
+  "artifact": {
+    "filename": "Qwen3.5-35B-A3B-Q4_K_M.gguf",
+    "local_path": "/Users/jrepp/d/qwen/Qwen3.5-35B-A3B-Q4_K_M.gguf",
+    "format": "gguf",
+    "quantization": "Q4_K_M",
+    "size_bytes": 22016023168,
+    "sha256": "3b46d1066bc91cc2d613e3bc22ce691dd77e6f0d33c9060690d24ce6de494375"
+  },
+  "model": {
+    "slug": "qwen35-35b-a3b-q4km",
+    "family": "Qwen3.5",
+    "name": "Qwen3.5-35B-A3B",
+    "canonical_model_card": "https://huggingface.co/Qwen/Qwen3.5-35B-A3B"
+  },
+  "source": {
+    "gguf_model_card": "https://huggingface.co/unsloth/Qwen3.5-35B-A3B-GGUF",
+    "publisher": "unsloth",
+    "provenance_status": "user_reported"
+  },
+  "download": {
+    "provider": "huggingface",
+    "repo_id": "unsloth/Qwen3.5-35B-A3B-GGUF",
+    "filename": "Qwen3.5-35B-A3B-Q4_K_M.gguf",
+    "revision": null
+  },
+  "launcher": {
+    "script": "/Users/jrepp/d/qwen/run-qwen35-server.py",
+    "profile": "qwen3.5",
+    "recommended_env": {
+      "MODEL_FILE": "Qwen3.5-35B-A3B-Q4_K_M.gguf"
+    }
+  },
+  "notes": [
+    "Local filename alone does not independently prove the GGUF publisher.",
+    "Canonical model card should be treated as authoritative for architecture and context guidance."
+  ]
+}

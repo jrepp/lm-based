@@ -1,0 +1,30 @@
+# Model files (large binaries)
+*.gguf
+*.bin
+*.safetensors
+
+# Environment / secrets
+.env
+.env.*
+
+# Runtime artifacts
+runs/
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Tool caches
+.uv-cache/
+.cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# macOS
+.DS_Store
