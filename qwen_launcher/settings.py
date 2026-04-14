@@ -18,9 +18,9 @@ class ServerSettings(BaseSettings):
         env_file_encoding="utf-8",
     )
 
-    llama_server_bin: str = "/Users/jrepp/.local/bin/llama-server"
-    model_dir: Path = Path("/Users/jrepp/d/qwen")
-    models_index_dir: Path = Path("/Users/jrepp/d/qwen/models")
+    llama_server_bin: str = "llama-server"
+    model_dir: Path = _PROJECT_ROOT
+    models_index_dir: Path = _PROJECT_ROOT / "models"
     model_slug: str | None = None
     model_file: str = "Qwen3.5-35B-A3B-Q4_K_M.gguf"
     model_path: Path | None = None
@@ -65,7 +65,7 @@ class ServerSettings(BaseSettings):
     enable_run_capture: bool = True
 
     log_file: Path | None = None
-    run_dir_root: Path = Path("/Users/jrepp/d/qwen/runs")
+    run_dir_root: Path = _PROJECT_ROOT / "runs"
     run_name: str | None = None
     monitor_interval_sec: float = 1.0
     rope_scaling: str | None = None
