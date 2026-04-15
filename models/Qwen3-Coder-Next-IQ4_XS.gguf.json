@@ -3,7 +3,7 @@
   "recorded_at": "2026-04-13",
   "artifact": {
     "filename": "Qwen3-Coder-Next-IQ4_XS.gguf",
-    "local_path": "/Users/jrepp/d/qwen/Qwen3-Coder-Next-IQ4_XS.gguf",
+    "local_path": "/Users/jrepp/d/qwen/artifacts/Qwen3-Coder-Next-IQ4_XS.gguf",
     "format": "gguf",
     "quantization": "IQ4_XS",
     "size_bytes": null,

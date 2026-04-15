@@ -7,31 +7,31 @@
 Regenerate the config after changing model sidecars or cloud backends:
 
 ```bash
-python clawrouter_config.py
+./clawrouter_config.py
 ```
 
 Show the current config in a compact, human-readable form:
 
 ```bash
-python clawrouter_config.py --status
+./clawrouter_config.py --status
 ```
 
 Validate sidecars and fail on structural errors:
 
 ```bash
-python clawrouter_config.py --validate
+./clawrouter_config.py --validate
 ```
 
 Run a broader health check:
 
 ```bash
-python clawrouter_config.py --doctor
+./clawrouter_config.py --doctor
 ```
 
 Show credential status for every cloud provider:
 
 ```bash
-python clawrouter_config.py --providers
+./clawrouter_config.py --providers
 ```
 
 ## What `--doctor` checks
@@ -60,6 +60,6 @@ http://host.docker.internal:8001/v1
 ## Typical workflow
 
 1. Update `models/*.json` or `CLOUD_PROVIDERS` in `clawrouter_config.py`.
-2. Run `python clawrouter_config.py`.
-3. Run `python clawrouter_config.py --status`.
-4. If requests are failing, run `python clawrouter_config.py --doctor`.
+2. Run `./clawrouter_config.py`.
+3. Run `./clawrouter_config.py --status`.
+4. If requests are failing, run `./clawrouter_config.py --doctor`.

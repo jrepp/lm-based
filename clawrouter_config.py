@@ -1,14 +1,17 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11,<3.14"
+# ///
 """
 Generate and inspect ClawRouter routing config from model sidecars.
 
 Examples:
-  python clawrouter_config.py              # write clawrouter.json
-  python clawrouter_config.py --status     # show current config summary
-  python clawrouter_config.py --doctor     # validate + probe endpoints + credential audit
-  python clawrouter_config.py --providers  # show credential status for all cloud providers
-  python clawrouter_config.py --json       # dump generated config to stdout
-  python clawrouter_config.py --validate   # validate sidecars, exit non-zero on errors
+  ./clawrouter_config.py            # write clawrouter.json
+  ./clawrouter_config.py --status   # show current config summary
+  ./clawrouter_config.py --doctor   # validate + probe endpoints + credential audit
+  ./clawrouter_config.py --providers
+  ./clawrouter_config.py --json
+  ./clawrouter_config.py --validate
 
 Credential model
 ----------------
@@ -380,7 +383,7 @@ def show_status() -> int:
     """--status: summarise existing clawrouter.json."""
     config = load_existing_config()
     if config is None:
-        print("No config found. Run: python clawrouter_config.py")
+        print("No config found. Run: ./clawrouter_config.py")
         return 1
 
     print("ClawRouter config")

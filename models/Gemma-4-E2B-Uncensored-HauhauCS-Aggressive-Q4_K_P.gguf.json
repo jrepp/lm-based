@@ -3,7 +3,7 @@
   "recorded_at": "2026-04-14",
   "artifact": {
     "filename": "Gemma-4-E2B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf",
-    "local_path": "/Users/jrepp/d/qwen/Gemma-4-E2B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf",
+    "local_path": "/Users/jrepp/d/qwen/artifacts/Gemma-4-E2B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf",
     "format": "gguf",
     "quantization": "Q4_K_P",
     "size_bytes": 3450277824,
@@ -38,6 +38,6 @@
     "Gemma-4 2B uncensored finetune by HauhauCS. This repo uses _P-suffix quant variants (Q4_K_P, not Q4_K_M).",
     "A multimodal projector is also available: mmproj-Gemma-4-E2B-Uncensored-HauhauCS-Aggressive-f16.gguf",
     "Gemma 4 uses a hybrid attention architecture (local sliding-window + global); llama.cpp support may require a recent build.",
-    "Provenance is planned_download — update sha256 and size_bytes after local artifact is confirmed."
+    "sha256 and size_bytes confirmed against downloaded artifact."
   ]
 }

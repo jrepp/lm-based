@@ -14,6 +14,9 @@ clawrouter.json
 # Runtime artifacts
 runs/
 
+# Local artifact tracking (machine-specific provenance state, never committed)
+artifacts/STATUS.md
+
 # Python caches
 __pycache__/
 *.pyc

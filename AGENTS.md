@@ -22,8 +22,8 @@ ClawRouter routing config, and documents the full local-LLM stack (see `docs/arc
 1. Write  models/<Artifact-QUANT>.gguf.json   (schema below)
 2. Extend lm_launcher/profiles.py if a new serving profile is needed
 3. Append row to docs/model-card-index.md
-4. Run    python clawrouter_config.py          (regenerate routing config)
-5. Verify python download_model.py --list      (new slug appears)
+4. Run    ./clawrouter_config.py               (regenerate routing config)
+5. Verify ./download_model.py --list           (new slug appears)
 ```
 
 ### Minimal sidecar schema
@@ -90,11 +90,11 @@ Credential model (see `docs/credentials.md`):
 - Never hard-code API keys in any file.
 
 ```bash
-python clawrouter_config.py --providers  # credential audit
-python clawrouter_config.py --doctor     # full health check
-python clawrouter_config.py --status     # summarise current config
-python clawrouter_config.py --validate   # sidecar lint only
-python clawrouter_config.py             # regenerate clawrouter.json
+./clawrouter_config.py --providers  # credential audit
+./clawrouter_config.py --doctor     # full health check
+./clawrouter_config.py --status     # summarise current config
+./clawrouter_config.py --validate   # sidecar lint only
+./clawrouter_config.py              # regenerate clawrouter.json
 ```
 
 ## Commit style

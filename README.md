@@ -22,7 +22,6 @@ See [`docs/architecture.html`](docs/architecture.html) for the interactive diagr
 ### 1 — Prerequisites
 
 - [`llama-server`](https://github.com/ggml-org/llama.cpp) on your PATH (or set `LLAMA_SERVER_BIN` in `.env`)
-- [`uv`](https://github.com/astral-sh/uv) for Python script execution
 - A HuggingFace account (free) if downloading gated models
 
 ### 2 — Configure
@@ -34,7 +33,7 @@ cp .env.example .env
 Edit `.env` and set at minimum:
 
 ```
-MODEL_SLUG=gemma4-e2b-uncensored-aggressive-q4kp   # or any slug from: python download_model.py --list
+MODEL_SLUG=gemma4-e2b-uncensored-aggressive-q4kp   # or any slug from: ./download_model.py --list
 ```
 
 Optional: add cloud provider keys (see [docs/credentials.md](docs/credentials.md)).
@@ -43,16 +42,16 @@ Optional: add cloud provider keys (see [docs/credentials.md](docs/credentials.md
 
 ```bash
 # List available models
-uv run download_model.py --list
+./download_model.py --list
 
 # Download by slug
-uv run download_model.py --model gemma4-e2b-uncensored-aggressive-q4kp
+./download_model.py --model gemma4-e2b-uncensored-aggressive-q4kp
 ```
 
 ### 4 — Start the server
 
 ```bash
-uv run run-server.py
+./run-server.py
 ```
 
 The server binds to `http://127.0.0.1:8001` by default. The model slug is read from `.env`.
@@ -60,7 +59,7 @@ The server binds to `http://127.0.0.1:8001` by default. The model slug is read f
 To override without editing `.env`:
 
 ```bash
-MODEL_SLUG=qwen3-coder-next-iq4xs uv run run-server.py
+MODEL_SLUG=qwen3-coder-next-iq4xs ./run-server.py
 ```
 
 ### 5 — Connect a client
@@ -86,8 +85,8 @@ Then open `http://localhost:3000`. See [docs/open-webui-local-server.md](docs/op
 If you use ClawRouter or want cloud provider routing:
 
 ```bash
-python clawrouter_config.py          # generate clawrouter.json
-python clawrouter_config.py --doctor # health check: sidecars + endpoints + credentials
+./clawrouter_config.py          # generate clawrouter.json
+./clawrouter_config.py --doctor # health check: sidecars + endpoints + credentials
 ```
 
 ---
@@ -97,6 +96,7 @@ python clawrouter_config.py --doctor # health check: sidecars + endpoints + cred
 | Slug | Family | Quant | Size |
 |------|--------|-------|------|
 | `gemma4-e2b-uncensored-aggressive-q4kp` | Gemma 4 2B | Q4_K_P | 3.4 GB |
+| `mistral-7b-instruct-v03-q4km` | Mistral 7B Instruct v0.3 | Q4_K_M | 4.4 GB |
 | `qwen3-coder-next-iq4xs` | Qwen3-Coder-Next | IQ4_XS | — |
 | `qwen35-35b-a3b-q4km` | Qwen3.5 35B A3B | Q4_K_M | 22 GB |
 
@@ -108,22 +108,22 @@ Full metadata: [`docs/model-card-index.md`](docs/model-card-index.md)
 
 ```bash
 # Model management
-uv run download_model.py --list
-uv run download_model.py --model <slug>
+./download_model.py --list
+./download_model.py --model <slug>
 
 # Server
-uv run run-server.py                    # start (reads .env)
-MODEL_SLUG=<slug> uv run run-server.py  # override model
+./run-server.py                    # start (reads .env)
+MODEL_SLUG=<slug> ./run-server.py  # override model
 
 # Routing config
-python clawrouter_config.py             # regenerate clawrouter.json
-python clawrouter_config.py --status    # summarise current config
-python clawrouter_config.py --providers # credential status per cloud provider
-python clawrouter_config.py --doctor    # full health check
-python clawrouter_config.py --validate  # lint sidecars only
+./clawrouter_config.py             # regenerate clawrouter.json
+./clawrouter_config.py --status    # summarise current config
+./clawrouter_config.py --providers # credential status per cloud provider
+./clawrouter_config.py --doctor    # full health check
+./clawrouter_config.py --validate  # lint sidecars only
 
 # Run analysis
-uv run summarize_run.py --run <run-dir>
+./summarize_run.py --run <run-dir>
 ```
 
 ---
@@ -139,6 +139,7 @@ uv run summarize_run.py --run <run-dir>
 | `clawrouter_config.py` | Generate and inspect ClawRouter routing config |
 | `.env.example` | Template for all environment variables |
 | `docs/` | Architecture, credentials, operations, model index |
+| `artifacts/` | Downloaded GGUF binaries (gitignored); `artifacts/STATUS.md` tracks local provenance |
 | `runs/` | Per-run logs, PIDs, monitor CSVs (gitignored) |
 
 ---

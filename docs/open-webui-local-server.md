@@ -21,7 +21,7 @@ Start the local model server first so it is listening on port `8001`.
 The launcher defaults in this repo already use port `8001`, so a typical local run is:
 
 ```bash
-python run-server.py
+./run-server.py
 ```
 
 ## Run Open WebUI in Docker

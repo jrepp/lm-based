@@ -24,13 +24,14 @@ See `docs/architecture.html` for a rendered diagram of the full stack:
 | `run-server.py` | Entry point: builds `ServerSettings` and execs llama-server |
 | `download_model.py` | CLI to fetch a model by sidecar slug |
 | `docs/` | Architecture diagram, credentials guide, routing and open-webui docs |
+| `artifacts/` | Downloaded GGUF binaries (gitignored); `STATUS.md` tracks local provenance |
 | `runs/` | Per-run capture dirs (logs, PIDs, monitor CSVs) |
 
 ## First-time setup
 
 ```bash
 cp .env.example .env        # fill in MODEL_SLUG and any API keys
-python clawrouter_config.py # generate clawrouter.json
+./clawrouter_config.py      # generate clawrouter.json
 ```
 
 ## Adding a model
@@ -40,8 +41,8 @@ python clawrouter_config.py # generate clawrouter.json
 2. If the model needs custom serving params, add a profile in
    `lm_launcher/profiles.py` → `profile_defaults()` and update `infer_profile()`.
 3. Append a row to `docs/model-card-index.md`.
-4. Regenerate: `python clawrouter_config.py`
-5. Verify: `python download_model.py --list` — new slug should appear.
+4. Regenerate: `./clawrouter_config.py`
+5. Verify: `./download_model.py --list` — new slug should appear.
 
 ## Sidecar conventions
 
@@ -60,9 +61,9 @@ See `docs/credentials.md` for the full explanation. Short version:
 - `clawrouter.json` stores `api_key_env` (the var *name*), never the resolved secret
 
 ```bash
-python clawrouter_config.py --providers  # credential status per provider
-python clawrouter_config.py --doctor     # full stack: sidecars + endpoints + credentials
-python clawrouter_config.py --status     # summary of current clawrouter.json
+./clawrouter_config.py --providers  # credential status per provider
+./clawrouter_config.py --doctor     # full stack: sidecars + endpoints + credentials
+./clawrouter_config.py --status     # summary of current clawrouter.json
 ```
 
 ## Adding a cloud provider

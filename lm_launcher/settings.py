@@ -19,7 +19,7 @@ class ServerSettings(BaseSettings):
     )
 
     llama_server_bin: str = "llama-server"
-    model_dir: Path = _PROJECT_ROOT
+    model_dir: Path = _PROJECT_ROOT / "artifacts"
     models_index_dir: Path = _PROJECT_ROOT / "models"
     model_slug: str | None = None
     model_file: str = ""

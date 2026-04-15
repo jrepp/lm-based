@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-04-15",
+  "artifact": {
+    "filename": "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
+    "local_path": "/Users/jrepp/d/qwen/artifacts/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
+    "format": "gguf",
+    "quantization": "Q4_K_M",
+    "size_bytes": null,
+    "sha256": null
+  },
+  "model": {
+    "slug": "mistral-7b-instruct-v03-q4km",
+    "family": "Mistral-7B",
+    "name": "Mistral-7B-Instruct-v0.3",
+    "canonical_model_card": "https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3"
+  },
+  "source": {
+    "gguf_model_card": "https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF",
+    "publisher": "bartowski",
+    "provenance_status": "planned_download"
+  },
+  "download": {
+    "provider": "huggingface",
+    "repo_id": "bartowski/Mistral-7B-Instruct-v0.3-GGUF",
+    "filename": "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
+    "revision": null
+  },
+  "launcher": {
+    "script": "/Users/jrepp/d/qwen/run-server.py",
+    "profile": "generic",
+    "recommended_env": {
+      "MODEL_FILE": "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
+      "PROFILE": "generic"
+    }
+  },
+  "notes": [
+    "Latest official Mistral 7B instruct model (v0.3). Mistral AI does not publish official GGUFs for 7B; bartowski is the best-maintained community source.",
+    "Q4_K_M is ~4.37 GB and the recommended quality/size balance for 7B models.",
+    "Supports function calling and system prompts via the v3 tokenizer."
+  ]
+}

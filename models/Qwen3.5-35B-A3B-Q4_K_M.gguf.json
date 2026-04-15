@@ -3,7 +3,7 @@
   "recorded_at": "2026-04-13",
   "artifact": {
     "filename": "Qwen3.5-35B-A3B-Q4_K_M.gguf",
-    "local_path": "/Users/jrepp/d/qwen/Qwen3.5-35B-A3B-Q4_K_M.gguf",
+    "local_path": "/Users/jrepp/d/qwen/artifacts/Qwen3.5-35B-A3B-Q4_K_M.gguf",
     "format": "gguf",
     "quantization": "Q4_K_M",
     "size_bytes": 22016023168,
