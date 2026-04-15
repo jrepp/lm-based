@@ -27,7 +27,7 @@
     "revision": null
   },
   "launcher": {
-    "script": "/Users/jrepp/d/qwen/run-qwen35-server.py",
+    "script": "/Users/jrepp/d/qwen/run-server.py",
     "profile": "qwen3.5",
     "recommended_env": {
       "MODEL_FILE": "Qwen3.5-35B-A3B-Q4_K_M.gguf"

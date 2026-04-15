@@ -2,8 +2,8 @@ import shutil
 import sys
 from pathlib import Path
 
-from qwen_launcher.run_capture import run_with_capture
-from qwen_launcher.settings import ServerSettings
+from lm_launcher.run_capture import run_with_capture
+from lm_launcher.settings import ServerSettings
 
 
 def fail(message: str) -> None:

@@ -17,7 +17,7 @@ import os
 import sys
 from pathlib import Path
 
-from qwen_launcher.model_index import load_model_records
+from lm_launcher.model_index import load_model_records
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 MODELS_DIR = PROJECT_ROOT / "models"
