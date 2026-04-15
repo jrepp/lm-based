@@ -151,6 +151,8 @@ MODEL_SLUG=<slug> ./run-server.py  # override model
 | [docs/credentials.md](docs/credentials.md) | Two-tier credential model: direct API keys vs x402 proxy |
 | [docs/clawrouter-operations.md](docs/clawrouter-operations.md) | ClawRouter CLI reference |
 | [docs/open-webui-local-server.md](docs/open-webui-local-server.md) | Connecting open-webui to the local server |
+| [docs/openai-api-explainer.md](docs/openai-api-explainer.md) | In-depth guide to OpenAI API shapes: responses, chat/completions, streaming, tools, embeddings |
+| [docs/embedding-model-research-brief.md](docs/embedding-model-research-brief.md) | Hugging Face research brief on local embedding model options and recommendation |
 | [docs/model-card-index.md](docs/model-card-index.md) | Model registry with upstream card links |
 | [docs/llama-server-stats-faq.md](docs/llama-server-stats-faq.md) | Understanding llama-server logs and memory numbers |
 | [docs/llama-server-cache-architecture-explainer.md](docs/llama-server-cache-architecture-explainer.md) | Deep dive: slots, KV cache, checkpoints, long-context |
