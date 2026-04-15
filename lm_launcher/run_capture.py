@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from qwen_launcher.settings import ServerSettings
+from lm_launcher.settings import ServerSettings
 
 
 @dataclass
@@ -71,7 +71,7 @@ def write_initial_metadata(settings: ServerSettings, context: RunContext) -> Non
         "monitor_csv": str(context.monitor_csv),
         "settings": settings.model_dump(mode="json"),
         "launcher": {
-            "script": str(Path(__file__).resolve().parents[1] / "run-qwen35-server.py"),
+            "script": str(Path(__file__).resolve().parents[1] / "run-server.py"),
             "python_executable": sys.executable,
         },
     }
@@ -85,7 +85,7 @@ def update_metadata(context: RunContext, updates: dict[str, Any]) -> None:
 
 
 def start_server(settings: ServerSettings, context: RunContext) -> subprocess.Popen[str]:
-    from qwen_launcher.launcher import build_args
+    from lm_launcher.launcher import build_args
 
     args = build_args(settings)
     process = subprocess.Popen(args, text=True)
@@ -109,7 +109,7 @@ def start_monitor(
     monitor_args = [
         sys.executable,
         "-m",
-        "qwen_launcher.pid_monitor",
+        "lm_launcher.pid_monitor",
         "--pid",
         str(process.pid),
         "--interval-sec",
@@ -178,7 +178,7 @@ def finalize_run(
 
 
 def run_with_capture(settings: ServerSettings) -> int:
-    from qwen_launcher.launcher import print_startup
+    from lm_launcher.launcher import print_startup
 
     settings, context = prepare_run_context(settings)
     write_initial_metadata(settings, context)

@@ -4,23 +4,26 @@ Instructions for AI agents working in this repository.
 
 ## What this repo does
 
-Manages a local registry of GGUF model artifacts and launches them via `llama-server`.
-Each model has a JSON sidecar in `models/` that drives downloads and serving configuration.
+Manages local GGUF model artifacts, launches them via `llama-server`, generates
+ClawRouter routing config, and documents the full local-LLM stack (see `docs/architecture.html`).
 
 ## Key invariants
 
-- Never modify `runs/` contents — these are live or historical run captures.
+- Never modify `runs/` contents.
 - Never modify `.gguf` binary files.
-- Never set `provenance_status` to `"verified"` unless you have actually verified the sha256.
+- Never set `provenance_status: "verified"` without actually verifying the sha256.
 - `schema_version` in sidecars is always `1` until explicitly bumped.
+- `clawrouter.json` is generated — edit `clawrouter_config.py` instead.
+- The Python package is `lm_launcher/`. Do not recreate or import from `qwen_launcher`.
 
-## Adding a model (agent checklist)
+## Adding a model (checklist)
 
 ```
-1. Write models/<Artifact-Name-QUANT>.gguf.json  (schema below)
-2. Extend qwen_launcher/profiles.py if a new serving profile is needed
+1. Write  models/<Artifact-QUANT>.gguf.json   (schema below)
+2. Extend lm_launcher/profiles.py if a new serving profile is needed
 3. Append row to docs/model-card-index.md
-4. Confirm `python download_model.py --list` shows the new slug
+4. Run    python clawrouter_config.py          (regenerate routing config)
+5. Verify python download_model.py --list      (new slug appears)
 ```
 
 ### Minimal sidecar schema
@@ -55,7 +58,7 @@ Each model has a JSON sidecar in `models/` that drives downloads and serving con
     "revision": null
   },
   "launcher": {
-    "script": "/Users/jrepp/d/qwen/run-qwen35-server.py",
+    "script": "/Users/jrepp/d/qwen/run-server.py",
     "profile": "<profile-name>",
     "recommended_env": {
       "MODEL_FILE": "<stem>.gguf",
@@ -68,10 +71,16 @@ Each model has a JSON sidecar in `models/` that drives downloads and serving con
 
 ## Profile guidelines
 
-When creating a new profile in `qwen_launcher/profiles.py`:
-- Add an `infer_profile()` branch matching the model family name fragment.
-- Add a `profile_defaults()` block that only overrides values that differ from generic.
-- Keep ctx_size conservative for untested architectures — user can override via env.
+- Add an `infer_profile()` branch matching a fragment of the model family name.
+- Add a `profile_defaults()` block that only overrides values differing from generic.
+- Keep `ctx_size` conservative for untested architectures.
+
+## ClawRouter
+
+To add a cloud provider, edit `CLOUD_MODELS` in `clawrouter_config.py`, then regenerate:
+```
+python clawrouter_config.py
+```
 
 ## Commit style
 

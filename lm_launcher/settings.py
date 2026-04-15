@@ -2,9 +2,9 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import model_validator
-from qwen_launcher.model_index import find_record_by_slug
+from lm_launcher.model_index import find_record_by_slug
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from qwen_launcher.profiles import infer_profile, profile_defaults
+from lm_launcher.profiles import infer_profile, profile_defaults
 
 _PROJECT_ROOT = Path(__file__).parent.parent
 
@@ -18,11 +18,11 @@ class ServerSettings(BaseSettings):
         env_file_encoding="utf-8",
     )
 
-    llama_server_bin: str = "/Users/jrepp/.local/bin/llama-server"
-    model_dir: Path = Path("/Users/jrepp/d/qwen")
-    models_index_dir: Path = Path("/Users/jrepp/d/qwen/models")
+    llama_server_bin: str = "llama-server"
+    model_dir: Path = _PROJECT_ROOT
+    models_index_dir: Path = _PROJECT_ROOT / "models"
     model_slug: str | None = None
-    model_file: str = "Qwen3.5-35B-A3B-Q4_K_M.gguf"
+    model_file: str = ""
     model_path: Path | None = None
     profile: str = "auto"
 
@@ -65,7 +65,7 @@ class ServerSettings(BaseSettings):
     enable_run_capture: bool = True
 
     log_file: Path | None = None
-    run_dir_root: Path = Path("/Users/jrepp/d/qwen/runs")
+    run_dir_root: Path = _PROJECT_ROOT / "runs"
     run_name: str | None = None
     monitor_interval_sec: float = 1.0
     rope_scaling: str | None = None
@@ -86,7 +86,7 @@ class ServerSettings(BaseSettings):
     spec_type: str | None = None
     cache_reuse: int | None = None
     api_key: str | None = None
-    min_model_bytes: int = 20_000_000_000
+    min_model_bytes: int = 0
 
     @model_validator(mode="after")
     def apply_model_index(self) -> "ServerSettings":

@@ -7,7 +7,7 @@
 # ]
 # ///
 
-from qwen_launcher.launcher import main
+from lm_launcher.launcher import main
 
 
 if __name__ == "__main__":

@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "proxy_port": 8402,
+  "profile": "auto",
+  "local_llama_server": "http://127.0.0.1:8001",
+  "backends": {
+    "local": [
+      {
+        "slug": "gemma4-e2b-uncensored-aggressive-q4kp",
+        "family": "Gemma-4",
+        "filename": "Gemma-4-E2B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf",
+        "openai_base": "http://127.0.0.1:8001/v1"
+      },
+      {
+        "slug": "qwen3-coder-next-iq4xs",
+        "family": "Qwen3-Coder-Next",
+        "filename": "Qwen3-Coder-Next-IQ4_XS.gguf",
+        "openai_base": "http://127.0.0.1:8001/v1"
+      },
+      {
+        "slug": "qwen35-35b-a3b-q4km",
+        "family": "Qwen3.5",
+        "filename": "Qwen3.5-35B-A3B-Q4_K_M.gguf",
+        "openai_base": "http://127.0.0.1:8001/v1"
+      }
+    ],
+    "cloud": [
+      {
+        "model": "zai/glm-5",
+        "openai_base": "http://127.0.0.1:8402/v1",
+        "api_key": "x402"
+      },
+      {
+        "model": "openai/gpt-4o",
+        "openai_base": "http://127.0.0.1:8402/v1",
+        "api_key": "x402"
+      },
+      {
+        "model": "minimax/minimax-m2.7",
+        "openai_base": "http://127.0.0.1:8402/v1",
+        "api_key": "x402"
+      },
+      {
+        "model": "deepseek/deepseek-chat",
+        "openai_base": "http://127.0.0.1:8402/v1",
+        "api_key": "x402"
+      },
+      {
+        "model": "anthropic/claude-sonnet-4.6",
+        "openai_base": "http://127.0.0.1:8402/v1",
+        "api_key": "x402"
+      },
+      {
+        "model": "xai/grok-4-1-fast",
+        "openai_base": "http://127.0.0.1:8402/v1",
+        "api_key": "x402"
+      },
+      {
+        "model": "google/gemini-2.5-pro",
+        "openai_base": "http://127.0.0.1:8402/v1",
+        "api_key": "x402"
+      }
+    ]
+  },
+  "profiles": {
+    "auto": {
+      "local_priority": true,
+      "fallback_to_cloud": true
+    },
+    "eco": {
+      "local_priority": true,
+      "fallback_to_cloud": true
+    },
+    "premium": {
+      "local_priority": false,
+      "fallback_to_cloud": true
+    },
+    "local_only": {
+      "local_priority": true,
+      "fallback_to_cloud": false
+    }
+  }
+}
