@@ -1,6 +1,6 @@
 # Llama Server Stats FAQ
 
-This FAQ explains the `llama-server` stats and memory numbers we are seeing in local Qwen runs.
+This FAQ explains the `llama-server` stats and memory numbers you will see in local runs.
 
 ## Where are the run artifacts?
 
