@@ -75,11 +75,26 @@ ClawRouter routing config, and documents the full local-LLM stack (see `docs/arc
 - Add a `profile_defaults()` block that only overrides values differing from generic.
 - Keep `ctx_size` conservative for untested architectures.
 
-## ClawRouter
+## ClawRouter and credentials
 
-To add a cloud provider, edit `CLOUD_MODELS` in `clawrouter_config.py`, then regenerate:
-```
-python clawrouter_config.py
+`clawrouter.json` is gitignored and generated — never hand-edit it.
+
+To add a cloud provider: add a `CloudProvider(...)` entry to `CLOUD_PROVIDERS`
+in `clawrouter_config.py`, then regenerate.
+
+Credential model (see `docs/credentials.md`):
+- Each provider has a `key_env` and `base_env` in `CLOUD_PROVIDERS`.
+- Key set + direct_base known → `routing=direct` in generated JSON.
+- Key absent → `routing=proxy` (x402).
+- The JSON stores `api_key_env` (var name), never the resolved secret.
+- Never hard-code API keys in any file.
+
+```bash
+python clawrouter_config.py --providers  # credential audit
+python clawrouter_config.py --doctor     # full health check
+python clawrouter_config.py --status     # summarise current config
+python clawrouter_config.py --validate   # sidecar lint only
+python clawrouter_config.py             # regenerate clawrouter.json
 ```
 
 ## Commit style

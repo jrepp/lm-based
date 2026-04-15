@@ -3,9 +3,13 @@
 *.bin
 *.safetensors
 
-# Environment / secrets
+# Environment / secrets (.env.example is committed intentionally)
 .env
-.env.*
+.env.local
+.env.*.local
+
+# Generated routing config (may reference resolved secrets at runtime)
+clawrouter.json
 
 # Runtime artifacts
 runs/
