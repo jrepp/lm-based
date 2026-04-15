@@ -6,8 +6,8 @@
     "local_path": "/Users/jrepp/d/qwen/artifacts/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
     "format": "gguf",
     "quantization": "Q4_K_M",
-    "size_bytes": null,
-    "sha256": null
+    "size_bytes": 4372812000,
+    "sha256": "1270d22c0fbb3d092fb725d4d96c457b7b687a5f5a715abe1e818da303e562b6"
   },
   "model": {
     "slug": "mistral-7b-instruct-v03-q4km",
@@ -18,7 +18,7 @@
   "source": {
     "gguf_model_card": "https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF",
     "publisher": "bartowski",
-    "provenance_status": "planned_download"
+    "provenance_status": "verified"
   },
   "download": {
     "provider": "huggingface",
