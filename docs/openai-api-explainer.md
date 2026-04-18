@@ -265,36 +265,133 @@ For local servers, plain prompting plus post-validation is often more portable t
 
 ## Embeddings API
 
-Embeddings turn text into vectors for:
+Embeddings turn text into vectors for search, retrieval, clustering, and semantic matching.
+This is a separate endpoint from chat/completions — a server can support one without the other.
 
-- search
-- retrieval
-- clustering
-- semantic matching
+### Endpoint
 
-Typical request:
+```
+POST /v1/embeddings
+```
+
+### Request shape
 
 ```json
 {
-  "model": "text-embedding-model",
-  "input": "llama.cpp KV cache"
+  "model": "text-embedding-3-small",
+  "input": "llama.cpp KV cache",
+  "encoding_format": "float"
 }
 ```
 
-Typical response:
+`input` can be a single string or an array of strings for batching:
 
-- one or more vectors
-- token usage metadata
+```json
+{
+  "model": "text-embedding-3-small",
+  "input": ["first document", "second document", "third document"],
+  "encoding_format": "float"
+}
+```
 
-This is separate from text generation. A server can support chat/completions without supporting embeddings.
+`encoding_format` is `"float"` (default, array of f32) or `"base64"` (base64-encoded binary,
+smaller over the wire).
 
-For local stacks, embeddings may come from:
+### Response shape
 
-- the same service as chat generation
-- a different local process
-- a hosted provider
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "object": "embedding",
+      "index": 0,
+      "embedding": [0.0023064255, -0.009327292, ...]
+    }
+  ],
+  "model": "text-embedding-3-small",
+  "usage": {
+    "prompt_tokens": 8,
+    "total_tokens": 8
+  }
+}
+```
 
-That distinction matters for Open WebUI and RAG systems, because the chat backend and the embedding backend are often different services.
+Each element in `data` corresponds to one input string. The `index` field gives the position
+in the original input array — responses are not guaranteed to be in order, so always sort by
+`index` before using the results (memvid's `api_embed.rs` does this explicitly).
+
+### Available models
+
+| Model | Dimensions | Max tokens | Notes |
+|---|---|---|---|
+| `text-embedding-3-small` | 1,536 | 8,191 | Default. Best price/performance. |
+| `text-embedding-3-large` | 3,072 | 8,191 | Highest quality. |
+| `text-embedding-ada-002` | 1,536 | 8,191 | Legacy. Prefer 3-small for new work. |
+
+Max batch size per request: **2,048 inputs** for all three models.
+
+### Dimensionality reduction
+
+`text-embedding-3-small` and `text-embedding-3-large` support a `dimensions` parameter that
+truncates the output to a smaller size while preserving most of the semantic signal:
+
+```json
+{
+  "model": "text-embedding-3-small",
+  "input": "example",
+  "dimensions": 512
+}
+```
+
+This is useful for reducing storage and ANN index size when the full 1,536 or 3,072 dims are
+more than the retrieval task requires. `ada-002` does not support this parameter.
+
+### Batching behavior
+
+Sending multiple inputs in one request is more efficient than one request per string — it
+reduces round-trip latency and amortizes API overhead. The max batch size is 2,048 inputs per
+call. For larger corpora, split into chunks of ≤2,048 and call sequentially or in parallel.
+
+### Retry and rate limiting
+
+The API returns `429 Too Many Requests` when rate limits are hit. The correct behavior is
+exponential backoff with jitter. memvid's implementation retries up to 3 times with initial
+1,000ms backoff, doubling each attempt (1s → 2s → 4s).
+
+Rate limits are per-minute and per-day, and depend on your tier. For bulk ingestion, the
+embeddings endpoint is often the bottleneck before the chat endpoint.
+
+### Using with local OpenAI-compatible servers
+
+Many local servers expose `/v1/embeddings` for their loaded model. The model name in the
+request is typically ignored or matched to whatever model is loaded.
+
+For `open-webui` RAG or memvid with a local backend, override the base URL:
+
+```python
+config = OpenAIConfig.default().with_base_url("http://127.0.0.1:8001/v1")
+```
+
+The API key can be any non-empty string when talking to a local server that doesn't validate
+it. Some servers require the `Authorization: Bearer <key>` header to be present even if they
+don't check the value.
+
+### Smoke test
+
+```bash
+curl -s http://127.0.0.1:8001/v1/embeddings \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer dummy' \
+  -d '{
+    "model": "text-embedding-3-small",
+    "input": "test sentence",
+    "encoding_format": "float"
+  }' | jq '.data[0].embedding | length'
+```
+
+Expected output: the embedding dimension (e.g., `1536`). If the server does not support
+embeddings, you will get a `404` or a `501`.
 
 ## Error handling
 

@@ -1,0 +1,31 @@
+%% isof-boxes.sty
+%% Shared box environments for ISOF documentation
+%% Part of the ISOF componentized documentation framework
+
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{isof-boxes}[2025/02/10 ISOF Box Environments]
+
+% Requires color definitions
+\RequirePackage{isof-colors}
+
+% Note box - for important notes
+\newenvironment{notebox}[1][Note]
+{\par\vspace{10pt}\parindent0pt\textbf{#1: }}
+{\par\vspace{10pt}}
+
+% Tip box - for helpful tips  
+\newenvironment{tipbox}[1][Tip]
+{\par\vspace{10pt}\parindent0pt\textbf{#1: }}
+{\par\vspace{10pt}}
+
+% Warning box - for warnings and cautions
+\newenvironment{warningbox}[1][Warning]
+{\par\vspace{10pt}\parindent0pt\textbf{#1: }}
+{\par\vspace{10pt}}
+
+% Example box - for code examples and demonstrations
+\newenvironment{examplebox}[1][Example]
+{\par\vspace{10pt}\parindent0pt\textbf{#1: }}
+{\par\vspace{10pt}}
+
+\endinput

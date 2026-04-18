@@ -100,3 +100,12 @@ Credential model (see `docs/credentials.md`):
 ## Commit style
 
 Plain imperative summary line. No `Co-Authored-By:` trailers.
+
+## Markdown guardrails
+
+Markdown files are linted through pre-commit using `markdownlint-cli2`.
+Before publishing doc-heavy changes, run:
+
+```bash
+pre-commit run --all-files
+```

@@ -1,0 +1,170 @@
+\contentsline {chapter}{Abstract}{i}{chapter*.1}%
+\contentsline {part}{I\hspace {1em}Foundations}{1}{part.1}%
+\contentsline {chapter}{\numberline {1}What Is an Embedding?}{3}{chapter.1}%
+\contentsline {section}{\numberline {1.1}The Core Problem}{3}{section.1.1}%
+\contentsline {section}{\numberline {1.2}What ``Similar Vectors'' Means Geometrically}{3}{section.1.2}%
+\contentsline {section}{\numberline {1.3}What Training Means}{4}{section.1.3}%
+\contentsline {section}{\numberline {1.4}What the Dimensions Represent}{4}{section.1.4}%
+\contentsline {section}{\numberline {1.5}From Words to Sentences to Documents}{4}{section.1.5}%
+\contentsline {section}{\numberline {1.6}Embedding Models vs Generative Models}{5}{section.1.6}%
+\contentsline {section}{\numberline {1.7}Bi-encoder vs Cross-encoder}{5}{section.1.7}%
+\contentsline {section}{\numberline {1.8}Why High Dimensionality?}{6}{section.1.8}%
+\contentsline {section}{\numberline {1.9}What Makes a Good Embedding Space for Retrieval}{6}{section.1.9}%
+\contentsline {section}{\numberline {1.10}Summary}{7}{section.1.10}%
+\contentsline {chapter}{\numberline {2}Tokenization}{9}{chapter.2}%
+\contentsline {section}{\numberline {2.1}Why Tokens, Not Words or Characters?}{9}{section.2.1}%
+\contentsline {section}{\numberline {2.2}BPE (Byte Pair Encoding)}{9}{section.2.2}%
+\contentsline {section}{\numberline {2.3}WordPiece}{10}{section.2.3}%
+\contentsline {section}{\numberline {2.4}SentencePiece}{10}{section.2.4}%
+\contentsline {section}{\numberline {2.5}Token Count vs Character Count}{10}{section.2.5}%
+\contentsline {section}{\numberline {2.6}How Token Limits Affect Chunking}{11}{section.2.6}%
+\contentsline {section}{\numberline {2.7}Tokens and Embedding Quality}{12}{section.2.7}%
+\contentsline {section}{\numberline {2.8}Special Tokens}{12}{section.2.8}%
+\contentsline {section}{\numberline {2.9}Counting Tokens Without Running the Model}{12}{section.2.9}%
+\contentsline {section}{\numberline {2.10}Practical Takeaways}{13}{section.2.10}%
+\contentsline {part}{II\hspace {1em}Benchmarks and Model Selection}{15}{part.2}%
+\contentsline {chapter}{\numberline {3}Evaluating Embedding Models: MTEB}{17}{chapter.3}%
+\contentsline {section}{\numberline {3.1}What MTEB Measures}{17}{section.3.1}%
+\contentsline {section}{\numberline {3.2}MTEB Task Taxonomy}{17}{section.3.2}%
+\contentsline {section}{\numberline {3.3}How to Read an MTEB Score}{18}{section.3.3}%
+\contentsline {section}{\numberline {3.4}Common MTEB Metrics}{19}{section.3.4}%
+\contentsline {subsection}{\numberline {3.4.1}What \texttt {@k} Means}{19}{subsection.3.4.1}%
+\contentsline {subsection}{\numberline {3.4.2}nDCG --- Normalized Discounted Cumulative Gain}{19}{subsection.3.4.2}%
+\contentsline {subsection}{\numberline {3.4.3}MAP --- Mean Average Precision}{20}{subsection.3.4.3}%
+\contentsline {subsection}{\numberline {3.4.4}Recall@k}{20}{subsection.3.4.4}%
+\contentsline {subsection}{\numberline {3.4.5}Clustering Metrics}{20}{subsection.3.4.5}%
+\contentsline {section}{\numberline {3.5}Which MTEB Metrics Matter Most for RAG}{20}{section.3.5}%
+\contentsline {section}{\numberline {3.6}Qwen3 Series: What It Targets on MTEB}{21}{section.3.6}%
+\contentsline {chapter}{\numberline {4}RTEB and Generalization}{23}{chapter.4}%
+\contentsline {section}{\numberline {4.1}What RTEB Is Trying to Fix}{23}{section.4.1}%
+\contentsline {section}{\numberline {4.2}Why RTEB Matters More Than Generic MTEB for Local RAG}{23}{section.4.2}%
+\contentsline {section}{\numberline {4.3}The Core Design: Open + Private Datasets}{24}{section.4.3}%
+\contentsline {section}{\numberline {4.4}Default Metric: nDCG@10}{24}{section.4.4}%
+\contentsline {section}{\numberline {4.5}What Kinds of Retrieval RTEB Covers}{24}{section.4.5}%
+\contentsline {section}{\numberline {4.6}How to Read RTEB for Your Use Case}{25}{section.4.6}%
+\contentsline {section}{\numberline {4.7}What RTEB Still Does Not Solve}{25}{section.4.7}%
+\contentsline {section}{\numberline {4.8}What RTEB Shows About Qwen3-Embedding}{25}{section.4.8}%
+\contentsline {section}{\numberline {4.9}Benchmark-Reading Order for Local RAG}{26}{section.4.9}%
+\contentsline {chapter}{\numberline {5}Embedding Model Selection}{27}{chapter.5}%
+\contentsline {section}{\numberline {5.1}Status}{27}{section.5.1}%
+\contentsline {section}{\numberline {5.2}Shortlist}{27}{section.5.2}%
+\contentsline {subsection}{\numberline {5.2.1}Qwen3-Embedding-4B-GGUF}{27}{subsection.5.2.1}%
+\contentsline {subsection}{\numberline {5.2.2}Qwen3-Embedding-0.6B-GGUF}{28}{subsection.5.2.2}%
+\contentsline {subsection}{\numberline {5.2.3}Qwen3-Embedding-8B-GGUF}{28}{subsection.5.2.3}%
+\contentsline {subsection}{\numberline {5.2.4}BAAI/bge-m3}{28}{subsection.5.2.4}%
+\contentsline {subsection}{\numberline {5.2.5}mixedbread-ai/mxbai-embed-large-v1}{29}{subsection.5.2.5}%
+\contentsline {subsection}{\numberline {5.2.6}nomic-embed-text-v1.5-GGUF}{29}{subsection.5.2.6}%
+\contentsline {section}{\numberline {5.3}Summary Table}{29}{section.5.3}%
+\contentsline {section}{\numberline {5.4}Final Recommendation}{30}{section.5.4}%
+\contentsline {section}{\numberline {5.5}Recommended Next Steps}{30}{section.5.5}%
+\contentsline {part}{III\hspace {1em}Retrieval Architecture}{31}{part.3}%
+\contentsline {chapter}{\numberline {6}Retrieval Architectures}{33}{chapter.6}%
+\contentsline {section}{\numberline {6.1}Dense Retrieval}{33}{section.6.1}%
+\contentsline {section}{\numberline {6.2}Sparse Retrieval (SPLADE)}{33}{section.6.2}%
+\contentsline {section}{\numberline {6.3}ColBERT --- Multi-vector / Late Interaction}{33}{section.6.3}%
+\contentsline {section}{\numberline {6.4}Hybrid Retrieval}{34}{section.6.4}%
+\contentsline {section}{\numberline {6.5}Retrieval vs Re-ranking: The Two-Stage Pattern}{35}{section.6.5}%
+\contentsline {subsection}{\numberline {6.5.1}Stage 1: Ranking (Retrieval)}{35}{subsection.6.5.1}%
+\contentsline {subsection}{\numberline {6.5.2}Stage 2: Re-ranking}{35}{subsection.6.5.2}%
+\contentsline {subsection}{\numberline {6.5.3}Why Not Rerank Everything?}{35}{subsection.6.5.3}%
+\contentsline {subsection}{\numberline {6.5.4}What Each Stage Optimizes For}{35}{subsection.6.5.4}%
+\contentsline {subsection}{\numberline {6.5.5}Practical Retrieval Stack}{36}{subsection.6.5.5}%
+\contentsline {section}{\numberline {6.6}Architecture Selection Guide}{36}{section.6.6}%
+\contentsline {chapter}{\numberline {7}ANN Indexes and Distance Metrics}{37}{chapter.7}%
+\contentsline {section}{\numberline {7.1}The Problem with Exact Search}{37}{section.7.1}%
+\contentsline {section}{\numberline {7.2}HNSW --- Hierarchical Navigable Small World}{37}{section.7.2}%
+\contentsline {section}{\numberline {7.3}Flat Scan (Brute Force)}{38}{section.7.3}%
+\contentsline {section}{\numberline {7.4}IVFFlat (Inverted File)}{38}{section.7.4}%
+\contentsline {section}{\numberline {7.5}Product Quantization (PQ)}{38}{section.7.5}%
+\contentsline {section}{\numberline {7.6}Distance Metrics}{38}{section.7.6}%
+\contentsline {subsection}{\numberline {7.6.1}Cosine Similarity}{38}{subsection.7.6.1}%
+\contentsline {subsection}{\numberline {7.6.2}L2 Distance (Euclidean Distance)}{39}{subsection.7.6.2}%
+\contentsline {subsection}{\numberline {7.6.3}Dot Product}{39}{subsection.7.6.3}%
+\contentsline {section}{\numberline {7.7}Elbow Cutoff (Score Cliff Detection)}{39}{section.7.7}%
+\contentsline {chapter}{\numberline {8}Ranking, BM25, and RRF}{41}{chapter.8}%
+\contentsline {section}{\numberline {8.1}BM25 --- Best Match 25}{41}{section.8.1}%
+\contentsline {section}{\numberline {8.2}RRF --- Reciprocal Rank Fusion}{41}{section.8.2}%
+\contentsline {section}{\numberline {8.3}nDCG in Practice: Using Rankings to Make Better Decisions}{42}{section.8.3}%
+\contentsline {subsection}{\numberline {8.3.1}Why nDCG Is Better Than Plain Recall for Ranking Quality}{42}{subsection.8.3.1}%
+\contentsline {subsection}{\numberline {8.3.2}Why \texttt {@10} Is Common}{42}{subsection.8.3.2}%
+\contentsline {subsection}{\numberline {8.3.3}nDCG with Binary vs Graded Judgments}{42}{subsection.8.3.3}%
+\contentsline {subsection}{\numberline {8.3.4}What nDCG Does Not Tell You}{43}{subsection.8.3.4}%
+\contentsline {section}{\numberline {8.4}SPO and Entity Graphs}{43}{section.8.4}%
+\contentsline {section}{\numberline {8.5}Choosing the Right Retrieval Mix}{44}{section.8.5}%
+\contentsline {part}{IV\hspace {1em}Building the Pipeline}{45}{part.4}%
+\contentsline {chapter}{\numberline {9}Chunking Strategies}{47}{chapter.9}%
+\contentsline {section}{\numberline {9.1}Why Chunk at All?}{47}{section.9.1}%
+\contentsline {section}{\numberline {9.2}The Chunk Size Tradeoff}{47}{section.9.2}%
+\contentsline {section}{\numberline {9.3}Strategy 1: Fixed-Size Chunking}{48}{section.9.3}%
+\contentsline {section}{\numberline {9.4}Strategy 2: Fixed-Size with Overlap}{48}{section.9.4}%
+\contentsline {section}{\numberline {9.5}Strategy 3: Sentence-Boundary Chunking}{49}{section.9.5}%
+\contentsline {section}{\numberline {9.6}Strategy 4: Recursive Character Splitting}{49}{section.9.6}%
+\contentsline {section}{\numberline {9.7}Strategy 5: Structure-Aware Chunking}{49}{section.9.7}%
+\contentsline {section}{\numberline {9.8}Strategy 6: Semantic Chunking}{50}{section.9.8}%
+\contentsline {section}{\numberline {9.9}Strategy 7: Parent-Child (Small-to-Big) Chunking}{50}{section.9.9}%
+\contentsline {section}{\numberline {9.10}Strategy 8: Late Chunking}{51}{section.9.10}%
+\contentsline {section}{\numberline {9.11}How memvid Handles Chunking}{51}{section.9.11}%
+\contentsline {section}{\numberline {9.12}Practical Checklist}{52}{section.9.12}%
+\contentsline {chapter}{\numberline {10}The RAG Pipeline}{53}{chapter.10}%
+\contentsline {section}{\numberline {10.1}Two Phases}{53}{section.10.1}%
+\contentsline {section}{\numberline {10.2}Indexing Phase}{53}{section.10.2}%
+\contentsline {subsection}{\numberline {10.2.1}Step 1: Document Ingestion}{53}{subsection.10.2.1}%
+\contentsline {subsection}{\numberline {10.2.2}Step 2: Text Cleaning}{54}{subsection.10.2.2}%
+\contentsline {subsection}{\numberline {10.2.3}Step 3: Chunking}{54}{subsection.10.2.3}%
+\contentsline {subsection}{\numberline {10.2.4}Step 4: Embedding}{54}{subsection.10.2.4}%
+\contentsline {subsection}{\numberline {10.2.5}Step 5: Storing in the Index}{55}{subsection.10.2.5}%
+\contentsline {subsection}{\numberline {10.2.6}Indexing Pipeline Summary}{55}{subsection.10.2.6}%
+\contentsline {section}{\numberline {10.3}Query Phase}{55}{section.10.3}%
+\contentsline {subsection}{\numberline {10.3.1}Step 1: Receive the Query}{55}{subsection.10.3.1}%
+\contentsline {subsection}{\numberline {10.3.2}Step 2: Embed the Query}{56}{subsection.10.3.2}%
+\contentsline {subsection}{\numberline {10.3.3}Step 3: Retrieve Candidates}{56}{subsection.10.3.3}%
+\contentsline {subsection}{\numberline {10.3.4}Step 4: Filter}{56}{subsection.10.3.4}%
+\contentsline {subsection}{\numberline {10.3.5}Step 5: Rerank (Optional but Recommended)}{56}{subsection.10.3.5}%
+\contentsline {subsection}{\numberline {10.3.6}Step 6: Assemble Context}{57}{subsection.10.3.6}%
+\contentsline {subsection}{\numberline {10.3.7}Step 7: Generate the Answer}{57}{subsection.10.3.7}%
+\contentsline {section}{\numberline {10.4}Common Failure Modes}{57}{section.10.4}%
+\contentsline {subsection}{\numberline {10.4.1}Retrieval Failures}{57}{subsection.10.4.1}%
+\contentsline {subsection}{\numberline {10.4.2}Generation Failures}{58}{subsection.10.4.2}%
+\contentsline {subsection}{\numberline {10.4.3}Indexing Failures}{58}{subsection.10.4.3}%
+\contentsline {section}{\numberline {10.5}This Repo's Stack}{58}{section.10.5}%
+\contentsline {chapter}{\numberline {11}Retrieval Backends}{61}{chapter.11}%
+\contentsline {section}{\numberline {11.1}memvid v2 --- Deep Analysis}{61}{section.11.1}%
+\contentsline {subsection}{\numberline {11.1.1}What It Is}{61}{subsection.11.1.1}%
+\contentsline {subsection}{\numberline {11.1.2}Storage and Embedding Mechanics}{61}{subsection.11.1.2}%
+\contentsline {subsection}{\numberline {11.1.3}Retrieval Patterns}{62}{subsection.11.1.3}%
+\contentsline {subsection}{\numberline {11.1.4}Memory and Agent Features}{62}{subsection.11.1.4}%
+\contentsline {subsection}{\numberline {11.1.5}Performance Profile}{62}{subsection.11.1.5}%
+\contentsline {subsection}{\numberline {11.1.6}Hard Limitations}{63}{subsection.11.1.6}%
+\contentsline {section}{\numberline {11.2}Backend Comparison Matrix}{63}{section.11.2}%
+\contentsline {section}{\numberline {11.3}Key Backend Details}{63}{section.11.3}%
+\contentsline {subsection}{\numberline {11.3.1}Qdrant}{63}{subsection.11.3.1}%
+\contentsline {subsection}{\numberline {11.3.2}LanceDB}{64}{subsection.11.3.2}%
+\contentsline {subsection}{\numberline {11.3.3}MongoDB Atlas}{64}{subsection.11.3.3}%
+\contentsline {subsection}{\numberline {11.3.4}pgvector}{64}{subsection.11.3.4}%
+\contentsline {section}{\numberline {11.4}Decision Guide}{64}{section.11.4}%
+\contentsline {subsection}{\numberline {11.4.1}Stacking memvid with Another Backend}{64}{subsection.11.4.1}%
+\contentsline {part}{V\hspace {1em}Local Deployment}{67}{part.5}%
+\contentsline {chapter}{\numberline {12}llama-server and llama-embedding}{69}{chapter.12}%
+\contentsline {section}{\numberline {12.1}What llama-embedding Does}{69}{section.12.1}%
+\contentsline {section}{\numberline {12.2}What Embedding Generation Means at the Model Level}{69}{section.12.2}%
+\contentsline {section}{\numberline {12.3}Why Pooling Matters}{69}{section.12.3}%
+\contentsline {section}{\numberline {12.4}llama-embedding vs llama-server \texttt {-{}-embedding}}{70}{section.12.4}%
+\contentsline {section}{\numberline {12.5}Why Embedding Models Are Often Served Separately}{70}{section.12.5}%
+\contentsline {section}{\numberline {12.6}What Gets Indexed}{71}{section.12.6}%
+\contentsline {section}{\numberline {12.7}Why Normalization Matters}{71}{section.12.7}%
+\contentsline {section}{\numberline {12.8}Why Embedding Performance Differs from Generation Performance}{71}{section.12.8}%
+\contentsline {section}{\numberline {12.9}Practical llama-server Invocations}{71}{section.12.9}%
+\contentsline {section}{\numberline {12.10}Practical Deployment Pattern for This Repo}{72}{section.12.10}%
+\contentsline {chapter}{\numberline {13}Query Instructions and Operational Guidance}{73}{chapter.13}%
+\contentsline {section}{\numberline {13.1}Why Query-Side Instructions Help}{73}{section.13.1}%
+\contentsline {section}{\numberline {13.2}The Basic Pattern}{73}{section.13.2}%
+\contentsline {section}{\numberline {13.3}Why Not Instruct Both Sides}{74}{section.13.3}%
+\contentsline {section}{\numberline {13.4}What ``Customize the Instruct'' Really Means}{74}{section.13.4}%
+\contentsline {section}{\numberline {13.5}Example Instruction Templates}{75}{section.13.5}%
+\contentsline {section}{\numberline {13.6}What the Reported 1\%--5\% Drop Means}{75}{section.13.6}%
+\contentsline {section}{\numberline {13.7}Operational Implication}{75}{section.13.7}%
+\contentsline {section}{\numberline {13.8}Operational Checklist}{76}{section.13.8}%
+\contentsline {subsection}{\numberline {13.8.1}Before First Deployment}{76}{subsection.13.8.1}%
+\contentsline {subsection}{\numberline {13.8.2}After Deployment}{76}{subsection.13.8.2}%
+\contentsline {subsection}{\numberline {13.8.3}Upgrading the Stack}{76}{subsection.13.8.3}%
+\contentsline {chapter}{Glossary}{77}{chapter*.3}%

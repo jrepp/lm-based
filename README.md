@@ -107,6 +107,11 @@ Full metadata: [`docs/model-card-index.md`](docs/model-card-index.md)
 ## Key commands
 
 ```bash
+# Guardrails
+pip install pre-commit
+pre-commit install
+pre-commit run --all-files
+
 # Model management
 ./download_model.py --list
 ./download_model.py --model <slug>
@@ -125,6 +130,8 @@ MODEL_SLUG=<slug> ./run-server.py  # override model
 # Run analysis
 ./summarize_run.py --run <run-dir>
 ```
+
+Markdown lint guardrails are enforced through `.pre-commit-config.yaml` using `markdownlint-cli2` over `README.md`, `AGENTS.md`, `CLAUDE.md`, and `docs/*.md`.
 
 ---
 

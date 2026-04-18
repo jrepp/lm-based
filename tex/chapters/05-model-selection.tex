@@ -1,0 +1,203 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Embedding Model Selection}
+\label{ch:model-selection}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+This chapter covers model selection for the specific context of this repo:
+
+\begin{itemize}
+    \item Local inference centered on \texttt{llama.cpp} / \texttt{llama-server}
+    \item The main compatibility target is an OpenAI-compatible local endpoint
+    \item Open WebUI and similar clients are easiest to support when the embedding model
+          is served as a dedicated local embeddings endpoint
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Status}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{warningbox}[Under Re-evaluation]
+The original recommendation (Qwen3-Embedding-4B) was based on MTEB scores. After reviewing
+RTEB research (see Chapter~\ref{ch:rteb}), the question of whether Qwen3-Embedding's rankings
+reflect genuine out-of-distribution generalization or benchmark proximity remains open. The
+final recommendation below reflects the current best assessment given available evidence.
+\end{warningbox}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Shortlist}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Qwen3-Embedding-4B-GGUF}
+
+\textbf{Key findings from the model card:}
+
+\begin{itemize}
+    \item 4B parameters, 32k context length
+    \item Embedding dimension up to 2560, configurable output from 32 to 2560 dims
+    \item 100+ language support
+    \item Official GGUF quantizations including Q4\_K\_M
+    \item Explicit \texttt{llama.cpp} usage documented on the model card:
+\begin{Verbatim}
+llama-embedding ... --pooling last
+llama-server -m model.gguf --embedding --pooling last
+\end{Verbatim}
+    \item 69.45 on multilingual MTEB, 74.60 on MTEB English v2
+\end{itemize}
+
+\textbf{Practical footprint:}
+
+\begin{itemize}
+    \item Q4\_K\_M: \textasciitilde2.5 GB
+    \item F16: \textasciitilde8.05 GB
+\end{itemize}
+
+\textbf{Fit assessment:} Best balance of quality, local footprint, and implementation
+simplicity. Easiest path to adopt because it matches the existing llama.cpp serving model.
+
+\subsection{Qwen3-Embedding-0.6B-GGUF}
+
+\textbf{Key findings:}
+
+\begin{itemize}
+    \item 0.6B parameters, 32k context length, embedding dimension up to 1024
+    \item 100+ language support, instruction awareness, configurable output dimension
+    \item Q8\_0: \textasciitilde639 MB, F16: \textasciitilde1.2 GB
+\end{itemize}
+
+\textbf{Fit assessment:} Strongest low-footprint candidate. Best choice when memory or startup
+speed matters more than absolute retrieval quality.
+
+\subsection{Qwen3-Embedding-8B-GGUF}
+
+\textbf{Key findings:}
+
+\begin{itemize}
+    \item 8B parameters, official GGUF release
+    \item Q4\_K\_M: \textasciitilde4.68 GB
+    \item Part of the same Qwen3 embedding family with multilingual, long-context, and
+          code retrieval emphasis
+\end{itemize}
+
+\textbf{Fit assessment:} Strongest quality option in the reviewed Qwen family. Probably
+overkill for a first local deployment unless retrieval quality is the top priority and the
+extra memory cost is acceptable.
+
+\subsection{BAAI/bge-m3}
+
+\textbf{Key findings:}
+
+\begin{itemize}
+    \item Supports dense, sparse, and multi-vector (ColBERT) retrieval in one model
+    \item 100+ languages, 8{,}192 token context
+    \item The card explicitly recommends hybrid retrieval plus reranking for RAG
+\end{itemize}
+
+\textbf{Fit assessment:} Technically very capable and a strong retrieval baseline. Less
+natural fit for this repo than Qwen3 GGUF because the Hugging Face card is centered on the
+broader BGE ecosystem rather than a simple official GGUF + llama-server serving path.
+
+This model is strongest when you are prepared to build a richer retrieval stack around dense
++ sparse + reranking, not when you want the cleanest single-model local embeddings server.
+
+\subsection{mixedbread-ai/mxbai-embed-large-v1}
+
+\textbf{Key findings:}
+
+\begin{itemize}
+    \item Strong English embedding model
+    \item Retrieval queries should use the prompt:
+          \textit{``Represent this sentence for searching relevant passages:''}
+    \item Supports Matryoshka representation learning and quantization
+    \item Strong March~2024 MTEB results; compares favorably with \texttt{text-embedding-3-large}
+\end{itemize}
+
+\textbf{Fit assessment:} A serious option for English-heavy retrieval, but adopting it
+cleanly here would likely mean introducing a separate embeddings-serving stack (Infinity,
+sentence-transformers) instead of reusing the local GGUF tooling pattern.
+
+\subsection{nomic-embed-text-v1.5-GGUF}
+
+\textbf{Key findings:}
+
+\begin{itemize}
+    \item Official GGUF release, explicitly llama.cpp-compatible
+    \item Requires task instruction prefixes such as \texttt{search\_query:}
+    \item Noted context-extension requirement for the full 8{,}192-token behavior
+    \item Q4\_K\_M: \textasciitilde81 MiB
+\end{itemize}
+
+\textbf{Fit assessment:} Very attractive if tiny footprint is the main requirement. Weaker
+choice than Qwen3 for a new deployment because it is older and its required task prefixes
+add operational sharp edges.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Summary Table}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{center}
+\begin{tabular}{llll}
+\toprule
+\textbf{Model} & \textbf{Strength} & \textbf{Weakness} & \textbf{Fit} \\
+\midrule
+Qwen3-Embedding-4B & Quality + practicality & Heavier than tiny models & Best overall \\
+Qwen3-Embedding-0.6B & Lightweight & Lower ceiling than 4B/8B & Best lightweight \\
+Qwen3-Embedding-8B & Highest quality & More memory & Best max-quality \\
+BAAI/bge-m3 & Dense+sparse versatility & Less direct fit & Good advanced \\
+mxbai-embed-large-v1 & Strong English retrieval & Not GGUF-first & Separate stack \\
+nomic-embed-text-v1.5 & Extremely small & Older, prefix-sensitive & Tiny fallback \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Final Recommendation}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+If the goal is ``state of the art and compatible for local use'':
+
+\begin{enumerate}
+    \item Adopt \texttt{Qwen/Qwen3-Embedding-4B-GGUF}
+    \item Serve it separately from the chat model
+    \item Expose it as the local embeddings endpoint for RAG and Open WebUI
+\end{enumerate}
+
+Why this recommendation is defensible:
+
+\begin{itemize}
+    \item Qwen's Hugging Face cards present the strongest current benchmark story among
+          reviewed candidates
+    \item The family has an official GGUF distribution
+    \item The card explicitly documents \texttt{llama.cpp} / \texttt{llama-server} usage
+    \item The 4B size is large enough to be serious and small enough to be practical
+    \item The Qwen3-Embedding family pairs with Qwen3-Reranker models for a complete
+          two-stage retrieval stack
+\end{itemize}
+
+\begin{notebox}[Reranker Pairing]
+Good retrieval systems often use both an embedding model for fast first-pass candidate
+retrieval and a reranker for slower but more accurate second-pass ordering.
+
+The Qwen3-Reranker family maps directly to the embedding family:
+\begin{itemize}
+    \item \texttt{Qwen/Qwen3-Reranker-0.6B} --- lightweight
+    \item \texttt{Qwen/Qwen3-Reranker-4B} --- balanced
+    \item \texttt{Qwen/Qwen3-Reranker-8B} --- maximum quality
+\end{itemize}
+\end{notebox}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Recommended Next Steps}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{enumerate}
+    \item Check whether Qwen3-Embedding RTEB scores have been published since this was
+          written (the RTEB leaderboard is live and updated).
+    \item Run a small domain-specific internal eval against your actual retrieval corpus.
+          Even 50--100 query-document pairs with manual relevance labels will reveal gross
+          distribution mismatch.
+    \item If internal eval is not feasible, treat Qwen3-Embedding as the leading candidate
+          but defer to RTEB-confirmed alternatives if they appear.
+    \item If deploying only one model first, the embedding model is the right first step
+          because it gives the core \texttt{/v1/embeddings} capability and is the prerequisite
+          for scalable corpus search.
+\end{enumerate}

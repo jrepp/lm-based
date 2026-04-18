@@ -1,0 +1,212 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Retrieval Backends}
+\label{ch:backends}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+This chapter compares storage backends for medium-scale RAG and agent memory use cases.
+Primary reference: analysis of \texttt{\texttildelow/d/memvid} (memvid-core v2.0.139, Rust)
+conducted April~2026.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{memvid v2 --- Deep Analysis}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{What It Is}
+
+A single \texttt{.mv2} binary file containing everything: compressed payloads (zstd/lz4),
+a WAL, a Tantivy BM25 index, an HNSW or flat vector index (bincode-serialized), a time index,
+a CLIP visual index, an SPO entity-relationship graph, and typed ``MemoryCard'' facts.
+No sidecar files. The entire corpus is one portable, optionally-encrypted artifact.
+
+The name is a metaphor---there is no video codec. ``Frames'' are immutable append-only content
+units inspired by video frame semantics. The v1 library (deprecated Python) used QR codes
+embedded in MP4 files; v2 discards that entirely.
+
+\subsection{Storage and Embedding Mechanics}
+
+Embeddings are stored as raw \texttt{Vec<f32>} in the WAL at ingest time, materialized into
+the vector index on \texttt{commit()}.
+
+Index selection at build time:
+
+\begin{itemize}
+    \item \textbf{$<$ 1{,}000 vectors} $\to$ flat scan (bincode \texttt{Vec<VecDocument>}, linear L2 with SIMD)
+    \item \textbf{$\geq$ 1{,}000 vectors} $\to$ HNSW (M=16, ef\_construction=200, hardcoded constants)
+    \item \textbf{Optional PQ96} $\to$ 16$\times$ compression via product quantization, needs $\geq$ 100 vectors
+\end{itemize}
+
+Distance metric is \textbf{L2 (Euclidean)} throughout. Similarity score $= 1.0 - \text{distance}$.
+Callers must normalize vectors externally for cosine equivalence.
+
+Supported embedding sources:
+
+\begin{itemize}
+    \item Local ONNX (BGE-small 384d, BGE-base 768d, nomic-embed-text 768d, gte-large 1024d)
+    \item OpenAI API (text-embedding-3-small 1536d, text-embedding-3-large 3072d, ada-002 1536d)
+    \item CLIP visual (MobileCLIP-S2, 512d)
+    \item Whisper audio (transcription $\to$ text $\to$ embed)
+    \item Caller-provided \texttt{Vec<f32>} via \texttt{put\_with\_embedding()}
+\end{itemize}
+
+\subsection{Retrieval Patterns}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Method} & \textbf{What it does} \\
+\midrule
+\texttt{search()} / \texttt{search\_lex()} & BM25 via Tantivy with sketch pre-filter \\
+\texttt{search\_vec()} & Pure ANN (flat or HNSW), returns distance scores \\
+\texttt{search\_adaptive()} & Vector with score cutoff strategies (cliff, elbow) \\
+\texttt{ask()} & Hybrid BM25 + vector with RRF ($k$=60), intent detection \\
+\texttt{search\_clip()} & Visual similarity over CLIP embeddings \\
+\texttt{graph\_search()} & Entity-relationship pattern matching over SPO MemoryCards \\
+\texttt{timeline()} & Chronological retrieval with time-travel support \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\texttt{ask()} adjusts \texttt{top\_k} multipliers by intent: 1$\times$ (default),
+2$\times$ (recency), 3$\times$ (aggregation), 5$\times$ (analytical).
+
+\subsection{Memory and Agent Features}
+
+\texttt{MemoryCard} types: facts, preferences, events, relationships. Populated via:
+
+\begin{itemize}
+    \item Explicit \texttt{put\_memory\_card()} API call
+    \item Auto-extraction by enrichment workers (background, feature-gated)
+    \item SPO triplet extractor that parses Subject-Predicate-Object from content
+\end{itemize}
+
+\texttt{Logic-Mesh} (entity graph) enables \texttt{graph\_search()} for natural language
+entity queries (``who works at'', ``who likes'', ``lives in'').
+
+\subsection{Performance Profile}
+
+From their own benchmarks on local retrieval:
+
+\begin{itemize}
+    \item P50: \textbf{0.025ms}
+    \item P99: \textbf{0.075ms}
+\end{itemize}
+
+\subsection{Hard Limitations}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Limitation} & \textbf{Impact} \\
+\midrule
+HNSW deletions are no-ops & Deleted frames remain in vector index \\
+Cannot retrieve original embedding from HNSW/PQ & No export without full rebuild \\
+PQ96 and HNSW params hardcoded & No recall/speed tuning \\
+No pre-filtering during ANN & Metadata filters applied after retrieval only \\
+Fully synchronous API & Requires \texttt{spawn\_blocking} in async Rust \\
+Temporal TZ hardcoded to \texttt{America/Chicago} & Incorrect timestamps for non-US deployments \\
+No distributed mode & Single-machine ceiling \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The HNSW deletion no-op is the most significant production concern. Any corpus needing
+forgetting/eviction semantics must call \texttt{finalize\_indexes()} (full-scan rebuild) to
+actually purge deleted embeddings.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Backend Comparison Matrix}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{center}
+\begin{tabular}{lllllll}
+\toprule
+& \textbf{memvid} & \textbf{Qdrant} & \textbf{LanceDB} & \textbf{pgvector} & \textbf{Chroma} & \textbf{sqlite-vec} \\
+\midrule
+Deployment & \texttt{.mv2} file & Docker & Embedded & PG extension & Server/embedded & SQLite ext \\
+Self-hosted & Trivial & Easy & Trivial & Easy & Easy & Trivial \\
+Hybrid search & BM25+vec+RRF & Sparse+dense & vec only & Manual FTS+vec & vec only & vec only \\
+Pre-filter ANN & No & Yes & Yes & Approx & Post only & SQL WHERE \\
+Deletion & HNSW: no-op & Yes & Yes (versioned) & Yes & Yes & Yes \\
+Scale ceiling & 5--20M & 100M+ & 100M+ & 50M+ & $<$5M & $<$10M \\
+Agent/memory & MemoryCards, SPO & None & None & None & None & None \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Key Backend Details}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Qdrant}
+
+Self-hosted via Docker, Rust-native, disk-based HNSW with correct deletions. Inline payload
+filtering during ANN search (exact pre-filter at small scale, sampling at large scale).
+Sparse + dense hybrid search using FastEmbed for on-device BM25. Named collections map cleanly
+to per-model or per-agent namespaces.
+
+Quantization options are configurable at index creation time (scalar int8, PQ, binary).
+REST and gRPC APIs. Strong operational tooling (Prometheus, dashboard).
+
+\textbf{Best fit for:} medium-scale RAG with frequent updates, metadata-filtered ANN,
+self-hosted.
+
+\subsection{LanceDB}
+
+Embedded (zero server), Rust-based, Apache Arrow + Lance columnar format. Supports S3 and
+local disk. Versioned snapshots give correct delete/update semantics without a separate server
+process. Python and Rust APIs both async.
+
+Scale ceiling is much higher than memvid (100M+ vectors) with disk-based storage. Does not
+include BM25 natively---Tantivy integration is an optional add-on.
+
+\textbf{Best fit for:} large-scale RAG, columnar/tabular data, S3-backed or edge deployment,
+zero ops.
+
+\subsection{MongoDB Atlas}
+
+Vector search requires Atlas cloud or the \texttt{mongot} sidecar process. \textbf{Not
+available in community \texttt{mongod}.} This is the primary gate for local-first deployments.
+
+When available: HNSW with configurable similarity metrics, Atlas Search (Lucene-based BM25,
+facets, fuzzy), hybrid retrieval via \texttt{\$unionWith} + RRF scoring pipeline.
+
+\textbf{Best fit for:} heterogeneous memory shapes, complex query logic, teams already using
+Atlas, willing to accept cloud dependency or mongot overhead.
+
+\subsection{pgvector}
+
+PostgreSQL extension. Adds \texttt{vector} type, cosine operator, IVFFlat and HNSW indexes.
+Standard SQL for filtering, joining, and ranking.
+
+\textbf{Best fit for:} teams already running Postgres, structured metadata + vector hybrid
+queries, medium scale ($<$50M vectors with tuning).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Decision Guide}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Scenario} & \textbf{Pick} \\
+\midrule
+Agent long-term memory, time-travel, portable, air-gapped & \textbf{memvid} \\
+Medium-scale RAG, updates/deletes, metadata-filtered ANN & \textbf{Qdrant} \\
+Large-scale RAG, columnar, S3-backed, zero-server & \textbf{LanceDB} \\
+Heterogeneous memory shapes, complex queries, Atlas acceptable & \textbf{MongoDB Atlas} \\
+Existing Postgres infrastructure & \textbf{pgvector} \\
+Prototype or small-scale Python RAG & \textbf{Chroma} \\
+Ultra-lightweight single-file + SQL & \textbf{sqlite-vec} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Stacking memvid with Another Backend}
+
+memvid's agent memory features (MemoryCards, SPO graph, timeline, time-travel) are unique and
+not easily replicated. Its RAG limitations (HNSW deletion no-op, no pre-filtering) are real.
+
+A viable hybrid: use \textbf{memvid for agent memory} (structured facts, conversation
+history, time-travel replay) and \textbf{Qdrant for document RAG} (large corpus, filtered
+ANN, correct deletes). Route queries through clawrouter with memory context injected from
+memvid alongside document context from Qdrant.

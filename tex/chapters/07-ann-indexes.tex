@@ -1,0 +1,174 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{ANN Indexes and Distance Metrics}
+\label{ch:ann}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{The Problem with Exact Search}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Given a query vector and a corpus of $N$ document vectors, exact nearest neighbor search
+computes the distance between the query and every document, then sorts. This is
+$O(N \times d)$ where $d$ is the dimensionality. At 1M documents with 1536-dim vectors, that
+is \textasciitilde1.5B float multiplications per query---too slow for interactive use.
+
+\textbf{ANN (Approximate Nearest Neighbor)} trades a small amount of recall for a large
+speedup. Instead of finding the provably closest $k$ vectors, it finds a very-probably-close
+$k$ with much less computation.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{HNSW --- Hierarchical Navigable Small World}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+The dominant ANN algorithm in production vector stores (Qdrant, pgvector, memvid, Weaviate).
+
+The core idea: build a multi-layer graph where each node is a document vector. Upper layers
+are sparse long-range connections (like highways); lower layers are dense local connections
+(like local roads). At query time, navigate top-down from the sparse layer to the dense layer,
+greedily following edges toward the query vector.
+
+\begin{Verbatim}
+Layer 2 (sparse):  A ─────────────────── E
+Layer 1 (medium):  A ──── B ──── D ───── E
+Layer 0 (dense):   A ─ B ─ C ─ D ─ E ─ F ─ G
+                               ↑
+                           query lands here
+\end{Verbatim}
+
+\textbf{Key parameters:}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Parameter} & \textbf{What it controls} & \textbf{Typical value} \\
+\midrule
+\texttt{M} & Max edges per node per layer. Higher = better recall, larger index & 16 \\
+\texttt{ef\_construction} & Candidate pool at build time. Higher = better graph quality & 200 \\
+\texttt{ef} (search) & Candidate pool at query time. Higher = better recall, slower & 50--200 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+memvid hardcodes M=16, ef\_construction=200 with no runtime override. Qdrant and pgvector
+expose these as configurable at index creation time.
+
+\textbf{Recall vs.\ speed:} HNSW at ef=50 typically achieves 95--99\% recall@10 (meaning
+95--99\% of the true top-10 nearest neighbors are in the returned set) at 10--100$\times$ the
+speed of brute-force scan. Raising ef improves recall at the cost of latency.
+
+\textbf{Memory requirement:} HNSW graphs are in-memory structures. At 1536 dims $\times$
+float32 $\times$ 1M vectors = \textasciitilde6~GB just for raw vectors, plus graph overhead.
+This is the primary scaling ceiling for memvid and pgvector---they are RAM-bound. Qdrant and
+LanceDB use disk-based HNSW with memory-mapped pages.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Flat Scan (Brute Force)}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+At small scale ($<$ \textasciitilde10k vectors), linear scan with SIMD-accelerated distance
+computation is often faster than HNSW because there is no graph traversal overhead. memvid
+uses flat scan below 1{,}000 vectors. Most vector DBs also fall back to exact scan at small
+collection sizes.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{IVFFlat (Inverted File)}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+An older algorithm used in Faiss and pgvector. Clusters vectors into \texttt{nlist} Voronoi
+cells during build. At query time, only searches the \texttt{nprobe} nearest cells. Faster to
+build than HNSW, less memory, but lower recall at the same speed.
+
+pgvector supports both IVFFlat and HNSW. HNSW is generally preferred for recall quality;
+IVFFlat is useful when build time or memory is the constraint.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Product Quantization (PQ)}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+PQ compresses vectors to reduce memory. The vector space is split into $M$ subspaces; each
+subspace is quantized to one of $k$ centroids. A 1536-dim float32 vector (6{,}144 bytes) can
+be compressed to $M$ bytes (one centroid ID per subspace).
+
+memvid's PQ96 splits into 96 subspaces $\times$ 256 centroids of 4 dims each $\to$ 96 bytes
+per vector (64$\times$ compression of the quantized portion). Search uses Asymmetric Distance
+Computation (ADC) with lookup tables---the query is not quantized, only the stored vectors are.
+
+\textbf{Trade-off:} PQ degrades recall compared to exact vectors. The more aggressive the
+compression, the larger the recall loss. PQ is typically combined with HNSW: HNSW navigates
+the graph, distances are computed via ADC.
+
+Qdrant's scalar quantization (SQ8) is a simpler alternative---quantize each dimension from
+float32 to int8 (4$\times$ compression, lower recall loss than PQ).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Distance Metrics}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Cosine Similarity}
+
+Measures the angle between vectors regardless of magnitude:
+
+\[
+\text{cosine}(a, b) = \frac{a \cdot b}{\|a\| \cdot \|b\|}
+\]
+
+Values range from $-1$ (opposite) to $1$ (identical direction). The standard metric for most
+embedding models. Equivalent to dot product on unit-normalized vectors.
+
+\subsection{L2 Distance (Euclidean Distance)}
+
+\[
+L2(a, b) = \sqrt{\sum_i (a_i - b_i)^2}
+\]
+
+Smaller L2 distance means the vectors are more similar. Some backends convert L2 to a
+similarity score via $\text{similarity} = 1.0 - \text{distance}$. This only makes sense when
+vectors are L2-normalized (unit length), because on the unit hypersphere:
+
+\[
+L2(a, b)^2 = 2 \times (1 - \text{cosine\_similarity}(a, b))
+\]
+
+If vectors are not normalized, $1.0 - L2\text{\_distance}$ produces incorrect similarity
+scores---values can go negative and the scale is arbitrary. Callers must normalize embeddings
+before storing them if they want cosine-equivalent ranking from L2 search.
+
+memvid hardcodes L2 distance. Callers must normalize externally for cosine equivalence.
+
+\subsection{Dot Product}
+
+\[
+\text{dot}(a, b) = \sum_i a_i \cdot b_i
+\]
+
+Equivalent to cosine similarity when vectors are unit-normalized. Some models are trained to
+maximize dot product rather than cosine similarity and should not be L2-normalized before
+storage. Check the model card.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Elbow Cutoff (Score Cliff Detection)}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+When an ANN search returns a ranked list, not all results are useful. The score distribution
+typically looks like:
+
+\begin{Verbatim}
+rank:  1     2     3     4     5     6     7     8
+score: 0.91  0.88  0.86  0.85  0.51  0.49  0.47  0.44
+\end{Verbatim}
+
+There is a sharp drop between rank~4 and rank~5. Everything from rank~5 onward is a different
+cluster of relevance---probably noise or tangentially related documents.
+
+The \textbf{elbow} (or cliff) is that drop point. Rather than returning a fixed \texttt{top\_k},
+adaptive retrieval detects where the score curve bends sharply and truncates there.
+
+Common cutoff strategies (as implemented in memvid's \texttt{AdaptiveConfig}):
+
+\begin{description}
+    \item[\texttt{AbsoluteThreshold}] Drop everything below a fixed score (e.g., 0.6)
+    \item[\texttt{RelativeThreshold}] Drop everything below \texttt{ratio} $\times$ top score
+    \item[\texttt{ScoreCliff}] Stop when the score drops more than X\% from the previous result
+    \item[\texttt{Elbow}] Automatic knee-detection in the score curve (derivative-based)
+    \item[\texttt{Combined}] Run multiple strategies; first one to trigger wins
+\end{description}

@@ -1,0 +1,84 @@
+\documentclass{professional-book}
+
+% Version info
+\input{version.tex}
+
+% No benchmark citation system for this book
+% \usepackage{benchcite}
+
+% Document metadata
+\title{Practical Embeddings\\Local RAG with llama.cpp\\and the Qwen3 Stack}
+\author{Jacob Repp}
+\date{\bookdate}
+
+\begin{document}
+
+% Title page
+\maketitle
+
+% Front matter
+\frontmatter
+
+% Abstract
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+This book documents the embedding and retrieval stack built around local \texttt{llama-server}
+inference. It covers the foundations of how embeddings work, how to evaluate and select
+embedding models, and how to assemble a complete Retrieval-Augmented Generation (RAG) pipeline
+running on consumer hardware.
+
+The primary target is a local-first deployment: models served via \texttt{llama-server} from
+GGUF artifacts, embeddings exposed through an OpenAI-compatible HTTP endpoint, and a retrieval
+backend that runs without external infrastructure. The Qwen3 Embedding family is treated as the
+leading local candidate throughout.
+
+The book is organized into five parts:
+
+\begin{enumerate}
+    \item \textbf{Foundations} --- what embeddings are, and how tokenization shapes what models can process
+    \item \textbf{Benchmarks and Model Selection} --- reading MTEB and RTEB scores, selecting for local RAG
+    \item \textbf{Retrieval Architecture} --- dense, sparse, and ColBERT retrieval; ANN indexes; BM25 and RRF
+    \item \textbf{Building the Pipeline} --- chunking strategies, the full RAG pipeline, and storage backend comparison
+    \item \textbf{Local Deployment} --- serving with llama-server, query instructions, and operational guidance
+\end{enumerate}
+
+% Table of contents
+\tableofcontents
+
+% Main matter
+\mainmatter
+
+% Part I: Foundations
+\part{Foundations}
+\include{chapters/01-foundations-embedding}
+\include{chapters/02-tokenization}
+
+% Part II: Benchmarks and Model Selection
+\part{Benchmarks and Model Selection}
+\include{chapters/03-mteb-benchmarks}
+\include{chapters/04-rteb-generalization}
+\include{chapters/05-model-selection}
+
+% Part III: Retrieval Architecture
+\part{Retrieval Architecture}
+\include{chapters/06-retrieval-architectures}
+\include{chapters/07-ann-indexes}
+\include{chapters/08-ranking-bm25-rrf}
+
+% Part IV: Building the Pipeline
+\part{Building the Pipeline}
+\include{chapters/09-chunking-strategies}
+\include{chapters/10-rag-pipeline}
+\include{chapters/11-retrieval-backends}
+
+% Part V: Local Deployment
+\part{Local Deployment}
+\include{chapters/12-llama-server}
+\include{chapters/13-query-instructions}
+
+% Back matter
+\backmatter
+\include{chapters/A-glossary}
+
+\end{document}

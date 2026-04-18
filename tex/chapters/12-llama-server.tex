@@ -1,0 +1,201 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{llama-server and llama-embedding}
+\label{ch:llama-server}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{What llama-embedding Does}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\texttt{llama-embedding} is the llama.cpp command-line tool for generating embeddings
+directly from a model instead of generating text. Conceptually it:
+
+\begin{enumerate}
+    \item Loads an embedding-capable model
+    \item Tokenizes the input text
+    \item Runs a forward pass through the model
+    \item Extracts a vector representation from the model output
+    \item Optionally normalizes or formats that vector for downstream use
+\end{enumerate}
+
+Instead of returning next-token probabilities or generated text, it returns a numeric vector
+that represents the semantic meaning of the input.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{What Embedding Generation Means at the Model Level}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+A transformer processes input tokens into hidden states. An embedding model then turns those
+hidden states into a single fixed-size vector. That vector is what you store in a vector index
+and compare during retrieval.
+
+The key challenge is that token sequences have variable length but vector search wants a
+fixed-size output. So the tool needs a pooling strategy.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Why Pooling Matters}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Pooling is the method used to collapse token-level hidden states into one embedding vector.
+Common pooling strategies:
+
+\begin{description}
+    \item[\texttt{last}] The final token representation (used by Qwen3 embedding models)
+    \item[\texttt{mean}] Average of all token representations
+    \item[\texttt{cls}] The special \texttt{[CLS]} token representation (BERT-style)
+\end{description}
+
+For Qwen3 embedding GGUF models, the official card explicitly requires:
+
+\begin{Verbatim}
+--pooling last
+\end{Verbatim}
+
+This matters because using the wrong pooling mode can degrade retrieval quality even if the
+model ``runs.'' For Qwen3 embedding models, \texttt{last} is not just an implementation
+detail---it is part of using the model correctly.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{llama-embedding vs llama-server \texttt{-{}-embedding}}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+These serve different roles.
+
+\textbf{\texttt{llama-embedding}:}
+
+\begin{itemize}
+    \item One-shot CLI tool
+    \item Useful for local experiments
+    \item Useful for benchmarking
+    \item Useful for generating vectors offline in scripts or batch jobs
+\end{itemize}
+
+\textbf{\texttt{llama-server -{}-embedding}:}
+
+\begin{itemize}
+    \item Long-running service
+    \item Exposes an HTTP endpoint (\texttt{/v1/embeddings})
+    \item Better for OpenAI-compatible clients and apps like Open WebUI
+    \item Better when embeddings need to be requested repeatedly
+\end{itemize}
+
+The rough split is: use \texttt{llama-embedding} to inspect and test; use
+\texttt{llama-server -{}-embedding} to serve a real application.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Why Embedding Models Are Often Served Separately}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+A chat model server and an embedding model server usually have different jobs:
+
+\begin{itemize}
+    \item Chat generation wants \texttt{/v1/chat/completions}
+    \item Embedding search wants \texttt{/v1/embeddings}
+\end{itemize}
+
+They may also need different models, different ports, different throughput assumptions, and
+different memory budgets. That is why a dedicated embedding server is usually cleaner than
+trying to make one chat model do everything.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{What Gets Indexed}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+In a retrieval workflow, you usually do not embed the entire corpus at query time. Instead:
+
+\begin{enumerate}
+    \item Split documents into chunks
+    \item Run \texttt{llama-embedding} or an embedding server over those chunks once
+    \item Store the vectors in a vector DB or ANN index
+    \item At query time, embed only the query
+    \item Compare query vector to stored document vectors
+\end{enumerate}
+
+This is what makes embedding retrieval scalable.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Why Normalization Matters}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Vector similarity is often computed with cosine similarity, dot product, or inner product.
+Many retrieval systems either explicitly normalize vectors or assume a similarity convention
+that effectively depends on normalization behavior.
+
+The practical takeaway: keep the indexing and query pipelines consistent. Do not change vector
+post-processing halfway through a deployment. If query vectors and document vectors are
+produced differently, retrieval quality can silently degrade.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Why Embedding Performance Differs from Generation Performance}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Embedding workloads are more like: encode text, return one vector. Generation workloads are:
+repeatedly decode tokens step by step.
+
+So a model that feels fine for embedding may be much too slow for chat generation, and vice
+versa. That is another reason embedding-specialized models are valuable.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Practical llama-server Invocations}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\textbf{Start an embedding server with Qwen3-Embedding-4B-GGUF:}
+
+\begin{Verbatim}
+llama-server \
+  --model artifacts/Qwen3-Embedding-4B-Q4_K_M.gguf \
+  --embedding \
+  --pooling last \
+  --port 8081 \
+  --ctx-size 4096
+\end{Verbatim}
+
+\textbf{Verify the endpoint is live:}
+
+\begin{Verbatim}
+curl -s http://localhost:8081/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{"input": "test query", "model": "qwen3-embedding"}' \
+  | python3 -m json.tool | head -20
+\end{Verbatim}
+
+\textbf{Generate a single embedding from the CLI:}
+
+\begin{Verbatim}
+llama-embedding \
+  --model artifacts/Qwen3-Embedding-4B-Q4_K_M.gguf \
+  --pooling last \
+  --prompt "Instruct: Retrieve a relevant passage.
+Query: how does KV cache work in llama.cpp?"
+\end{Verbatim}
+
+\textbf{Run-server.py integration (via \texttt{MODEL\_SLUG}):}
+
+\begin{Verbatim}
+MODEL_SLUG=qwen3-embedding-4b ./run-server.py
+\end{Verbatim}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Practical Deployment Pattern for This Repo}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+If this repo adopts \texttt{Qwen3-Embedding-4B-GGUF}, the most likely operational pattern is:
+
+\begin{enumerate}
+    \item Use \texttt{llama-embedding} to validate quality and inspect behavior locally
+    \item Serve the model with \texttt{llama-server -{}-embedding -{}-pooling last}
+    \item Point Open WebUI or another RAG client at that dedicated embeddings endpoint
+    \item Later add a Qwen3-Reranker if top-of-list quality becomes the bottleneck
+\end{enumerate}
+
+The embedding model and generation model run as separate \texttt{llama-server} instances,
+usually on different ports. This avoids context-switch overhead and allows independent tuning
+of each model's memory budget.
+
+\begin{tipbox}[Why the embedding model should come first]
+If you only add one model first, the embedding model is the right first step because it gives
+you the core \texttt{/v1/embeddings} capability, is the prerequisite for scalable corpus
+search, and Open WebUI and RAG systems can immediately benefit from it. Generation quality
+can be improved later by upgrading the chat model; retrieval quality requires the embedding
+model to exist at all.
+\end{tipbox}

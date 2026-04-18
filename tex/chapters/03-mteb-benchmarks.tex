@@ -1,0 +1,212 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Evaluating Embedding Models: MTEB}
+\label{ch:mteb}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+MTEB stands for \textbf{Massive Text Embedding Benchmark}. It is the primary public benchmark
+suite for evaluating embedding models across many task families rather than a single retrieval
+dataset. That breadth is why it is useful---and also why it is easy to overread.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{What MTEB Measures}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+MTEB evaluates models across a mix of task categories:
+
+\begin{itemize}
+    \item Retrieval
+    \item Reranking
+    \item Classification
+    \item Clustering
+    \item Semantic Textual Similarity (STS)
+    \item Pair classification
+    \item Summarization-related matching
+    \item Bitext mining
+\end{itemize}
+
+The exact benchmark composition depends on which leaderboard slice you are looking at:
+English MTEB, multilingual MTEB (MMTEB), or code-focused subsets such as MTEB-Code. A single
+leaderboard score is a compressed summary across many task types, domains, and datasets.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{MTEB Task Taxonomy}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+The official MTEB task taxonomy includes these core text task families:
+
+\begin{description}
+    \item[\texttt{Retrieval}] Retrieve relevant documents for a query from a corpus.
+    \item[\texttt{Reranking}] Reorder a candidate list for better top-of-list relevance.
+    \item[\texttt{Classification}] Assign a label to a text.
+    \item[\texttt{MultilabelClassification}] Assign multiple labels to a text.
+    \item[\texttt{Clustering}] Group texts by semantic similarity without labels.
+    \item[\texttt{PairClassification}] Classify the relationship between two texts.
+    \item[\texttt{STS}] Semantic textual similarity between two texts.
+    \item[\texttt{Summarization}] Evaluate summary-document semantic correspondence.
+    \item[\texttt{BitextMining}] Find semantically matching sentence pairs across languages.
+    \item[\texttt{InstructionRetrieval}] Retrieval tasks where instruction prompting is part of evaluation.
+    \item[\texttt{InstructionReranking}] Reranking tasks where instruction prompting is part of evaluation.
+\end{description}
+
+For a local RAG stack, these are the most important by priority:
+
+\begin{enumerate}
+    \item \texttt{Retrieval}
+    \item \texttt{Reranking}
+    \item \texttt{InstructionRetrieval}
+    \item \texttt{InstructionReranking}
+    \item \texttt{BitextMining} (if multilingual search matters)
+\end{enumerate}
+
+Everything else is useful background signal, but it is not the center of gravity for local RAG.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{How to Read an MTEB Score}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+A high MTEB score generally means the model is broadly capable across many embedding tasks.
+It does not automatically mean:
+
+\begin{itemize}
+    \item It is best for your exact workload
+    \item It is fastest
+    \item It is the easiest to serve locally
+    \item It is best for first-stage retrieval versus reranking
+\end{itemize}
+
+For local RAG work, MTEB should be treated as a strong screening benchmark---not the only
+decision criterion.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Common MTEB Metrics}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+MTEB does not use one single metric for every task. It uses task-appropriate metrics, then
+aggregates results.
+
+\subsection{What \texttt{@k} Means}
+
+When you see metrics like \texttt{nDCG@10}, \texttt{Recall@20}, or \texttt{Precision@5},
+the \texttt{@k} part means: evaluate only the top $k$ ranked items.
+
+\begin{itemize}
+    \item \texttt{nDCG@10} --- score the ranking quality of only the top 10 retrieved items
+    \item \texttt{Recall@20} --- how many relevant items were captured inside the top 20
+    \item \texttt{pass@1} --- did the first attempt succeed?
+\end{itemize}
+
+Real systems almost never use the entire ranked list. They typically use top 5, top 10, or
+top 20. That is why metrics with \texttt{@k} are often more meaningful than a metric over an
+unbounded ranking.
+
+\subsection{nDCG --- Normalized Discounted Cumulative Gain}
+
+nDCG is a ranking metric. Intuitively:
+
+\begin{itemize}
+    \item It rewards returning relevant items near the top
+    \item It rewards putting the most relevant items earlier in the list
+    \item It penalizes good results buried lower in the ranking
+\end{itemize}
+
+nDCG is built from two pieces: DCG (Discounted Cumulative Gain) and IDCG (Ideal DCG).
+The normalized score is:
+
+\[
+\text{nDCG@k} = \frac{\text{DCG@k}}{\text{IDCG@k}}
+\]
+
+The DCG formula with graded relevance is:
+
+\[
+\text{DCG@k} = \sum_{i=1}^{k} \frac{2^{\text{rel}_i} - 1}{\log_2(i + 1)}
+\]
+
+\textbf{Worked example.} Suppose the top-5 retrieved documents have relevance labels
+$A = [3, 2, 0, 1, 0]$:
+
+\begin{align*}
+\text{DCG}_A@5 &= \frac{7}{1} + \frac{3}{1.585} + \frac{0}{2} + \frac{1}{2.322} + \frac{0}{2.585} \\
+               &\approx 7 + 1.893 + 0 + 0.431 + 0 = 9.324
+\end{align*}
+
+The ideal ordering $[3, 2, 1, 0, 0]$ gives $\text{IDCG@5} \approx 9.393$.
+
+\[
+\text{nDCG}_A@5 = \frac{9.324}{9.393} \approx 0.993 \quad \text{(near-ideal ranking)}
+\]
+
+A worse ordering $B = [0, 1, 2, 3, 0]$ of the same documents gives
+$\text{nDCG}_B@5 \approx 0.548$---significantly lower, even though both rankings retrieved
+the same relevant items. nDCG cares about \textbf{order}, not just membership.
+
+\subsection{MAP --- Mean Average Precision}
+
+MAP measures how well relevant items are retrieved across the ranking. It is sensitive to
+whether relevant results appear early, not just whether they appear somewhere. Often used
+when there may be multiple relevant documents per query.
+
+\subsection{Recall@k}
+
+Recall@k asks: among all relevant items, how many were captured in the top $k$ results?
+This is a coverage metric. It is less concerned with the exact order inside the top $k$ than
+nDCG. This matters when your pipeline does first-stage retrieval with a generous top-k
+followed by second-stage reranking: high recall at the retrieval stage is often more important
+than perfect ranking at that stage.
+
+\subsection{Clustering Metrics}
+
+Clustering tasks often use metrics such as V-measure or NMI (Normalized Mutual Information).
+If the embedding space is good, unsupervised clusters should align better with real semantic
+categories.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Which MTEB Metrics Matter Most for RAG}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+If your practical use case is local RAG, the most important categories are:
+
+\begin{itemize}
+    \item Retrieval metrics like nDCG and Recall@k
+    \item Reranking metrics if you plan to add a reranker
+    \item Multilingual retrieval metrics if your corpus or queries span multiple languages
+\end{itemize}
+
+For a two-stage retrieval pipeline:
+
+\begin{itemize}
+    \item Stage-1 embedding retriever should have strong recall
+    \item Stage-2 reranker should improve top-of-list ordering
+\end{itemize}
+
+\begin{notebox}[Practical rule for local retrieval]
+Use \texttt{Recall@k} to judge whether your first-stage embedding retriever is finding enough
+candidates. Use \texttt{nDCG@k} to judge whether the highest-ranked candidates are in the
+right order. Use reranking to improve \texttt{nDCG@k} after retrieval if recall is already good.
+\end{notebox}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Qwen3 Series: What It Targets on MTEB}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+The Qwen3 Embedding and Qwen3 Reranker series are designed as a matched retrieval stack
+rather than isolated single-purpose models. The official model cards describe the series as
+targeting:
+
+\begin{itemize}
+    \item Text retrieval
+    \item Code retrieval
+    \item Text classification
+    \item Text clustering
+    \item Bitext mining
+\end{itemize}
+
+These tasks are related, but not identical. For a local RAG use case, text retrieval and code
+retrieval are the most relevant. The series reports strong MTEB scores: Qwen3-Embedding-4B
+at 69.45 on multilingual MTEB and 74.60 on MTEB English v2 as of June 2025.
+
+\begin{warningbox}[MTEB Score Interpretation]
+High MTEB scores may reflect benchmark proximity rather than out-of-distribution
+generalization. Models trained on data that overlaps with MTEB test sets can achieve inflated
+public scores. See Chapter~\ref{ch:rteb} for the RTEB benchmark designed to detect this.
+\end{warningbox}

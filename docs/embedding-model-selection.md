@@ -6,13 +6,24 @@ Context for this repo:
 - the main compatibility target is an OpenAI-compatible local endpoint
 - Open WebUI and similar clients are easiest to support when the embedding model can be served cleanly as a dedicated local embeddings endpoint
 
-Background on benchmarks, metrics, and retrieval architectures: [embedding-concepts.md](embedding-concepts.md)
+Related documents:
+
+| Document | Contents |
+|---|---|
+| [embedding-concepts.md](embedding-concepts.md) | MTEB / RTEB explainers, benchmark metrics, query instructions, llama-embedding internals |
+| [retrieval-concepts.md](retrieval-concepts.md) | Retrieval architectures (dense / sparse / ColBERT), ANN indexes, ranking vs re-ranking, BM25, RRF |
+| [retrieval-backends.md](retrieval-backends.md) | memvid deep analysis, backend comparison matrix, decision guide |
 
 ---
 
 ## Status
 
 **Under re-evaluation.** The original recommendation (Qwen3-Embedding-4B) was based on MTEB scores. After reviewing RTEB research, the question of whether Qwen3-Embedding's rankings reflect genuine out-of-distribution generalization or benchmark proximity is open. See the RTEB section below before finalising a choice.
+
+Source annotations:
+
+- RTEB launch and benchmark design: https://huggingface.co/blog/rteb
+- Benchmark registry and slices: https://embeddings-benchmark.github.io/mteb/overview/available_benchmarks/
 
 ---
 
@@ -29,6 +40,12 @@ Why it was selected:
 - much more practical locally than the 8B model while still substantially stronger than tiny embedding models
 - multilingual and code retrieval support
 
+Source annotations:
+
+- Qwen3-Embedding-4B-GGUF model card: https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF
+- Qwen3-Embedding-0.6B-GGUF model card: https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF
+- Qwen3-Embedding-8B-GGUF model card: https://huggingface.co/Qwen/Qwen3-Embedding-8B-GGUF
+
 Best lightweight fallback:
 
 - `Qwen/Qwen3-Embedding-0.6B-GGUF`
@@ -43,7 +60,7 @@ Related reranker family worth pairing with the embedding model:
 - `Qwen/Qwen3-Reranker-4B`
 - `Qwen/Qwen3-Reranker-8B`
 
-Good retrieval systems often use both an embedding model for fast first-pass candidate retrieval and a reranker for slower but more accurate second-pass ordering. See [embedding-concepts.md — Retrieval Architectures](embedding-concepts.md#retrieval-architectures).
+Good retrieval systems often use both an embedding model for fast first-pass candidate retrieval and a reranker for slower but more accurate second-pass ordering. See [Retrieval Architectures](embedding-concepts.md#retrieval-architectures).
 
 ---
 
@@ -65,7 +82,7 @@ RTEB's approach:
 References:
 
 - https://huggingface.co/blog/rteb
-- https://github.com/embedding-benchmark/rteb
+- https://embeddings-benchmark.github.io/mteb/overview/available_benchmarks/
 
 ### What RTEB shows about Qwen3-Embedding
 
@@ -78,6 +95,13 @@ What the indirect evidence suggests:
 - Octen-Embedding-8B, which is fine-tuned on Qwen3-8B base, scores **0.8045 on RTEB overall** and performs *slightly higher on private data than public* (0.8157 private vs 0.7953 public). That inverted gap is a strong generalization signal and suggests the Qwen3 foundation model itself is not poisoned.
 - Qwen3-Embedding's three-stage training (contrastive pretraining on weakly supervised data → supervised fine-tuning → model merging) is designed for domain breadth, which is consistent with generalisation.
 - Qwen3-Embedding outperforms BGE-M3 by ~18% on MTEB English v2 and ~8% on MMTEB, which is a larger margin than benchmark contamination alone would typically produce.
+
+Source annotations:
+
+- Octen mention and RTEB framing come from the Hugging Face RTEB launch post: https://huggingface.co/blog/rteb
+- Qwen3 benchmark claims and training description come from the Qwen Hugging Face model cards:
+  https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF
+  https://huggingface.co/Qwen/Qwen3-Embedding-8B-GGUF
 
 Tentative interpretation: Qwen3-Embedding is probably not severely contaminated, but "probably not" is not the same as confirmed. The gap is a known risk for any model released after MTEB became the dominant leaderboard.
 
@@ -96,12 +120,22 @@ Tentative interpretation: Qwen3-Embedding is probably not severely contaminated,
 | Gemini-embedding-001 | 0.7602 | API-only |
 | BGE-M3 | not published | Strong multilingual; 8192-token context; GGUF available; 3× faster via ONNX |
 
+Source annotations:
+
+- RTEB scores and leaderboard framing: https://huggingface.co/blog/rteb
+- BGE-M3 model card: https://huggingface.co/BAAI/bge-m3
+
 For local llama.cpp serving specifically, BGE-M3 is the strongest RTEB-adjacent alternative:
 
 - `BAAI/bge-m3` — GGUF quantizations available from community publishers
-- supports dense, sparse (SPLADE), and ColBERT-style retrieval in a single model (see [embedding-concepts.md — Retrieval Architectures](embedding-concepts.md#retrieval-architectures))
+- supports dense, sparse (SPLADE), and ColBERT-style retrieval in a single model
+  (see [Retrieval Architectures](embedding-concepts.md#retrieval-architectures))
 - well-established generalization reputation predating the MTEB contamination era
 - 8,192 token context vs Qwen3-Embedding's 32K (usually sufficient for chunked retrieval)
+
+Inference notes:
+
+- "RTEB-adjacent" is an inference from the public benchmark and model-card evidence, not a published first-party RTEB result for BGE-M3.
 
 ### Recommended next step
 
@@ -131,6 +165,10 @@ Key findings from the model card:
 - the card reports `Qwen3-Embedding-4B` at `69.45` on multilingual MTEB and `74.60` on MTEB English v2
 - the same card reports the 8B model at the top of the multilingual MTEB leaderboard as of June 5, 2025
 
+Source annotations:
+
+- https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF
+
 Fit assessment:
 
 - best balance of quality, local footprint, and implementation simplicity
@@ -141,7 +179,7 @@ Practical footprint:
 - the model card lists `Q4_K_M` at about `2.5 GB`
 - `F16` is about `8.05 GB`
 
-## 2. Qwen3-Embedding-0.6B-GGUF
+### 2. Qwen3-Embedding-0.6B-GGUF
 
 Hugging Face:
 
@@ -157,6 +195,10 @@ Key findings:
 - same Qwen3 embedding family features: instruction awareness and configurable output dimension
 - official model card exposes the same `llama.cpp`-friendly usage pattern
 
+Source annotations:
+
+- https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF
+
 Fit assessment:
 
 - strongest low-footprint candidate from the reviewed set
@@ -167,7 +209,7 @@ Practical footprint:
 - the card lists `Q8_0` at about `639 MB`
 - `F16` is about `1.2 GB`
 
-## 3. Qwen3-Embedding-8B-GGUF
+### 3. Qwen3-Embedding-8B-GGUF
 
 Hugging Face:
 
@@ -180,12 +222,16 @@ Key findings:
 - `Q4_K_M` listed at about `4.68 GB`
 - part of the same Qwen3 embedding family with multilingual, long-context, and code retrieval emphasis
 
+Source annotations:
+
+- https://huggingface.co/Qwen/Qwen3-Embedding-8B-GGUF
+
 Fit assessment:
 
 - strongest quality option in the reviewed Qwen family
 - probably overkill for a first local deployment unless retrieval quality is the top priority and the extra memory cost is acceptable
 
-## 4. BAAI/bge-m3
+### 4. BAAI/bge-m3
 
 Hugging Face:
 
@@ -198,6 +244,10 @@ Key findings:
 - supports up to 8192 tokens
 - the card explicitly recommends hybrid retrieval plus reranking for RAG
 
+Source annotations:
+
+- https://huggingface.co/BAAI/bge-m3
+
 Fit assessment:
 
 - technically very capable and still a strong retrieval baseline
@@ -207,7 +257,7 @@ Inference:
 
 - this looks strongest when you are prepared to build a richer retrieval stack around dense + sparse + reranking, not when you want the cleanest single-model local embeddings server
 
-## 5. mixedbread-ai/mxbai-embed-large-v1
+### 5. mixedbread-ai/mxbai-embed-large-v1
 
 Hugging Face:
 
@@ -221,6 +271,10 @@ Key findings:
 - supports Matryoshka representation learning and quantization
 - the card reports strong March 2024 MTEB results and compares favorably with `text-embedding-3-large`
 
+Source annotations:
+
+- https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1
+
 Fit assessment:
 
 - still a serious option for English-heavy retrieval
@@ -230,7 +284,7 @@ Inference:
 
 - good model, but adopting it cleanly here would likely mean introducing a separate embeddings-serving stack instead of reusing the local GGUF tooling pattern
 
-## 6. nomic-embed-text-v1.5-GGUF
+### 6. nomic-embed-text-v1.5-GGUF
 
 Hugging Face:
 
@@ -244,6 +298,10 @@ Key findings:
 - llama.cpp compatibility is called out directly in the model card
 - the card notes llama.cpp defaults to 2048 context here unless you apply a context-extension method for the full 8192-token behavior
 - very small quantized sizes, including `Q4_K_M` at roughly `81 MiB`
+
+Source annotations:
+
+- https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF
 
 Fit assessment:
 
@@ -279,6 +337,11 @@ Why this recommendation is defensible:
 - the family has an official GGUF distribution
 - the card explicitly documents `llama.cpp` / `llama-server` usage
 - the 4B size is large enough to be serious and small enough to be practical
+
+Source annotations:
+
+- Qwen3-Embedding-4B-GGUF: https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF
+- RTEB retrieval-benchmark framing: https://huggingface.co/blog/rteb
 
 ## Sources
 

@@ -1,0 +1,27 @@
+%% isof-code.sty
+%% Shared code styling for ISOF documentation
+%% Part of the ISOF componentized documentation framework
+
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{isof-code}[2025/02/10 ISOF Code Styling]
+
+% Requires color definitions and fancyvrb
+\RequirePackage{isof-colors}
+\RequirePackage{fancyvrb}
+
+% Code block environment using fancyvrb
+\DefineVerbatimEnvironment{code}{Verbatim}{
+    frame=single,
+    framesep=10pt,
+    rulecolor=\color{lightgray},
+    formatcom=\color{darkgray},
+    fontsize=\small,
+    baselinestretch=1.0,
+    xleftmargin=0pt,
+    xrightmargin=0pt
+}
+
+% Inline code command
+\newcommand{\inlinecode}[1]{\texttt{\textcolor{darkgray}{#1}}}
+
+\endinput

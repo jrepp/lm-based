@@ -1,0 +1,197 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Retrieval Architectures}
+\label{ch:retrieval-arch}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Embedding models can produce different kinds of representations. The architecture determines
+what kind of index you build and how query-document similarity is computed.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Dense Retrieval}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+The standard approach. One vector per text.
+
+\begin{Verbatim}
+query  → [single vector]
+doc    → [single vector]
+score  = dot_product(query_vec, doc_vec)
+\end{Verbatim}
+
+Fast at query time. Index is compact. Works well when queries and documents are semantically
+similar in the embedding space.
+
+\textbf{Weakness:} a single vector must compress all meaning. Queries that need to match
+multiple distinct aspects of a document can lose signal.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Sparse Retrieval (SPLADE)}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Instead of a dense vector, the model outputs a sparse weighted term vocabulary---like a
+learned BM25.
+
+\begin{Verbatim}
+query → {term: weight, term: weight, ...}  (most weights ≈0)
+doc   → {term: weight, term: weight, ...}
+score = sum of overlapping weighted terms
+\end{Verbatim}
+
+Good at exact and near-exact term matching. Complements dense retrieval on queries where
+lexical specificity matters: version numbers, proper nouns, code tokens.
+
+BGE-M3 includes a sparse retrieval head alongside its dense head, making hybrid pipelines
+cheaper to operate.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{ColBERT --- Multi-vector / Late Interaction}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+ColBERT keeps one vector per token rather than collapsing to a single vector.
+
+\begin{Verbatim}
+query: [what]  [is]  [the]  [capital]
+          ↓      ↓     ↓       ↓
+          q1     q2    q3      q4
+
+doc:  [Paris] [is] [a] [city] [in] [France]
+          ↓      ↓   ↓    ↓      ↓     ↓
+          d1     d2  d3   d4     d5    d6
+\end{Verbatim}
+
+Similarity (MaxSim):
+
+\begin{Verbatim}
+score = sum over each qi of: max(dot(qi, dj) for all dj)
+\end{Verbatim}
+
+Each query token independently finds its best matching document token, then scores are summed.
+
+\textbf{Why it matters:}
+
+\begin{itemize}
+    \item ``bank of a river'' and ``bank loan'' map to the same dense vector in ambiguous
+          models; ColBERT keeps them distinct because \textit{river} and \textit{loan} match
+          different document tokens
+    \item Multi-aspect queries (``fast AND cheap AND local'') get each aspect separately
+          matched rather than compressed into one average direction
+    \item Exact token sensitivity: ``Python~3.11 migration'' won't match a document about
+          ``Python~2.7'' because \textit{3.11} and \textit{2.7} pull in different directions
+\end{itemize}
+
+\textbf{Tradeoffs:}
+
+\begin{center}
+\begin{tabular}{llll}
+\toprule
+& \textbf{Dense} & \textbf{Sparse} & \textbf{ColBERT} \\
+\midrule
+Index size & small & medium & large (tokens $\times$ docs) \\
+Query speed & very fast & fast & slower \\
+Recall on complex queries & good & good for lexical & better \\
+Typical use & first-stage retrieval & hybrid retrieval & reranking or dedicated index \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Hybrid Retrieval}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Most production systems combine modes rather than choosing one:
+
+\begin{enumerate}
+    \item Dense retrieval $\to$ top-k candidates (fast, high recall)
+    \item Sparse/ColBERT reranking $\to$ reorder top-k (slower, higher precision)
+\end{enumerate}
+
+BGE-M3 is notable because it runs all three modes (dense, sparse, ColBERT) from a single set
+of weights, making hybrid pipelines cheaper to operate than maintaining separate models.
+
+The typical local deployment for this repo uses dense retrieval for first-stage candidate
+generation and reserves sparse or ColBERT for a second-stage reranking pass.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Retrieval vs Re-ranking: The Two-Stage Pattern}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+This distinction is one of the most important things to understand when choosing an embedding
+stack.
+
+\subsection{Stage 1: Ranking (Retrieval)}
+
+Ranking is the initial ordering produced by the retriever. In an embedding pipeline:
+
+\begin{enumerate}
+    \item Embed the query
+    \item Embed all documents or chunks ahead of time
+    \item Compute similarity
+    \item Return the top $k$ nearest items
+\end{enumerate}
+
+This stage is fast, scalable, and approximate. Document embeddings are precomputed; nearest-
+neighbor search can be indexed efficiently.
+
+\subsection{Stage 2: Re-ranking}
+
+Re-ranking is a second pass over the candidate set returned by the retriever:
+
+\begin{enumerate}
+    \item Retriever returns top 20, 50, or 100 candidates
+    \item Reranker reads the query plus each candidate together
+    \item Reranker assigns a more exact relevance score
+    \item Candidates are reordered before being passed to generation
+\end{enumerate}
+
+This stage is slower and more expensive, but usually more accurate, because the reranker can
+reason over the direct query-document interaction rather than coarse vector proximity.
+
+\subsection{Why Not Rerank Everything?}
+
+Reranking does not scale to a large corpus. If you have 1M chunks, you can vector-search them
+efficiently, but you do not want to run a cross-encoder reranker over all 1M. So the pattern
+is: retrieve broadly, rerank narrowly.
+
+\subsection{What Each Stage Optimizes For}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Stage} & \textbf{Goal} \\
+\midrule
+Embedding model & Maximize semantic recall at scale; good-enough ranking \\
+Reranker & Maximize precision at the top of the list \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Embedding and reranking scores are not interchangeable. A strong embedding model that gets
+the right document in the top 20 at high speed is more valuable than a slow but precise model
+that cannot serve queries under load.
+
+\subsection{Practical Retrieval Stack}
+
+A strong modern local retrieval stack:
+
+\begin{enumerate}
+    \item Embedding model generates query and document vectors
+    \item ANN index (HNSW) returns top 20--100 candidates (see Chapter~\ref{ch:ann})
+    \item Reranker rescoring narrows to best top 5--10
+    \item Only the highest-ranked chunks go into the final LLM prompt
+\end{enumerate}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Architecture Selection Guide}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{description}
+    \item[First local deployment] Use dense retrieval with Qwen3-Embedding-4B. Serve with
+          \texttt{llama-server~--embedding~--pooling~last}. Add reranking if top-of-list
+          precision becomes a bottleneck.
+    \item[Hybrid search needed] Add BM25 alongside vector search; fuse results with RRF (see
+          Chapter~\ref{ch:ranking}). memvid includes this by default in its \texttt{ask()} method.
+    \item[ColBERT / multi-vector] Introduce BGE-M3 if you need multi-aspect query matching
+          and are willing to manage a larger index. Not the first step.
+    \item[Complex code retrieval] ColBERT or sparse retrieval may outperform pure dense for
+          queries with specific identifiers, version numbers, or exact function names.
+\end{description}

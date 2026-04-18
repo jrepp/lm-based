@@ -1,0 +1,308 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Chunking Strategies}
+\label{ch:chunking}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Chunking is the process of splitting documents into smaller pieces before embedding and
+indexing. It is one of the highest-leverage decisions in a RAG system---more so than model
+choice in many cases. Poor chunking degrades retrieval quality regardless of how good the
+embedding model is.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Why Chunk at All?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Two reasons force chunking:
+
+\textbf{1. Token limits.} Embedding models have a maximum input length (typically 512--8{,}192
+tokens). A document longer than that limit must be split before it can be embedded. Truncation
+is the naive alternative---it silently discards everything past the limit.
+
+\textbf{2. Retrieval precision.} A vector representing a 20{,}000-word document compresses too
+much information into one point. When you retrieve that document in response to a specific
+question, most of its content is irrelevant to the query. The retrieved context sent to the LLM
+is bloated with noise.
+
+Chunking trades recall (a whole document contains the answer somewhere) for precision (the
+specific chunk most relevant to the query is returned).
+
+\begin{tipbox}[When Not to Chunk]
+Long-context generative models (Gemini 2.0, Claude with 200K context) can ingest entire
+documents. If the corpus is small enough that all documents fit in the model's context window,
+chunking adds complexity without benefit. Chunking makes sense when: the corpus is too large
+to fit in one prompt, retrieval must select relevant content from many documents, or the LLM
+context budget is constrained.
+\end{tipbox}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{The Chunk Size Tradeoff}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Chunk size is the central tuning parameter:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Smaller chunks} & \textbf{Larger chunks} \\
+\midrule
+Higher retrieval precision & Higher recall \\
+Less context per retrieved chunk & More context per chunk \\
+More chunks to index and store & Fewer chunks, smaller index \\
+Better for fact lookup, Q\&A & Better for synthesis, summarization \\
+Risk: answer split across boundary & Risk: irrelevant content dilutes chunk \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Typical defaults by use case:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Use case} & \textbf{Chunk size} \\
+\midrule
+Q\&A over technical docs & 256--512 tokens \\
+General knowledge retrieval & 512--1{,}024 tokens \\
+Long-form synthesis & 1{,}024--2{,}048 tokens \\
+Code retrieval & Function/class boundary (variable) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+There is no universal optimal. Test on representative queries from your domain.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Strategy 1: Fixed-Size Chunking}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Split every $N$ characters (or tokens), regardless of content boundaries.
+
+\begin{Verbatim}
+document = "The model uses attention mechanisms. Attention allows..."
+
+chunk 1 = "The model uses attention mec"   ← breaks mid-word
+chunk 2 = "hanisms. Attention allows..."
+\end{Verbatim}
+
+\textbf{Advantage:} Simple. Predictable chunk sizes. Easy to implement.
+
+\textbf{Disadvantage:} Breaks at arbitrary points---mid-sentence, mid-word, mid-concept.
+Fixed-size chunking without overlap is rarely useful in practice.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Strategy 2: Fixed-Size with Overlap}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Like fixed-size, but each chunk shares some content with the previous and next chunk.
+
+\begin{Verbatim}
+chunk_size = 500 tokens
+overlap    = 100 tokens
+
+chunk 1: tokens 0–499
+chunk 2: tokens 400–899    ← shares 100 tokens with chunk 1
+chunk 3: tokens 800–1299   ← shares 100 tokens with chunk 2
+\end{Verbatim}
+
+\textbf{Why overlap exists:} If the relevant answer spans a chunk boundary, overlap ensures
+the answer appears whole in at least one chunk. Without overlap, a sentence split at the
+boundary would be partially in chunk~N and partially in chunk~N+1, and neither chunk would
+retrieve well.
+
+\textbf{Disadvantage:} Increases index size proportional to overlap fraction. Same content
+appears multiple times in search results, requiring deduplication.
+
+\textbf{Typical overlap:} 10--20\% of chunk size. Higher overlap for fine-grained Q\&A;
+lower for storage-constrained deployments.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Strategy 3: Sentence-Boundary Chunking}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Accumulate text until reaching the size target, but only split at sentence boundaries
+(`.`, `!`, `?`, paragraph breaks).
+
+\textbf{Advantage:} Each chunk is semantically coherent. No broken sentences. Better
+embedding quality because the model receives grammatically complete input.
+
+\textbf{Disadvantage:} Chunk sizes vary. A single very long sentence can exceed the target.
+Requires a sentence tokenizer (spaCy, NLTK, or heuristic regex).
+
+This is the preferred baseline for most RAG systems. memvid approximates this with its
+``natural breakpoint'' look-ahead (finding sentence/paragraph endings near the target
+boundary).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Strategy 4: Recursive Character Splitting}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Split on the most natural boundary available, falling back to coarser splits only when
+necessary.
+
+\begin{Verbatim}
+Priority order: paragraph → sentence → word → character
+
+1. Try splitting on "\n\n" (paragraph breaks)
+2. If any resulting chunk is too large, split on ". " (sentences)
+3. If still too large, split on " " (words)
+4. If still too large, split on "" (characters)
+\end{Verbatim}
+
+This is the default strategy in LangChain and LlamaIndex. It preserves document structure
+when possible and only resorts to arbitrary splits when forced.
+
+\textbf{Advantage:} Produces coherent chunks across a wide range of document types without
+per-format configuration.
+
+\textbf{Disadvantage:} Can still break logical units (a numbered list, a table row, a code
+block) when the target size forces it.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Strategy 5: Structure-Aware Chunking}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Use knowledge of the document's format to split on meaningful boundaries:
+
+\begin{itemize}
+    \item \textbf{Markdown}: split on headers (\texttt{\#\#}, \texttt{\#\#\#}), preserve
+          fenced code blocks and tables whole
+    \item \textbf{HTML}: split on \texttt{<section>}, \texttt{<article>}, \texttt{<h2>} tags
+    \item \textbf{PDF with structure}: split on section headers from the PDF outline
+    \item \textbf{Code}: split on function/class definitions, not arbitrary line counts
+    \item \textbf{Tables}: keep each row (or the whole table) as a unit; propagate headers
+          to every chunk
+\end{itemize}
+
+\textbf{Advantage:} Chunks align with the document's own logical structure.
+
+\textbf{Disadvantage:} Requires a parser per document type. Section-level chunks can be very
+long or very short depending on the document.
+
+memvid activates structure-aware mode when it detects Markdown tables or code fences,
+propagating table headers to continuation chunks.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Strategy 6: Semantic Chunking}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Split based on \textbf{topic shift} rather than size targets. Embed each sentence, compute
+cosine similarity between adjacent sentence vectors, and insert a chunk boundary where
+similarity drops sharply (a semantic ``cliff'').
+
+\begin{Verbatim}
+sentence 1 → vector
+sentence 2 → vector  similarity(1,2) = 0.92  → no split
+sentence 3 → vector  similarity(2,3) = 0.89  → no split
+sentence 4 → vector  similarity(3,4) = 0.41  → SPLIT HERE
+sentence 5 → vector  similarity(4,5) = 0.88  → no split
+\end{Verbatim}
+
+\textbf{Advantage:} Chunk boundaries align with actual topic transitions. Each chunk has a
+single coherent topic. Retrieval precision improves.
+
+\textbf{Disadvantage:} Requires running the embedding model during indexing (not just at query
+time). Chunk sizes are unpredictable. Topic shifts within a long sentence are not detected.
+
+Semantic chunking is most valuable for long, multi-topic documents (books, reports, wikis).
+For short uniform documents (product descriptions, Q\&A pairs) it adds cost without benefit.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Strategy 7: Parent-Child (Small-to-Big) Chunking}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Index small chunks for retrieval precision, but return the larger parent chunk to the LLM
+for context richness.
+
+\begin{Verbatim}
+Parent chunk:  full section (1200 tokens)  ← not directly indexed
+Child chunks:  each paragraph (~200 tokens) ← these are embedded and indexed
+
+Query → retrieve child chunks → return their parent to the LLM
+\end{Verbatim}
+
+\textbf{Why this works:} Small child chunks match queries precisely. But the LLM benefits
+from the broader context of the parent section, which includes surrounding sentences that
+explain the child chunk.
+
+\textbf{Variants:}
+
+\begin{itemize}
+    \item Sentence $\to$ paragraph (retrieve sentences, return paragraphs)
+    \item Paragraph $\to$ section (retrieve paragraphs, return sections)
+    \item Chunk $\to$ full document (retrieve chunks, return whole document)
+\end{itemize}
+
+memvid implements this: \texttt{FrameRole::DocumentChunk} for child chunks,
+\texttt{FrameRole::Document} for the parent, linked by \texttt{parent\_id}.
+
+\textbf{Disadvantage:} Doubles the storage (parent and child both stored). The parent context
+may still include irrelevant content. Works best when document sections have natural boundaries.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Strategy 8: Late Chunking}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+An emerging strategy for ColBERT-style models. Rather than chunking before embedding, embed
+the whole document and then extract chunk-level embeddings from the token-level outputs.
+
+\begin{Verbatim}
+Document → [embedding model] → token vectors (one per token)
+                              → pool each chunk's token range into one vector
+\end{Verbatim}
+
+\textbf{Advantage:} Eliminates boundary artifacts---a sentence at the start of the document
+has the same embedding quality as one in the middle.
+
+\textbf{Disadvantage:} Requires a model that exposes token-level outputs (ColBERT-style or raw
+transformer outputs). Not supported by the standard OpenAI-compatible embeddings API.
+Currently experimental.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{How memvid Handles Chunking}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+memvid's chunking implementation (\texttt{src/memvid/chunks.rs}):
+
+\begin{itemize}
+    \item Default: 1{,}200-character chunks with $\pm$240-char look-ahead for natural breakpoints
+    \item Documents under 2{,}400 chars are not chunked
+    \item Structure-aware mode activates on detection of Markdown tables or code fences
+    \item Tables: splits between rows, propagates headers to continuation chunks
+    \item Code: keeps fenced blocks whole where possible
+    \item Parent-child: \texttt{FrameRole::Document} links to \texttt{FrameRole::DocumentChunk}
+          children via \texttt{parent\_id}; \texttt{TextChunkManifest} records each child's
+          \texttt{(start, end)} character range
+\end{itemize}
+
+\textbf{Gaps:} no overlap, no semantic chunking, no sentence-boundary splitting (heuristic
+only), no recursive character fallback. These are reasonable defaults for a general-purpose
+embedded store but may need supplementing for domain-specific corpora.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Practical Checklist}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+When designing a chunking strategy:
+
+\begin{enumerate}
+    \item \textbf{Know your documents.} Short uniform records behave differently from long
+          heterogeneous documents. Sample 20--30 representative documents before choosing
+          a strategy.
+
+    \item \textbf{Know your queries.} Fact-lookup queries benefit from small precise chunks.
+          Synthesis queries benefit from larger chunks.
+
+    \item \textbf{Start simple.} Sentence-boundary chunks with 15\% overlap is a good default.
+          Measure retrieval quality before adding complexity.
+
+    \item \textbf{Measure chunk size distribution.} Check the p50, p95, and max chunk sizes.
+          Outliers (single-sentence chunks, oversized sections) degrade retrieval differently
+          than average chunks.
+
+    \item \textbf{Always store metadata.} At minimum: source, section, date. This is cheap to
+          add and expensive to reconstruct later.
+
+    \item \textbf{Plan for re-chunking.} When you change chunking strategy or embedding model,
+          the entire index must be rebuilt. Design ingestion pipelines so re-chunking is not a
+          one-time manual operation.
+\end{enumerate}

@@ -1,8 +1,12 @@
 # Embedding Concepts
 
-Background reference for embedding model evaluation, retrieval architectures, and benchmark interpretation.
+Background reference for embedding model evaluation, benchmarks, and model internals.
 
-For model selection and comparison: [embedding-model-selection.md](embedding-model-selection.md)
+Related documents:
+
+- For model selection and comparison: [embedding-model-selection.md](embedding-model-selection.md)
+- For retrieval algorithms and index structures: [retrieval-concepts.md](retrieval-concepts.md)
+- For storage backend comparison: [retrieval-backends.md](retrieval-backends.md)
 
 ---
 
@@ -17,6 +21,11 @@ The key idea is:
 - reranker models then read the query and each candidate document together and assign a more precise relevance score
 
 That is why the Qwen cards emphasize both embedding and ranking tasks.
+
+Source annotations:
+
+- Qwen3 embedding family overview: https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF
+- Qwen3 higher-end family context: https://huggingface.co/Qwen/Qwen3-Embedding-8B-GGUF
 
 ### What the Qwen3 embedding series is trying to be good at
 
@@ -96,6 +105,12 @@ If a model performs well here, it is usually a good sign for:
 - cross-lingual retrieval
 - translation-memory style systems
 
+Source annotations:
+
+- Task targets and multilingual positioning in this section are drawn from the Qwen Hugging Face model cards:
+  https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF
+  https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF
+
 ## MTEB Explainer
 
 MTEB stands for `Massive Text Embedding Benchmark`.
@@ -105,6 +120,10 @@ Official references:
 - https://embeddings-benchmark.github.io/mteb/
 - https://github.com/embeddings-benchmark/mteb
 - https://huggingface.co/mteb
+
+Source annotations:
+
+- The task taxonomy and benchmark-family references below come from these MTEB sources.
 
 At a high level, MTEB is a benchmark suite for evaluating embedding models across many task families rather than only one retrieval dataset.
 
@@ -185,6 +204,10 @@ And the broader benchmark catalog now includes retrieval-heavy subsets and bench
 
 That matters because MTEB is not one monolithic test. It is a framework spanning many concrete datasets and benchmark bundles.
 
+Inference notes:
+
+- The prioritization for local RAG use in this document is a repo-specific recommendation layered on top of the official MTEB taxonomy.
+
 ### How to read an MTEB score
 
 A high MTEB score generally means:
@@ -209,7 +232,7 @@ MTEB does not use one single metric for every task. It uses task-appropriate met
 
 The most important ones to understand are:
 
-### What `@k` means
+#### What `@k` means
 
 When you see metrics like:
 
@@ -263,7 +286,7 @@ Why it matters:
 
 - if your application only shows the top few hits, ranking quality near the top matters a lot
 
-### nDCG deep dive
+##### nDCG deep dive
 
 `nDCG` is one of the most important retrieval metrics because it measures not just:
 
@@ -660,6 +683,10 @@ So RTEB is explicitly trying to be:
 - more realistic
 - more resistant to benchmark overfitting
 
+Source annotations:
+
+- This framing comes directly from the Hugging Face RTEB launch post: https://huggingface.co/blog/rteb
+
 ### Why RTEB matters more than generic MTEB for local RAG
 
 Your actual local use case is not:
@@ -704,6 +731,10 @@ That matters because the benchmark is trying to balance:
 
 - reproducibility
 - anti-overfitting protection
+
+Source annotations:
+
+- https://huggingface.co/blog/rteb
 
 ### Default metric: nDCG@10
 
@@ -763,6 +794,11 @@ The Hugging Face article also gives concrete open-dataset examples across domain
   `ChatDoctor_HealthCareMagic`, `HC3 Medicine`, `Cure`, `TripClick`
 - multilingual and general retrieval:
   `MIRACLHardNegatives`, `JaQuAD`, `FreshStack`
+
+Source annotations:
+
+- RTEB launch article: https://huggingface.co/blog/rteb
+- Benchmark slices and naming: https://embeddings-benchmark.github.io/mteb/overview/available_benchmarks/
 
 That is a more useful picture than thinking of RTEB as just "one retrieval score."
 
@@ -850,6 +886,10 @@ If I were choosing for a local RAG-first setup, I would trust:
 
 in exactly that order
 
+Inference notes:
+
+- That trust ordering is an operational recommendation for this repo, not a quoted benchmark rule.
+
 ### What this means for this repo
 
 For this repo, the practical lesson from the Hugging Face RTEB article is:
@@ -867,172 +907,6 @@ So the right benchmark-reading order for this repo is:
 
 
 ---
-
-## Retrieval Architectures
-
-Embedding models can produce different kinds of representations. The architecture determines what kind of index you build and how query-document similarity is computed.
-
-### Dense retrieval
-
-The standard approach. One vector per text.
-
-```
-query  → [single vector]
-doc    → [single vector]
-score  = dot_product(query_vec, doc_vec)
-```
-
-Fast at query time. Index is compact. Works well when queries and documents are semantically similar in the embedding space.
-
-Weakness: a single vector must compress all meaning. Queries that need to match multiple distinct aspects of a document can lose signal.
-
-### Sparse retrieval (SPLADE)
-
-Instead of a dense vector, the model outputs a sparse weighted term vocabulary — like a learned BM25.
-
-```
-query → {term: weight, term: weight, ...}  (most weights ~0)
-doc   → {term: weight, term: weight, ...}
-score = sum of overlapping weighted terms
-```
-
-Good at exact and near-exact term matching. Complements dense retrieval on queries where lexical specificity matters (version numbers, proper nouns, code tokens).
-
-BGE-M3 includes a sparse retrieval head alongside its dense head.
-
-### ColBERT (multi-vector / late interaction)
-
-ColBERT keeps one vector per token rather than collapsing to a single vector.
-
-```
-query: [what]  [is]  [the]  [capital]
-          ↓      ↓     ↓       ↓
-          q1     q2    q3      q4
-
-doc:  [Paris] [is] [a] [city] [in] [France]
-          ↓      ↓   ↓    ↓      ↓     ↓
-          d1     d2  d3   d4     d5    d6
-```
-
-Similarity (MaxSim):
-
-```
-score = sum over each qi of: max(dot(qi, dj) for all dj)
-```
-
-Each query token independently finds its best matching document token, then the scores are summed.
-
-Why it matters:
-
-- "bank of a river" and "bank loan" map to the same dense vector in ambiguous models; ColBERT keeps them distinct because `river` and `loan` match different document tokens
-- multi-aspect queries ("fast AND cheap AND local") get each aspect separately matched rather than compressed into one average direction
-- exact token sensitivity: "Python 3.11 migration" won't match a document about "Python 2.7" because `3.11` and `2.7` pull in different directions
-
-Tradeoffs:
-
-| | Dense | Sparse | ColBERT |
-|---|---|---|---|
-| Index size | small | medium | large (tokens × docs) |
-| Query speed | very fast | fast | slower |
-| Recall on complex queries | good | good for lexical | better |
-| Typical use | first-stage retrieval | hybrid retrieval | reranking or dedicated index |
-
-### Hybrid retrieval
-
-Most production systems combine modes rather than choosing one:
-
-1. Dense retrieval → top-k candidates (fast, high recall)
-2. Sparse/ColBERT reranking → reorder top-k (slower, higher precision)
-
-BGE-M3 is notable because it runs all three modes (dense, sparse, ColBERT) from a single set of weights, making hybrid pipelines cheaper to operate than maintaining separate models.
-
-## Ranking vs Re-ranking
-
-This distinction is one of the most important things to understand when choosing an embedding stack.
-
-### Ranking
-
-Ranking is the initial ordering produced by the retriever.
-
-In an embedding pipeline, the usual process is:
-
-1. embed the query
-2. embed all documents or chunks ahead of time
-3. compute similarity
-4. return the top `k` nearest items
-
-This stage is:
-
-- fast
-- scalable
-- approximate
-
-Why it is fast:
-
-- document embeddings are precomputed
-- nearest-neighbor search can be indexed efficiently
-
-Why it is approximate:
-
-- the retriever compares fixed vectors, not full query-document reasoning
-
-### Re-ranking
-
-Re-ranking is a second pass over the candidate set returned by the retriever.
-
-Typical process:
-
-1. retriever returns top 20, 50, or 100 candidates
-2. reranker reads the query plus each candidate together
-3. reranker assigns a more exact relevance score
-4. candidates are reordered before being shown or passed to generation
-
-This stage is:
-
-- slower
-- more expensive
-- usually more accurate
-
-Why it is more accurate:
-
-- the reranker can reason over the direct query-document interaction
-- it does not rely only on coarse vector proximity
-
-### Why not rerank everything
-
-Because reranking does not scale well to a huge corpus.
-
-If you have:
-
-- 1 million chunks
-
-you can vector search them efficiently, but you usually do not want to run a cross-encoder style reranker over all 1 million.
-
-So the common pattern is:
-
-- retrieve broadly
-- rerank narrowly
-
-### Practical retrieval stack
-
-A strong modern local retrieval stack often looks like this:
-
-1. embedding model generates query and document vectors
-2. vector DB or ANN index returns top 20 to top 100 candidates
-3. reranker rescoring narrows this to the best top 5 to top 10
-4. only those highest-ranked chunks go into the final LLM prompt
-
-### What each model is optimizing for
-
-Embedding model goal:
-
-- maximize semantic recall and good-enough ranking at scale
-
-Reranker goal:
-
-- maximize precision at the top of the list
-
-That is why embedding and reranking scores should not be treated as interchangeable.
 
 ## Query Instruction Explainer
 
@@ -1064,6 +938,12 @@ Without an instruction, the model may optimize for a vaguer notion of semantic c
 With an instruction, the model can better align the query embedding toward the retrieval objective you actually care about.
 
 That is why the Qwen team reports a measurable retrieval drop when the query-side instruction is omitted.
+
+Source annotations:
+
+- Query-instruction guidance in this section comes from the Qwen embedding model cards:
+  https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF
+  https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF
 
 ### The basic pattern
 
@@ -1243,6 +1123,10 @@ This matters because using the wrong pooling mode can degrade retrieval quality 
 
 So for Qwen3 embedding models, `last` is not just an implementation detail. It is part of using the model correctly.
 
+Source annotations:
+
+- `llama.cpp` / `llama-server` embedding usage and `--pooling last`: https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF
+
 ### `llama-embedding` vs `llama-server --embedding`
 
 These serve different roles.
@@ -1367,4 +1251,3 @@ That is the cleanest path from:
 to:
 
 - serious retrieval quality
-

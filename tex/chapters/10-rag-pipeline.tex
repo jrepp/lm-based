@@ -1,0 +1,341 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{The RAG Pipeline}
+\label{ch:rag-pipeline}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Retrieval-Augmented Generation (RAG) is a pattern for answering questions against a corpus
+too large to fit in a single LLM prompt. A retrieval system selects the relevant subset; the
+LLM uses that subset to generate a grounded answer.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Two Phases}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+RAG has two distinct phases that run at different times and at different frequencies:
+
+\begin{Verbatim}
+INDEXING PHASE (offline, once per document)
+  Raw document → extract text → chunk → embed → store in index
+
+QUERY PHASE (online, once per question)
+  Question → embed → search index → retrieve chunks → assemble context → generate
+\end{Verbatim}
+
+The indexing phase is batch work: slow, expensive, done in advance. The query phase must be
+fast: the user is waiting.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Indexing Phase}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Step 1: Document Ingestion}
+
+Accept the raw document in its source format. Common formats: plain text (\texttt{.txt},
+\texttt{.md}), PDF, HTML, DOCX, XLSX, code.
+
+At this step, also extract metadata: source URL or path, title, author, creation date,
+document type. This metadata travels with every chunk the document produces.
+
+\textbf{Failure modes:}
+
+\begin{itemize}
+    \item PDF with scanned images: text extraction returns nothing. Requires OCR.
+    \item PDF with ligature fonts: some extractors corrupt \textit{fi}, \textit{fl} ligatures.
+    \item HTML with JavaScript-rendered content: static extraction misses dynamically loaded content.
+\end{itemize}
+
+\subsection{Step 2: Text Cleaning}
+
+Before chunking, normalize the extracted text:
+
+\begin{itemize}
+    \item Remove boilerplate (headers, footers, page numbers, navigation)
+    \item Normalize whitespace and Unicode (ligatures, smart quotes, zero-width spaces)
+    \item Optionally repair broken words from PDF column extraction
+\end{itemize}
+
+Cleaning quality directly affects embedding quality. Embedding a chunk full of OCR artifacts
+produces a vector that does not cluster with clean content.
+
+\subsection{Step 3: Chunking}
+
+Split the cleaned text into chunks sized for the embedding model's context window and the
+retrieval precision you need. See Chapter~\ref{ch:chunking} for the full decision tree.
+
+Key decisions at this step:
+
+\begin{itemize}
+    \item Chunk size (characters or tokens)
+    \item Overlap (0--20\% is typical)
+    \item Split strategy (fixed, sentence-boundary, structure-aware, semantic)
+    \item Parent-child relationship (store parent for context, index children for retrieval)
+\end{itemize}
+
+Output: a list of \texttt{(chunk\_text, chunk\_metadata)} pairs.
+
+\subsection{Step 4: Embedding}
+
+Pass each chunk through the embedding model to produce a vector:
+
+\begin{Verbatim}
+chunk_text  → [embedding model] → [0.21, -0.45, 0.03, ...]
+\end{Verbatim}
+
+This is the most computationally expensive step. Strategies:
+
+\begin{itemize}
+    \item \textbf{Batch embedding:} send multiple chunks per API call (up to 2{,}048 for
+          OpenAI). Reduces round-trip overhead by orders of magnitude vs.\ one call per chunk.
+    \item \textbf{Local vs.\ API:} local ONNX or GGUF models have zero per-call cost but
+          require GPU/CPU capacity. OpenAI API has per-token cost but no infrastructure overhead.
+    \item \textbf{Caching:} if re-indexing a partially updated corpus, skip chunks whose text
+          has not changed (hash the chunk text to detect unchanged content).
+\end{itemize}
+
+\subsection{Step 5: Storing in the Index}
+
+Write each \texttt{(vector, chunk\_text, chunk\_metadata)} into the storage backend.
+
+What gets stored:
+
+\begin{itemize}
+    \item The vector (for ANN search)
+    \item The chunk text (to return as context to the LLM)
+    \item The metadata (for filtering and attribution)
+    \item Optionally: a BM25 inverted index over the chunk text (for hybrid search)
+\end{itemize}
+
+\subsection{Indexing Pipeline Summary}
+
+\begin{Verbatim}
+[raw docs]
+    │
+    ▼
+[extract text]  ←── format-specific parsers
+    │
+    ▼
+[clean text]    ←── normalize, strip boilerplate
+    │
+    ▼
+[chunk]         ←── size, overlap, strategy choice
+    │
+    ▼
+[embed]         ←── model choice, batch size, caching
+    │
+    ▼
+[store]         ←── vector index + optional BM25 index
+\end{Verbatim}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Query Phase}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Step 1: Receive the Query}
+
+The user submits a question or search string. Before retrieval, consider:
+
+\begin{itemize}
+    \item \textbf{Query type:} Is this a factual lookup, a synthesis request, or a conversational
+          follow-up?
+    \item \textbf{Query transformation:} Should the query be rewritten before retrieval?
+\end{itemize}
+
+Common query transformation techniques:
+
+\begin{description}
+    \item[HyDE (Hypothetical Document Embedding)] Ask the LLM to write a hypothetical document
+          that would answer the question, then embed that document instead of the bare query.
+          Bridges the vocabulary gap between short queries and long documents.
+    \item[Query expansion] Append related terms to improve recall.
+    \item[Sub-question decomposition] Split a complex query into simpler sub-questions, retrieve
+          for each, then combine.
+\end{description}
+
+\subsection{Step 2: Embed the Query}
+
+Embed the query using the same model used to embed the documents. This is non-negotiable---
+the query and document vectors must live in the same vector space.
+
+\begin{Verbatim}
+query_text → [same embedding model] → query_vector
+\end{Verbatim}
+
+If query instructions are used (as with Qwen3-Embedding), wrap the query in the appropriate
+instruction template before embedding. See Chapter~\ref{ch:query-instructions}.
+
+\subsection{Step 3: Retrieve Candidates}
+
+\textbf{Pure vector search:}
+
+\begin{Verbatim}
+query_vector → ANN search → top-k chunks ranked by vector similarity
+\end{Verbatim}
+
+\textbf{Hybrid search (BM25 + vector):}
+
+\begin{Verbatim}
+query_text   → BM25 search → lex_results (ranked by keyword relevance)
+query_vector → ANN search  → vec_results (ranked by semantic similarity)
+lex_results + vec_results   → RRF fusion → merged_results
+\end{Verbatim}
+
+Hybrid search consistently outperforms either modality alone, especially on queries with
+exact-match terms or where the vocabulary gap between query and document is small.
+
+\subsection{Step 4: Filter}
+
+Apply metadata filters to the candidate set:
+
+\begin{itemize}
+    \item Date range (``only documents from the last 6 months'')
+    \item Source type (``only from the API documentation'')
+    \item Access control (``only documents this user can see'')
+\end{itemize}
+
+Filtering is most efficient when done \textbf{during} ANN search (as supported by Qdrant and
+MongoDB Atlas) rather than after (as in memvid). Post-filtering on a small top-k can silently
+produce fewer results than requested if many candidates are filtered out.
+
+\subsection{Step 5: Rerank (Optional but Recommended)}
+
+Pass the top candidates through a cross-encoder reranker to produce a more precise ordering.
+
+\begin{Verbatim}
+(query, candidate_1) → [reranker] → 0.92
+(query, candidate_2) → [reranker] → 0.87
+(query, candidate_3) → [reranker] → 0.41
+\end{Verbatim}
+
+The reranker reads the query and each candidate together, producing a relevance score that
+accounts for the full text interaction. Reranking is skipped when: latency is critical, the
+corpus is small enough that vector search precision is already high, or no reranker model is
+available.
+
+\subsection{Step 6: Assemble Context}
+
+Select the top $N$ chunks and concatenate them into a context block for the LLM prompt.
+
+\textbf{Context budget:} The LLM has a finite context window. A practical rule: reserve 30\%
+for the answer, 10\% for system prompt and question, 60\% for retrieved context.
+
+\textbf{Ordering matters:} LLMs attend less reliably to content in the middle of long contexts
+(the ``lost in the middle'' problem). Put the most relevant chunks first and last.
+
+\textbf{Attribution:} Include source metadata so the LLM can cite sources:
+
+\begin{Verbatim}
+[Source: retrieval-concepts.md, Section: HNSW]
+HNSW builds a multi-layer graph where each node is a document vector...
+\end{Verbatim}
+
+\textbf{Parent-child expansion:} If using parent-child chunking, swap retrieved child chunks
+for their parent chunk at this step to give the LLM richer context.
+
+\subsection{Step 7: Generate the Answer}
+
+Typical prompt structure:
+
+\begin{Verbatim}
+SYSTEM:
+You are a helpful assistant. Answer using only the provided context.
+If the context does not contain the answer, say so.
+
+CONTEXT:
+[assembled context block]
+
+USER:
+[original question]
+
+ASSISTANT:
+\end{Verbatim}
+
+The system prompt should instruct the LLM to use the provided context as the primary source,
+acknowledge when the context does not contain the answer, and cite sources when relevant.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Common Failure Modes}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Retrieval Failures}
+
+\textbf{Symptom: The LLM says ``I don't know'' but the answer is in the corpus.}
+
+Probable causes:
+
+\begin{itemize}
+    \item Chunk boundary split the answer across two chunks
+    \item Query vocabulary doesn't match document vocabulary (semantic gap); try hybrid search or HyDE
+    \item \texttt{top\_k} too small; the right chunk is at rank~12 but only top~5 are retrieved
+    \item Metadata filter too aggressive; filtered out the relevant chunk
+\end{itemize}
+
+\textbf{Symptom: Retrieved chunks are consistently off-topic.}
+
+Probable causes:
+
+\begin{itemize}
+    \item Chunks are too large; the relevant sentence is buried in an irrelevant chunk
+    \item Embedding model is not well-suited to the domain
+    \item No reranker; vector proximity is imprecise for this query type
+\end{itemize}
+
+\subsection{Generation Failures}
+
+\textbf{Symptom: LLM ignores the context and answers from its parametric memory.}
+
+Probable causes:
+
+\begin{itemize}
+    \item System prompt does not strongly instruct the model to use context
+    \item Context block is too long; relevant chunks are in the ``lost in the middle'' zone
+    \item Model temperature too high; try 0.0--0.3 for fact retrieval tasks
+\end{itemize}
+
+\subsection{Indexing Failures}
+
+\textbf{Symptom: Re-indexing takes much longer than expected.}
+
+Probable causes:
+
+\begin{itemize}
+    \item Embedding every chunk individually instead of batching
+    \item No caching of embeddings for unchanged content
+\end{itemize}
+
+\textbf{Symptom: Index quality degrades over time as documents are updated.}
+
+Probable causes:
+
+\begin{itemize}
+    \item Stale vectors from old document versions still in the index
+    \item Backend does not support correct deletions (see Chapter~\ref{ch:backends})
+    \item No mechanism to detect and re-embed changed content
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{This Repo's Stack}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+In this repo, the RAG pipeline maps to the following components:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Pipeline step} & \textbf{Component} \\
+\midrule
+Document ingestion & memvid readers (PDF, DOCX, XLSX) or direct \texttt{put\_bytes()} \\
+Chunking & memvid chunker (1{,}200 char, structure-aware) \\
+Embedding & \texttt{llama-server --embedding} serving a GGUF embedding model \\
+Storage & memvid \texttt{.mv2} file (vector + BM25 + metadata) \\
+Query embedding & Same llama-server endpoint \\
+Retrieval & memvid \texttt{ask()} --- hybrid BM25 + vector with RRF \\
+Reranking & Not yet integrated (planned: Qwen3-Reranker via llama-server) \\
+Context assembly & memvid \texttt{AskResponse.context} field \\
+Generation & llama-server chat completions or cloud provider via clawrouter \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The embedding model and generation model are served as separate llama-server instances.
+Open WebUI routes embedding requests to the dedicated embeddings endpoint and generation
+requests to the generation endpoint. clawrouter handles routing to local vs.\ cloud providers.

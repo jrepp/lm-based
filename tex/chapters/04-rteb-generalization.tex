@@ -1,0 +1,210 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{RTEB and Generalization}
+\label{ch:rteb}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+If retrieval is your main use case, RTEB is more relevant than the overall MTEB aggregate.
+RTEB stands for \textbf{Retrieval Text Embedding Benchmark}. The Hugging Face launch post was
+published on October~1, 2025, by the MTEB team.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{What RTEB Is Trying to Fix}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+RTEB was introduced because broad public retrieval leaderboards have a known problem: models
+get repeatedly tested against the same public datasets, and training data can overlap with
+benchmark data. Leaderboard gains can partly reflect benchmark familiarity rather than true
+retrieval generalization.
+
+The RTEB authors frame this as a generalization gap between public benchmark performance and
+performance on new, unseen retrieval problems. The benchmark is explicitly trying to be:
+
+\begin{itemize}
+    \item Retrieval-first
+    \item More realistic
+    \item More resistant to benchmark overfitting
+\end{itemize}
+
+The Hugging Face post makes a useful distinction between a \textit{leaderboard score} and a
+\textit{zero-shot score}. A model can look strong on a familiar public benchmark while still
+generalizing poorly to new retrieval tasks.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Why RTEB Matters More Than Generic MTEB for Local RAG}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Your actual local use case is not broad embedding capability across classification, clustering,
+STS, and bitext mining. It is: can this model retrieve the right chunks for my queries?
+
+That makes RTEB a better decision aid because it focuses on retrieval quality, domain realism,
+and multilingual and specialized search settings.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{The Core Design: Open + Private Datasets}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+RTEB uses a hybrid benchmark design:
+
+\begin{itemize}
+    \item \textbf{Open datasets} --- fully public and reproducible
+    \item \textbf{Private datasets} --- evaluated by the maintainers to test generalization
+          to unseen data
+\end{itemize}
+
+This is the most important thing to understand about RTEB. Strong public-only performance can
+be misleading. If a model drops sharply on the private side, that suggests benchmark
+overfitting or weak generalization.
+
+For transparency, the maintainers provide descriptive statistics, dataset descriptions, and
+sample (query, document, relevance) triplets. The benchmark balances reproducibility with
+anti-overfitting protection.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Default Metric: nDCG@10}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+The RTEB material explicitly states that the default leaderboard metric is \texttt{nDCG@10}.
+That is a strong choice for retrieval because it emphasizes whether relevant documents appear
+near the top---which is exactly what matters when a RAG pipeline passes only the top 5 or
+top 10 chunks into the final prompt.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{What Kinds of Retrieval RTEB Covers}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+RTEB is not one dataset. It is a retrieval benchmark family spanning multiple domains and
+languages. The benchmark currently covers 20 languages, with datasets organized into groups
+by domain and language. One dataset can belong to multiple groups---a German legal dataset
+counts as both \texttt{german} and \texttt{legal}.
+
+Domain coverage includes:
+
+\begin{itemize}
+    \item \textbf{Legal:} AILACasedocs, AILAStatutes, LegalSummarization, LegalQuAD
+    \item \textbf{Finance:} FinanceBench, HC3Finance, FinQA
+    \item \textbf{Code:} HumanEval, MBPP, APPS, DS1000, WikiSQL
+    \item \textbf{Healthcare:} ChatDoctor\_HealthCareMagic, HC3 Medicine, Cure, TripClick
+    \item \textbf{Multilingual and general:} MIRACLHardNegatives, JaQuAD, FreshStack
+\end{itemize}
+
+RTEB benchmark names in the catalog include:
+
+\begin{itemize}
+    \item \texttt{HumanEvalRetrieval}, \texttt{MBPPRetrieval}, \texttt{WikiSQLRetrieval}
+    \item \texttt{FreshStackRetrieval}, \texttt{FinanceBenchRetrieval}
+    \item \texttt{ChatDoctorRetrieval}, \texttt{MIRACLRetrievalHardNegatives}
+\end{itemize}
+
+This is important because retrieval quality is highly domain-sensitive. A model that looks
+good on generic QA-style retrieval may not be the best model for code search, technical docs,
+multilingual knowledge bases, or legal corpora.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{How to Read RTEB for Your Use Case}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+You should not ask: ``which model is \#1 on RTEB overall?''
+
+You should ask: ``which model performs well on the RTEB slice closest to my workload?''
+
+\begin{itemize}
+    \item If your corpus is mostly English docs, \texttt{RTEB(eng, beta)} matters more than
+          the multilingual aggregate
+    \item If your main problem is code retrieval, the code-heavy tasks matter more than
+          finance or legal tasks
+    \item If your content spans multiple languages, the multilingual and language-specific
+          slices matter more than English-only results
+\end{itemize}
+
+\textbf{RTEB slices relevant to local infrastructure workloads:}
+
+\begin{description}
+    \item[\texttt{RTEB(beta)}] Broad retrieval signal across domains
+    \item[\texttt{RTEB(eng, beta)}] Best general-purpose check if most material is English
+    \item[Code-heavy tasks] For source code, documentation, or engineering notes
+    \item[Multilingual retrieval tasks] If knowledge base or queries are not strictly English
+\end{description}
+
+Language-specific subsets include \texttt{RTEB(deu, beta)}, \texttt{RTEB(fra, beta)}, and
+\texttt{RTEB(jpn, beta)}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{What RTEB Still Does Not Solve}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+RTEB is better aligned with retrieval than the broad MTEB aggregate, but it is not perfect.
+The official launch notes several current limitations:
+
+\begin{itemize}
+    \item It is still in beta
+    \item It is text-only
+    \item Language coverage is still expanding
+    \item About half of the current retrieval datasets are repurposed from QA datasets
+\end{itemize}
+
+QA-derived retrieval can favor lexical overlap more than true production retrieval sometimes
+does. So even with RTEB, your own internal retrieval eval still matters.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{What RTEB Shows About Qwen3-Embedding}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Qwen3-Embedding does not have published first-party RTEB scores as of this writing. That
+absence is the core open question in the original model recommendation: MTEB rank-1 without
+a corresponding RTEB result means the generalization question is unanswered, not confirmed.
+
+Indirect evidence:
+
+\begin{itemize}
+    \item Octen-Embedding-8B, fine-tuned on Qwen3-8B base, scores \textbf{0.8045 on RTEB
+          overall} and performs slightly higher on private data than public (0.8157 private
+          vs 0.7953 public). That inverted gap is a strong generalization signal and suggests
+          the Qwen3 foundation model is not contaminated.
+    \item Qwen3-Embedding's three-stage training (contrastive pretraining on weakly supervised
+          data $\to$ supervised fine-tuning $\to$ model merging) is designed for domain breadth,
+          which is consistent with generalization.
+    \item Qwen3-Embedding outperforms BGE-M3 by \textasciitilde18\% on MTEB English v2 and
+          \textasciitilde8\% on MMTEB, a larger margin than benchmark contamination alone
+          would typically produce.
+\end{itemize}
+
+Tentative interpretation: Qwen3-Embedding is probably not severely contaminated, but
+``probably not'' is not the same as confirmed.
+
+\textbf{RTEB-confirmed alternatives:}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Model} & \textbf{RTEB score} & \textbf{Notes} \\
+\midrule
+Octen-Embedding-8B & 0.8045 & Fine-tuned on Qwen3-8B; best published RTEB result \\
+Voyage-3-large & 0.7812 & API-only; no local serving \\
+Gemini-embedding-001 & 0.7602 & API-only \\
+BGE-M3 & not published & Strong multilingual; GGUF available \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+For local llama.cpp serving specifically, BGE-M3 is the strongest RTEB-adjacent alternative:
+it supports dense, sparse (SPLADE), and ColBERT-style retrieval in a single model, has a
+well-established generalization reputation predating the MTEB contamination era, and 8{,}192
+token context.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Benchmark-Reading Order for Local RAG}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{enumerate}
+    \item Domain-relevant RTEB retrieval results
+    \item Broader retrieval metrics like MTEB retrieval subsets
+    \item Overall MTEB aggregate
+    \item Secondary task families like clustering or classification (background signal only)
+\end{enumerate}
+
+\begin{notebox}[Before finalising a model choice]
+Check whether Qwen3-Embedding RTEB scores have been published since this was written (the
+RTEB leaderboard is live and updated). Run a small domain-specific internal eval against your
+actual retrieval corpus --- even 50--100 query-document pairs with manual relevance labels
+will reveal gross distribution mismatch.
+\end{notebox}

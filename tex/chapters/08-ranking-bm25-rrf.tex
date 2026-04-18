@@ -1,0 +1,171 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Ranking, BM25, and RRF}
+\label{ch:ranking}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{BM25 --- Best Match 25}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+BM25 is the dominant full-text ranking algorithm used in search engines (Elasticsearch,
+Lucene, Solr, Tantivy). It scores documents against a query based on term frequency and
+inverse document frequency with saturation corrections:
+
+\[
+\text{score}(D, Q) = \sum_{t \in Q} \text{IDF}(t) \cdot \frac{\text{tf}(t,D) \cdot (k_1 + 1)}
+  {\text{tf}(t,D) + k_1 \cdot \left(1 - b + b \cdot \frac{|D|}{\text{avgdl}}\right)}
+\]
+
+Where:
+
+\begin{itemize}
+    \item $\text{tf}(t, D)$ --- how many times term $t$ appears in document $D$
+    \item $\text{IDF}(t)$ --- how rare the term is across all documents (log-scaled)
+    \item $k_1$ --- term frequency saturation (typically 1.2--2.0); prevents a term appearing
+          100$\times$ from dominating
+    \item $b$ --- length normalization (typically 0.75); penalizes long documents
+    \item $\text{avgdl}$ --- average document length in the corpus
+\end{itemize}
+
+\textbf{Why BM25 matters for RAG:} Vector search finds semantically similar content but can
+miss exact keyword matches: names, version numbers, code identifiers, rare technical terms.
+BM25 excels at exact match and rare term recall. Hybrid search combines both.
+
+\textbf{Implementation notes:} memvid uses Tantivy's BM25. MongoDB Atlas Search uses Lucene's.
+Qdrant uses FastEmbed's sparse encoding which approximates BM25.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{RRF --- Reciprocal Rank Fusion}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+When you run both BM25 and vector search on the same query, you get two ranked lists. The
+lists contain overlapping but not identical results with incomparable scores (BM25 scores are
+not in the same range as cosine similarity values).
+
+RRF merges them by rank position, not by raw score:
+
+\[
+\text{RRF\_score}(d) = \sum_{L} \frac{1}{k + \text{rank}_L(d)}
+\]
+
+Where $k$ is a constant (typically 60). The $k$ value dampens the advantage of rank~1 over
+rank~2---it prevents a single list from dominating just because one result was ranked first.
+
+\textbf{Example with $k=60$ and two lists:}
+
+\begin{Verbatim}
+doc A: rank 1 in BM25, rank 4 in vector  → 1/61 + 1/64 = 0.0321
+doc B: rank 2 in BM25, rank 2 in vector  → 1/62 + 1/62 = 0.0323
+doc C: rank 1 in vector, not in BM25     → 0    + 1/61 = 0.0164
+\end{Verbatim}
+
+Doc~B wins because consistent top performance across both lists beats a single dominant rank.
+Doc~C is penalized for appearing in only one list.
+
+RRF requires no calibration of score scales across different retrieval systems---only ranks
+matter. This makes it robust for combining any retrieval methods without normalization.
+
+memvid's \texttt{ask()} method uses RRF with $k=60$ as the default fusion strategy.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{nDCG in Practice: Using Rankings to Make Better Decisions}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Understanding nDCG at a practical level helps you make better decisions about your retrieval
+stack. The key insight is that nDCG measures ranking quality, not just membership.
+
+\subsection{Why nDCG Is Better Than Plain Recall for Ranking Quality}
+
+Recall asks: did the system retrieve relevant items? It does not strongly care whether the
+best item was rank~1 or rank~10. nDCG does care. This is why:
+
+\begin{itemize}
+    \item Recall is often more important for stage-1 candidate generation
+    \item nDCG is often more important for top-of-list quality and reranking
+\end{itemize}
+
+\subsection{Why \texttt{@10} Is Common}
+
+\texttt{nDCG@10} is common because many applications only care about the first screenful of
+results or the first prompt window. A RAG pipeline may pass only the top 5 to top 10 chunks
+into generation. If your system only ever uses the top 5 chunks, then \texttt{nDCG@5} may be
+even more informative for your internal evals.
+
+\subsection{nDCG with Binary vs Graded Judgments}
+
+With binary judgments, nDCG mostly reflects whether relevant items are ranked early.
+With graded judgments, nDCG becomes more expressive---it can reward systems that rank the
+very best documents above merely acceptable ones. This makes graded nDCG especially valuable
+for reranking benchmarks.
+
+\subsection{What nDCG Does Not Tell You}
+
+nDCG does not directly tell you:
+
+\begin{itemize}
+    \item Whether your retriever found all relevant items in the corpus
+    \item How expensive the retrieval system is
+    \item Whether the retrieved text is the best chunking strategy for generation
+    \item Whether your model generalizes outside the benchmark
+\end{itemize}
+
+That is why nDCG should usually be read together with Recall@k and domain-specific benchmark
+slices or internal evaluation.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{SPO and Entity Graphs}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\textbf{SPO triplets} are a way to represent facts as structured relationships:
+
+\begin{Verbatim}
+Subject        Predicate       Object
+───────────    ─────────────   ──────────────
+Alice          works_at        Acme Corp
+Bob            lives_in        San Francisco
+project-X      depends_on      library-Y
+\end{Verbatim}
+
+SPO extraction parses free text and produces a graph of entities and their relationships.
+In retrieval systems, this enables queries that pure vector search cannot handle well:
+
+\begin{itemize}
+    \item ``who works at Acme Corp'' --- entity lookup, not semantic similarity
+    \item ``what does project-X depend on'' --- graph traversal
+    \item ``find all relationships involving Alice'' --- entity-centric search
+\end{itemize}
+
+\textbf{MemoryCards} (as implemented in memvid) are typed records built on top of SPO:
+
+\begin{description}
+    \item[Fact] A general assertion (``Paris is the capital of France'')
+    \item[Preference] A user preference (``user prefers dark mode'')
+    \item[Event] A timestamped occurrence (``meeting with Alice on 2026-03-15'')
+    \item[Relationship] A link between entities (``Alice reports to Bob'')
+\end{description}
+
+In agent memory systems, the SPO graph complements vector search: vector search finds
+semantically similar content; graph search finds structured facts about known entities.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Choosing the Right Retrieval Mix}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Query type} & \textbf{Best retrieval method} \\
+\midrule
+Semantic / conceptual & Dense vector search \\
+Exact keyword (names, IDs, version numbers) & BM25 \\
+Mixed / general & Hybrid (BM25 + vector with RRF) \\
+Multi-aspect complex queries & ColBERT or reranker \\
+Structured entity queries & SPO graph search \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+In practice, running hybrid retrieval (BM25 + vector) as the default and adding a reranker
+for final ordering captures the vast majority of production retrieval improvements. SPO graph
+search is valuable for agent memory and knowledge graph use cases but requires additional
+infrastructure.

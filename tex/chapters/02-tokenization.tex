@@ -1,0 +1,267 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Tokenization}
+\label{ch:tokenization}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Tokenization is the process of splitting text into the discrete units a model processes.
+Understanding it is essential for working with embedding models because token counts---not
+character counts---determine whether a text fits in a model's context window, how chunking
+interacts with model limits, and why costs and latency vary with input length.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Why Tokens, Not Words or Characters?}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Early NLP systems split on whitespace: each word is a unit. This breaks down on several
+practical problems:
+
+\begin{itemize}
+    \item \textbf{Vocabulary explosion.} English has hundreds of thousands of words, and new
+          ones are coined constantly. A word-level vocabulary must either be huge or mark
+          unknown words as \texttt{[UNK]}, losing all information about them.
+    \item \textbf{Morphological variants.} ``run'', ``runs'', ``running'', and ``ran'' are four
+          different vocabulary entries that share almost all meaning. A word-level model treats
+          them as unrelated.
+    \item \textbf{Multilinguality.} Japanese and Chinese have no spaces. Arabic and Hebrew write
+          without vowels. A word tokenizer that splits on spaces fails silently.
+\end{itemize}
+
+Character-level tokenization solves the vocabulary problem (26 letters plus punctuation is a
+tiny vocabulary) but produces very long sequences. Attention is O($n^2$) in sequence length,
+so character sequences are expensive to process.
+
+\textbf{Subword tokenization}---the dominant approach---sits between the two. Common words stay
+as single tokens. Rare words are split into meaningful subword pieces. Sequences stay short
+enough for efficient attention.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{BPE (Byte Pair Encoding)}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+BPE is the most widely used tokenization algorithm (GPT-2 through GPT-4o, LLaMA, Qwen, Mistral).
+
+\textbf{How it works:}
+\begin{enumerate}
+    \item Start with a vocabulary of individual characters (or bytes).
+    \item Count all adjacent pairs in the training corpus.
+    \item Merge the most frequent pair into a new token.
+    \item Repeat until the vocabulary reaches the target size (typically 32k--128k tokens).
+\end{enumerate}
+
+\textbf{Example:}
+
+\begin{Verbatim}
+Training text: "low lower lowest lower low"
+
+Initial: l o w  l o w e r  l o w e s t  l o w e r  l o w
+Step 1: merge 'l'+'o' → 'lo' (most frequent pair)
+        lo w  lo w e r  lo w e s t  lo w e r  lo w
+Step 2: merge 'lo'+'w' → 'low'
+        low  low e r  low e s t  low e r  low
+Step 3: merge 'low'+'e' → 'lowe'
+        low  lowe r  lowe s t  lowe r  low
+\end{Verbatim}
+
+After training on a large corpus, common words like ``the'', ``is'', and ``model'' are single
+tokens. Rare words split into recognizable subwords: ``tokenization'' becomes
+\texttt{["token", "ization"]}. Truly novel words split further:
+\texttt{"Qwen3Embedding"} $\to$ \texttt{["Qw", "en", "3", "Embed", "ding"]}.
+
+The \textbf{byte-level variant} (used by GPT-2 and descendants) operates on raw bytes rather
+than characters. This ensures any Unicode text can be tokenized without an unknown-token
+fallback, at the cost of longer sequences for non-Latin scripts.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{WordPiece}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Used by BERT and its descendants (including many embedding models like BGE and
+nomic-embed-text). Conceptually similar to BPE, but merges are chosen to maximize the
+likelihood of the training data under a language model, not just by raw pair frequency.
+Subword pieces are prefixed with \texttt{\#\#} to indicate continuation:
+
+\begin{Verbatim}
+"playing"     → ["play", "##ing"]
+"unplayable"  → ["un", "##play", "##able"]
+\end{Verbatim}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{SentencePiece}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Used by LLaMA, Mistral, and many multilingual models. Operates directly on raw text without
+pre-tokenization---no whitespace splitting required first. Handles languages without spaces
+naturally. The underlying algorithm is typically BPE or Unigram.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Token Count vs Character Count}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+A critical practical point: \textbf{model limits are in tokens, not characters or words}.
+
+Approximate conversions for English text:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Unit} & \textbf{Typical ratio} \\
+\midrule
+1 token & \textasciitilde4 characters \\
+1 token & \textasciitilde0.75 words \\
+100 tokens & \textasciitilde75 words, \textasciitilde400 characters \\
+1{,}000 tokens & \textasciitilde750 words, \textasciitilde3--4 paragraphs \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+These ratios are for English. Other languages differ:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Language} & \textbf{Tokens per word (approx)} \\
+\midrule
+English & 1.3 \\
+Spanish / French & 1.4 \\
+German & 1.5 (compound words split more) \\
+Chinese & 1.5--2.5 (ideographs often multi-byte) \\
+Arabic & 1.5--2.0 \\
+Code (Python) & 2--4 (identifiers, indentation, symbols) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Code tokenizes much less efficiently than prose. A 100-line Python function may consume
+300--500 tokens. This matters for code retrieval use cases where chunk size must be set by
+token count, not character count.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{How Token Limits Affect Chunking}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Every embedding model has a maximum context length:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Model} & \textbf{Max tokens} \\
+\midrule
+BGE-small-en-v1.5 & 512 \\
+nomic-embed-text-v1.5 & 8{,}192 \\
+text-embedding-3-small & 8{,}191 \\
+text-embedding-3-large & 8{,}191 \\
+Qwen3-Embedding series & 32{,}768 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+What happens when input exceeds the limit depends on the implementation:
+
+\begin{itemize}
+    \item \textbf{Truncation:} the model silently discards tokens beyond the limit. The embedding
+          represents only the first $N$ tokens. Content in the truncated portion is invisible
+          to retrieval.
+    \item \textbf{Error:} the API or model raises an error. Callers must pre-split.
+\end{itemize}
+
+Truncation is the silent failure mode. If your chunks regularly exceed the model's token limit,
+you are losing content without any warning.
+
+Chunk size should be set in tokens when precision matters. For a 512-token limit model with a
+15\% safety margin, target 435-token chunks. Converted to characters at 4 chars/token: roughly
+1{,}740 characters. memvid's default of 1{,}200 characters is conservative for 512-token models
+and well within limits for 8K+ token models.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Tokens and Embedding Quality}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Shorter inputs produce different embeddings than longer ones because pooling collapses all
+token vectors into one. A 5-token chunk and a 500-token chunk are both represented by a single
+1536-dim vector, but the 500-token vector averages over far more content.
+
+Implications:
+
+\begin{itemize}
+    \item \textbf{Very short chunks} (1--3 sentences) embed well---the vector captures the
+          specific topic of that chunk cleanly.
+    \item \textbf{Very long chunks} produce embeddings that represent a blend of all topics in
+          the chunk. They retrieve for any of those topics at reduced precision.
+    \item \textbf{Asymmetric retrieval:} a 10-word query embedding will not be close to a
+          2{,}000-token document embedding even if the document contains the answer, because the
+          document's vector is averaged over content unrelated to the query. This is why chunking
+          exists.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Special Tokens}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Most models use reserved tokens for structural purposes:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Token} & \textbf{Meaning} & \textbf{Models} \\
+\midrule
+\texttt{[CLS]} & Classification / sentence start & BERT-style \\
+\texttt{[SEP]} & Separator between segments & BERT-style \\
+\texttt{[PAD]} & Padding to uniform length & All \\
+\texttt{[UNK]} & Unknown token (rare in modern BPE) & All \\
+\texttt{<s>} & Sequence start & LLaMA/Mistral \\
+\texttt{</s>} & Sequence end & LLaMA/Mistral \\
+\texttt{<|endoftext|>} & End of text & GPT-2/3/4 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Special tokens consume context window budget. A BGE model with a 512-token limit uses 2
+special tokens (\texttt{[CLS]} and \texttt{[SEP]}), leaving 510 tokens for content.
+
+For CLS pooling models, the \texttt{[CLS]} token is the output used as the embedding.
+For last-token pooling models (Qwen3), the final real token before \texttt{</s>} is used.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Counting Tokens Without Running the Model}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Counting tokens before sending text to a model is useful for ensuring chunks stay within
+limits, estimating API cost, and debugging truncation issues.
+
+\textbf{Python (HuggingFace tokenizers):}
+
+\begin{Verbatim}
+from transformers import AutoTokenizer
+
+tokenizer = AutoTokenizer.from_pretrained("BAAI/bge-small-en-v1.5")
+tokens = tokenizer.encode("The quick brown fox")
+print(len(tokens))  # 6
+\end{Verbatim}
+
+\textbf{Python (tiktoken, for OpenAI models):}
+
+\begin{Verbatim}
+import tiktoken
+
+enc = tiktoken.get_encoding("cl100k_base")  # text-embedding-3-*
+tokens = enc.encode("The quick brown fox")
+print(len(tokens))  # 5
+\end{Verbatim}
+
+\textbf{Rule of thumb without a tokenizer:}
+Divide character count by 4 for English prose. Accurate to $\pm 20\%$ for most inputs.
+For code, divide by 3. For non-Latin scripts, divide by 2.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Practical Takeaways}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{itemize}
+    \item Token limits are per-model and in tokens, not characters. Check the model card.
+    \item English prose: \textasciitilde4 characters per token. Code: \textasciitilde3 chars per token. CJK: \textasciitilde2 chars per token.
+    \item Exceeding the limit silently truncates in most implementations.
+    \item Set chunk size in tokens when working with models near their 512-token limit;
+          character estimates are close enough for 8K+ token models.
+    \item Short chunks embed their specific topic precisely; long chunks produce averaged embeddings.
+    \item Special tokens consume 2--4 tokens of context budget per call.
+\end{itemize}

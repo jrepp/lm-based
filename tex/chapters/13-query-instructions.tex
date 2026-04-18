@@ -1,0 +1,202 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Query Instructions and Operational Guidance}
+\label{ch:query-instructions}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Why Query-Side Instructions Help}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+The Qwen embedding cards include guidance such as:
+
+\begin{quotation}
+\textit{We recommend that developers customize the instruct according to their specific
+scenarios, tasks, and languages. Our tests have shown that in most retrieval scenarios, not
+using an instruct on the query side can lead to a drop in retrieval performance by
+approximately 1\% to 5\%.}
+\end{quotation}
+
+Embedding models are not only learning generic ``semantic similarity.'' They are also learning
+task-conditioned similarity. Those are different questions:
+
+\begin{itemize}
+    \item ``what texts are generally similar?''
+    \item ``what documents answer this search query?''
+    \item ``what code snippet is relevant to this bug report?''
+    \item ``what multilingual passage best matches this English question?''
+\end{itemize}
+
+An instruction helps disambiguate the retrieval intent. Without an instruction, the model may
+optimize for a vaguer notion of semantic closeness. With an instruction, the model can better
+align the query embedding toward the retrieval objective you actually care about.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{The Basic Pattern}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{itemize}
+    \item Query side: add an instruction prefix
+    \item Document side: embed the raw document or chunk (no instruction)
+\end{itemize}
+
+Conceptually:
+
+\begin{Verbatim}
+Query embedding input:
+"Instruct: Given a web search query, retrieve relevant passages
+that answer the query.
+Query: how does KV cache reuse work in llama.cpp?"
+
+Document embedding input:
+"KV cache reuse in llama.cpp allows ..."
+\end{Verbatim}
+
+The instruction tells the model what ``relevant'' means for this query.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Why Not Instruct Both Sides}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+You usually do not want to add the same instruction to every document chunk because:
+
+\begin{itemize}
+    \item It adds noise and wasted tokens
+    \item Document embeddings are often precomputed once and reused many times
+    \item The task conditioning is usually needed most on the query side
+\end{itemize}
+
+The query is where the ambiguity lives.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{What ``Customize the Instruct'' Really Means}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+It does not mean you need a different prompt for every single query. It usually means:
+
+\begin{itemize}
+    \item Choose a stable instruction template for each retrieval use case
+    \item Adapt it to your language and domain
+    \item Keep it consistent during indexing and evaluation
+\end{itemize}
+
+Examples of retrieval modes that may want different instructions:
+
+\begin{itemize}
+    \item Documentation search
+    \item Code search
+    \item Support-ticket retrieval
+    \item Multilingual knowledge-base retrieval
+    \item Legal or medical retrieval with specialized vocabulary
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Example Instruction Templates}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\textbf{General documentation retrieval:}
+
+\begin{Verbatim}
+Instruct: Given a question, retrieve passages that best answer it.
+Query: {query}
+\end{Verbatim}
+
+\textbf{Code retrieval:}
+
+\begin{Verbatim}
+Instruct: Given a software engineering question, retrieve code or
+documentation relevant to solving it.
+Query: {query}
+\end{Verbatim}
+
+\textbf{Multilingual retrieval:}
+
+\begin{Verbatim}
+Instruct: Given a multilingual search query, retrieve passages with
+the most relevant semantic meaning, even across languages.
+Query: {query}
+\end{Verbatim}
+
+\textbf{Internal knowledge-base retrieval:}
+
+\begin{Verbatim}
+Instruct: Given an internal operations question, retrieve documents
+that directly help answer the question.
+Query: {query}
+\end{Verbatim}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{What the Reported 1\%--5\% Drop Means}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+That reported drop should be interpreted as: not catastrophic, but large enough to matter
+in retrieval systems.
+
+Why it matters: a few percentage points in retrieval can be the difference between the right
+chunk appearing in the top~5 versus disappearing below the cutoff. Once a relevant document
+misses the first-stage retrieval window, reranking cannot recover it. So even a modest drop
+at the embedding stage can have a noticeable end-to-end effect on RAG quality.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Operational Implication}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+If you adopt a Qwen3 embedding model in this repo, you should plan for:
+
+\begin{enumerate}
+    \item A consistent query instruction template
+    \item A retrieval-specific evaluation pass using your own corpus
+    \item Measuring top-k recall before and after changing the instruction
+\end{enumerate}
+
+This matters more than chasing leaderboard decimals, because the best instruction for your
+language mix, chunking strategy, domain vocabulary, and query style may differ from the
+default examples in the model card.
+
+\begin{notebox}[Practical rule for first deployment]
+Start with a simple, stable query instruction. Do not instruct documents. Benchmark retrieval
+quality on your own data. Only then tune the instruction wording. That is the low-complexity
+path to capturing most of the benefit the Qwen guidance is pointing at.
+\end{notebox}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Operational Checklist}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Before First Deployment}
+
+\begin{itemize}
+    \item Confirm the RTEB leaderboard entry for your chosen model (or confirm it is absent
+          and accept the uncertainty)
+    \item Run 50--100 representative query-document pairs through the model and check
+          top-5 recall manually
+    \item Choose a query instruction template appropriate to your domain and record it
+    \item Decide on chunk size, overlap, and strategy before indexing (re-indexing later
+          is expensive)
+    \item Ensure the llama-server port for embeddings is distinct from the chat model port
+\end{itemize}
+
+\subsection{After Deployment}
+
+\begin{itemize}
+    \item Monitor embedding latency separately from generation latency
+    \item Re-embed and re-index when you change the embedding model or chunk strategy
+    \item When adding new document types (code, PDF, HTML), validate that the chunker handles
+          them correctly before bulk ingestion
+    \item If retrieval precision drops after a corpus update, check for stale vectors from
+          deleted or updated documents
+\end{itemize}
+
+\subsection{Upgrading the Stack}
+
+\begin{enumerate}
+    \item \textbf{First step:} embed + basic vector search (current target)
+    \item \textbf{Second step:} add a Qwen3 reranker for top-of-list quality
+    \item \textbf{Third step:} add hybrid search (BM25 + vector with RRF) if exact-match
+          queries are failing
+    \item \textbf{Fourth step:} evaluate ColBERT or multi-vector retrieval for complex
+          multi-aspect queries
+\end{enumerate}
+
+Each step should be gated on measurement: only add complexity when you have data showing it
+helps. The first step---a correctly configured embedding server with a good query instruction
+template---captures the majority of the improvement available.
