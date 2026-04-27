@@ -1,3 +1,5 @@
+import re
+import subprocess
 from pathlib import Path
 from typing import Literal
 
@@ -7,6 +9,44 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from lm_launcher.profiles import infer_profile, profile_defaults
 
 _PROJECT_ROOT = Path(__file__).parent.parent
+
+
+def _discover_lan_ips() -> list[str]:
+    ips: set[str] = set()
+    try:
+        result = subprocess.run(
+            ["ip", "-4", "addr", "show"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                m = re.search(r"inet\s+(\d+\.\d+\.\d+\.\d+)", line)
+                if m:
+                    ip = m.group(1)
+                    if ip not in ("127.0.0.1", "127.0.1.1") and not ip.startswith("169.254"):
+                        ips.add(ip)
+    except (subprocess.SubprocessError, FileNotFoundError):
+        pass
+    if not ips:
+        try:
+            result = subprocess.run(
+                ["ifconfig"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                for line in result.stdout.splitlines():
+                    m = re.search(r"inet\s+(\d+\.\d+\.\d+\.\d+)", line)
+                    if m:
+                        ip = m.group(1)
+                        if ip not in ("127.0.0.1", "127.0.1.1") and not ip.startswith("169.254"):
+                            ips.add(ip)
+        except (subprocess.SubprocessError, FileNotFoundError):
+            pass
+    return sorted(ips)
 
 
 class ServerSettings(BaseSettings):
@@ -26,7 +66,8 @@ class ServerSettings(BaseSettings):
     model_path: Path | None = None
     profile: str = "auto"
 
-    host: str = "127.0.0.1"
+    host: str = "0.0.0.0"
+    additional_hosts: str = ""
     port: int = 8001
     ctx_size: int | None = None
     gpu_layers: str = "all"
@@ -105,8 +146,14 @@ class ServerSettings(BaseSettings):
             recommended_env = launcher.get("recommended_env", {})
 
             self.model_file = artifact.get("filename", self.model_file)
-            self.model_path = Path(
-                artifact.get("local_path", str(self.model_dir / self.model_file))
+            local_path_raw = artifact.get(
+                "local_path", str(self.model_dir / self.model_file)
+            )
+            local_path = Path(local_path_raw)
+            self.model_path = (
+                local_path
+                if local_path.is_absolute()
+                else self.model_dir / local_path
             )
             if self.profile == "auto":
                 self.profile = launcher.get("profile", self.profile)
@@ -140,3 +187,17 @@ class ServerSettings(BaseSettings):
             self.presence_penalty = self.repetition_guard_presence_penalty
 
         return self
+
+    @property
+    def all_hosts(self) -> list[str]:
+        hosts = [self.host]
+        if self.additional_hosts:
+            for token in self.additional_hosts.split(","):
+                token = token.strip()
+                if not token:
+                    continue
+                if token == "+lan":
+                    hosts.extend(_discover_lan_ips())
+                else:
+                    hosts.append(token)
+        return hosts

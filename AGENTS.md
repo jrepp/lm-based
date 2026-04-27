@@ -34,7 +34,7 @@ ClawRouter routing config, and documents the full local-LLM stack (see `docs/arc
   "recorded_at": "YYYY-MM-DD",
   "artifact": {
     "filename": "<stem>.gguf",
-    "local_path": "/Users/jrepp/d/qwen/<stem>.gguf",
+    "local_path": "<stem>.gguf",
     "format": "gguf",
     "quantization": "<QUANT>",
     "size_bytes": null,

@@ -18,6 +18,8 @@ def infer_profile(model_name: str, requested: str) -> str:
         return "qwen3.5"
     if "gemma" in lowered:
         return "gemma4"
+    if "ouro" in lowered:
+        return "ouro"
     return "generic"
 
 
@@ -78,6 +80,18 @@ def profile_defaults(profile: str, model_name: str) -> dict[str, object]:
                 "min_p": 0.0,
                 "cache_type_k": "q4_0",
                 "cache_type_v": "q4_0",
+            }
+        )
+
+    if profile == "ouro":
+        defaults.update(
+            {
+                "ctx_size": 8192,
+                "alias": "ouro-2.6b-thinking",
+                "batch_size": 512,
+                "ubatch_size": 128,
+                "temperature": 0.7,
+                "top_p": 1.0,
             }
         )
 

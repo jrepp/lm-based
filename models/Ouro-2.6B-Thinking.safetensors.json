@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-04-23",
+  "artifact": {
+    "filename": "model.safetensors",
+    "local_path": "Ouro-2.6B-Thinking/model.safetensors",
+    "format": "safetensors",
+    "quantization": null,
+    "size_bytes": 5336011242,
+    "sha256": null
+  },
+  "model": {
+    "slug": "ouro-2.6b-thinking",
+    "family": "Ouro",
+    "name": "Ouro-2.6B-Thinking",
+    "canonical_model_card": "https://huggingface.co/ByteDance/Ouro-2.6B-Thinking"
+  },
+  "source": {
+    "gguf_model_card": null,
+    "publisher": "ByteDance",
+    "provenance_status": "verified"
+  },
+  "download": {
+    "provider": "huggingface",
+    "repo_id": "ByteDance/Ouro-2.6B-Thinking",
+    "filename": "model.safetensors",
+    "revision": null
+  },
+  "launcher": {
+    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "profile": "ouro",
+    "recommended_env": {
+      "PROFILE": "ouro",
+      "OURO_MODEL_ID": "ByteDance/Ouro-2.6B-Thinking"
+    }
+  },
+  "notes": [
+    "Transformer-based model (not llama-server). Uses FastAPI + transformers pipeline.",
+    "Located at /Users/jrepp/d/ouro/models/Ouro-2.6B-Thinking/",
+    "Custom architecture with thinking token support."
+  ]
+}

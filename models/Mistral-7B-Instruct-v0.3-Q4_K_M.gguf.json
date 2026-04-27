@@ -3,7 +3,7 @@
   "recorded_at": "2026-04-15",
   "artifact": {
     "filename": "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
-    "local_path": "/Users/jrepp/d/qwen/artifacts/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
+    "local_path": "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
     "format": "gguf",
     "quantization": "Q4_K_M",
     "size_bytes": 4372812000,
