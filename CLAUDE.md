@@ -18,8 +18,8 @@ See `docs/architecture.html` for a rendered diagram of the full stack:
 |------|---------|
 | `models/*.json` | Sidecar metadata per GGUF artifact (schema_version 1) |
 | `lm_launcher/` | Python package — launcher, profiles, settings, run capture |
-| `clawrouter_config.py` | Generate, validate, and inspect `clawrouter.json` |
-| `clawrouter.json` | Generated routing config — gitignored, regenerate with `clawrouter_config.py` |
+| `route-config.py` | Generate, validate, and inspect `clawrouter.json` |
+| `clawrouter.json` | Generated routing config — gitignored, regenerate with `route-config.py` |
 | `.env.example` | Template for all env vars; copy to `.env` and fill in |
 | `run-server.py` | Entry point: builds `ServerSettings` and execs llama-server |
 | `download_model.py` | CLI to fetch a model by sidecar slug |
@@ -31,7 +31,7 @@ See `docs/architecture.html` for a rendered diagram of the full stack:
 
 ```bash
 cp .env.example .env        # fill in MODEL_SLUG and any API keys
-./clawrouter_config.py      # generate clawrouter.json
+./route-config.py      # generate clawrouter.json
 ```
 
 ## Adding a model
@@ -41,7 +41,7 @@ cp .env.example .env        # fill in MODEL_SLUG and any API keys
 2. If the model needs custom serving params, add a profile in
    `lm_launcher/profiles.py` → `profile_defaults()` and update `infer_profile()`.
 3. Append a row to `docs/model-card-index.md`.
-4. Regenerate: `./clawrouter_config.py`
+4. Regenerate: `./route-config.py`
 5. Verify: `./download_model.py --list` — new slug should appear.
 
 ## Sidecar conventions
@@ -61,14 +61,14 @@ See `docs/credentials.md` for the full explanation. Short version:
 - `clawrouter.json` stores `api_key_env` (the var *name*), never the resolved secret
 
 ```bash
-./clawrouter_config.py --providers  # credential status per provider
-./clawrouter_config.py --doctor     # full stack: sidecars + endpoints + credentials
-./clawrouter_config.py --status     # summary of current clawrouter.json
+./route-config.py --providers  # credential status per provider
+./route-config.py --doctor     # full stack: sidecars + endpoints + credentials
+./route-config.py --status     # summary of current clawrouter.json
 ```
 
 ## Adding a cloud provider
 
-Edit `CLOUD_PROVIDERS` in `clawrouter_config.py` — add a `CloudProvider(...)` entry with
+Edit `CLOUD_PROVIDERS` in `route-config.py` — add a `CloudProvider(...)` entry with
 `model_id`, `display`, `key_env`, `base_env`, and `direct_base`. Then regenerate.
 
 ## Profiles

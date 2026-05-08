@@ -30,7 +30,7 @@ using your key.  You pay the provider directly.
 proxy.  The proxy holds its own credentials and settles via USDC micropayments.
 No provider key is needed from you for this path.
 
-The routing decision is made at config-generation time (`./clawrouter_config.py`)
+The routing decision is made at config-generation time (`./route-config.py`)
 and written into `clawrouter.json`.  Re-generate whenever you add or remove keys.
 
 ## Setting credentials
@@ -47,17 +47,17 @@ $EDITOR .env
 After editing `.env`, regenerate the routing config:
 
 ```bash
-./clawrouter_config.py
+./route-config.py
 ```
 
 ## Checking what's configured
 
 ```bash
 # Show credential status for all providers (reads live env)
-./clawrouter_config.py --providers
+./route-config.py --providers
 
 # Full stack check: sidecars, endpoints, credential audit
-./clawrouter_config.py --doctor
+./route-config.py --doctor
 ```
 
 Example `--providers` output:

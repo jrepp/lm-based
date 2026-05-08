@@ -1,0 +1,12 @@
+[project]
+name = "llama-swap"
+version = "0.1.0"
+description = "Python wrapper for llama-swap hot-swap proxy"
+requires-python = ">=3.11"
+dependencies = ["pyyaml"]
+
+[project.scripts]
+llama-swap = "llama_swap.cli:main"
+
+[tool.uv]
+script_requires-python = ">=3.11"

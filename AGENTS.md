@@ -13,7 +13,7 @@ ClawRouter routing config, and documents the full local-LLM stack (see `docs/arc
 - Never modify `.gguf` binary files.
 - Never set `provenance_status: "verified"` without actually verifying the sha256.
 - `schema_version` in sidecars is always `1` until explicitly bumped.
-- `clawrouter.json` is generated — edit `clawrouter_config.py` instead.
+- `clawrouter.json` is generated — edit `route-config.py` instead.
 - The Python package is `lm_launcher/`. Do not recreate or import from `qwen_launcher`.
 
 ## Adding a model (checklist)
@@ -22,7 +22,7 @@ ClawRouter routing config, and documents the full local-LLM stack (see `docs/arc
 1. Write  models/<Artifact-QUANT>.gguf.json   (schema below)
 2. Extend lm_launcher/profiles.py if a new serving profile is needed
 3. Append row to docs/model-card-index.md
-4. Run    ./clawrouter_config.py               (regenerate routing config)
+4. Run    ./route-config.py               (regenerate routing config)
 5. Verify ./download_model.py --list           (new slug appears)
 ```
 
@@ -75,12 +75,47 @@ ClawRouter routing config, and documents the full local-LLM stack (see `docs/arc
 - Add a `profile_defaults()` block that only overrides values differing from generic.
 - Keep `ctx_size` conservative for untested architectures.
 
+## llama-swap
+
+[llama-swap](https://github.com/mostlygeek/llama-swap) is a Go binary that acts as a hot-swap
+reverse proxy for any OpenAI/Anthropic API-compatible inference server (llama-server, vllm, etc.).
+
+The `llama_swap/` Python package wraps it:
+
+| File | Purpose |
+|------|---------|
+| `llama_swap/bin.py` | Binary discovery and installation |
+| `llama_swap/config.py` | YAML config generation from model sidecars |
+| `llama_swap/wrapper.py` | Process management wrapper (`LlamaSwap` class) |
+| `llama_swap/cli.py` | CLI entry point |
+
+Key commands:
+```bash
+./llama-swap-runner.py ensure   # download/install llama-swap binary
+./llama-swap-runner.py config    # generate llama-swap.yaml from sidecars
+./llama-swap-runner.py start     # launch the proxy
+./llama-swap-runner.py status    # show loaded models
+./llama-swap-runner.py logs      # stream logs
+```
+
+Or via `just`:
+```bash
+just swap-ensure    # install binary
+just swap-config     # generate yaml
+just swap-start      # launch proxy
+just swap-status     # check status
+just swap-logs       # stream logs
+```
+
+`llama-swap.yaml` is gitignored; it is generated from sidecar metadata and llama-server
+profile flags. Regenerate after adding or changing a model.
+
 ## ClawRouter and credentials
 
 `clawrouter.json` is gitignored and generated — never hand-edit it.
 
 To add a cloud provider: add a `CloudProvider(...)` entry to `CLOUD_PROVIDERS`
-in `clawrouter_config.py`, then regenerate.
+in `route-config.py`, then regenerate.
 
 Credential model (see `docs/credentials.md`):
 - Each provider has a `key_env` and `base_env` in `CLOUD_PROVIDERS`.
@@ -90,11 +125,11 @@ Credential model (see `docs/credentials.md`):
 - Never hard-code API keys in any file.
 
 ```bash
-./clawrouter_config.py --providers  # credential audit
-./clawrouter_config.py --doctor     # full health check
-./clawrouter_config.py --status     # summarise current config
-./clawrouter_config.py --validate   # sidecar lint only
-./clawrouter_config.py              # regenerate clawrouter.json
+./route-config.py --providers  # credential audit
+./route-config.py --doctor     # full health check
+./route-config.py --status     # summarise current config
+./route-config.py --validate   # sidecar lint only
+./route-config.py              # regenerate clawrouter.json
 ```
 
 ## Commit style

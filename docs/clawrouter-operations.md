@@ -1,37 +1,37 @@
 # ClawRouter Operations
 
-`clawrouter_config.py` is the operator entry point for keeping routing config current and debuggable.
+`route-config.py` is the operator entry point for keeping routing config current and debuggable.
 
 ## Common commands
 
 Regenerate the config after changing model sidecars or cloud backends:
 
 ```bash
-./clawrouter_config.py
+./route-config.py
 ```
 
 Show the current config in a compact, human-readable form:
 
 ```bash
-./clawrouter_config.py --status
+./route-config.py --status
 ```
 
 Validate sidecars and fail on structural errors:
 
 ```bash
-./clawrouter_config.py --validate
+./route-config.py --validate
 ```
 
 Run a broader health check:
 
 ```bash
-./clawrouter_config.py --doctor
+./route-config.py --doctor
 ```
 
 Show credential status for every cloud provider:
 
 ```bash
-./clawrouter_config.py --providers
+./route-config.py --providers
 ```
 
 ## What `--doctor` checks
@@ -59,7 +59,7 @@ http://host.docker.internal:8001/v1
 
 ## Typical workflow
 
-1. Update `models/*.json` or `CLOUD_PROVIDERS` in `clawrouter_config.py`.
-2. Run `./clawrouter_config.py`.
-3. Run `./clawrouter_config.py --status`.
-4. If requests are failing, run `./clawrouter_config.py --doctor`.
+1. Update `models/*.json` or `CLOUD_PROVIDERS` in `route-config.py`.
+2. Run `./route-config.py`.
+3. Run `./route-config.py --status`.
+4. If requests are failing, run `./route-config.py --doctor`.

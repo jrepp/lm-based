@@ -3,15 +3,15 @@
 # requires-python = ">=3.11,<3.14"
 # ///
 """
-Generate and inspect ClawRouter routing config from model sidecars.
+Generate and inspect routing config from model sidecars.
 
 Examples:
-  ./clawrouter_config.py            # write clawrouter.json
-  ./clawrouter_config.py --status   # show current config summary
-  ./clawrouter_config.py --doctor   # validate + probe endpoints + credential audit
-  ./clawrouter_config.py --providers
-  ./clawrouter_config.py --json
-  ./clawrouter_config.py --validate
+  ./route-config.py            # write clawrouter.json
+  ./route-config.py --status   # show current config summary
+  ./route-config.py --doctor   # validate + probe endpoints + credential audit
+  ./route-config.py --providers
+  ./route-config.py --json
+  ./route-config.py --validate
 
 Credential model
 ----------------
@@ -383,7 +383,7 @@ def show_status() -> int:
     """--status: summarise existing clawrouter.json."""
     config = load_existing_config()
     if config is None:
-        print("No config found. Run: ./clawrouter_config.py")
+        print("No config found. Run: ./route-config.py")
         return 1
 
     print("ClawRouter config")
@@ -474,7 +474,7 @@ def run_doctor(proxy_port_override: int | None = None) -> int:
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate and inspect ClawRouter routing config.",
+        description="Generate and inspect routing config.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )

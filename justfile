@@ -36,3 +36,51 @@ book-check:
 # List built PDFs
 book-list:
     @ls -lh pdf-releases/*.pdf 2>/dev/null || echo "No PDFs yet — run: just book"
+
+# ─── llama-swap ───────────────────────────────────────────────────────────────
+
+# Download/install llama-swap binary
+swap-ensure:
+    @uv run --script llama-swap-runner.py ensure
+
+# Generate llama-swap.yaml from model sidecars
+swap-config:
+    @uv run --script llama-swap-runner.py config
+
+# Print llama-swap.yaml to stdout
+swap-config-yaml:
+    @uv run --script llama-swap-runner.py config --yaml
+
+# Start llama-swap proxy (background)
+swap-start:
+    @uv run --script llama-swap-runner.py start &
+
+# Stop llama-swap proxy
+swap-stop:
+    @pkill -f "llama-swap" || true
+
+# Show running models
+swap-status:
+    @uv run --script llama-swap-runner.py status
+
+# Print llama-swap logs
+swap-logs:
+    @uv run --script llama-swap-runner.py logs
+
+# ─── routing ──────────────────────────────────────────────────────────────────
+
+# Regenerate clawrouter.json
+route-config:
+    @./route-config.py
+
+# Show routing config summary
+route-status:
+    @./route-config.py --status
+
+# Validate sidecars and check credentials
+route-doctor:
+    @./route-config.py --doctor
+
+# Show credential status
+route-providers:
+    @./route-config.py --providers
