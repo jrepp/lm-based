@@ -13,6 +13,7 @@ clawrouter.json
 
 # Runtime artifacts
 runs/
+.runtime/
 
 # Local artifact tracking (machine-specific provenance state, never committed)
 artifacts/STATUS.md

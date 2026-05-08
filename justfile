@@ -67,6 +67,16 @@ swap-status:
 swap-logs:
     @uv run --script llama-swap-runner.py logs
 
+# ─── serving observability ────────────────────────────────────────────────────
+
+# Render staging-only Prometheus and Vector config under .runtime/serve-manager/
+serve-observability-render:
+    @uv run --script serve-observability.py render
+
+# Print the observability manifest without writing runtime files
+serve-observability-show:
+    @uv run --script serve-observability.py show
+
 # ─── routing ──────────────────────────────────────────────────────────────────
 
 # Regenerate clawrouter.json
