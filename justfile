@@ -77,6 +77,40 @@ serve-observability-render:
 serve-observability-show:
     @uv run --script serve-observability.py show
 
+# ─── serve-manager ────────────────────────────────────────────────────────────
+
+# Plan a direct HAProxy staging generation
+serve-plan-direct:
+    @GOCACHE=/tmp/go-build go run ./cmd/serve-manager plan --mode direct
+
+# Plan a managed HAProxy + llama-swap generation
+serve-plan-managed:
+    @GOCACHE=/tmp/go-build go run ./cmd/serve-manager plan --mode managed
+
+# Validate binaries, ports, and model artifacts for direct staging
+serve-doctor-direct:
+    @GOCACHE=/tmp/go-build go run ./cmd/serve-manager doctor --mode direct
+
+# Validate binaries, ports, and model artifacts for managed staging
+serve-doctor-managed:
+    @GOCACHE=/tmp/go-build go run ./cmd/serve-manager doctor --mode managed
+
+# Apply the direct HAProxy staging generation
+serve-apply-direct:
+    @GOCACHE=/tmp/go-build go run ./cmd/serve-manager apply --mode direct
+
+# Apply the managed HAProxy + llama-swap staging generation
+serve-apply-managed:
+    @GOCACHE=/tmp/go-build go run ./cmd/serve-manager apply --mode managed
+
+# Show serve-manager runtime status
+serve-status:
+    @GOCACHE=/tmp/go-build go run ./cmd/serve-manager status
+
+# Stop staging HAProxy / llama-swap processes
+serve-stop:
+    @GOCACHE=/tmp/go-build go run ./cmd/serve-manager stop
+
 # ─── routing ──────────────────────────────────────────────────────────────────
 
 # Regenerate clawrouter.json

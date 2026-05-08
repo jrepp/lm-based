@@ -1,0 +1,41 @@
+{
+  "api_version": "v1",
+  "ingress": {
+    "public_listen": "127.0.0.1:8080",
+    "swap_listen": "127.0.0.1:8081",
+    "swap_ui_enabled": false
+  },
+  "workers": {
+    "host": "127.0.0.1",
+    "port_range": {
+      "start": 10001,
+      "end": 10100
+    },
+    "default_run_mode": "swap_worker",
+    "default_enable_run_capture": false
+  },
+  "models": {
+    "enabled": [
+      "qwen36-27b-q6k",
+      "qwen25-coder-7b-instruct"
+    ],
+    "disabled": [],
+    "warm": [
+      "qwen25-coder-7b-instruct"
+    ],
+    "operator_only": []
+  },
+  "swap": {
+    "global_ttl_seconds": 0,
+    "send_loading_state": true
+  },
+  "observability": {
+    "metrics_listen": "127.0.0.1:9091",
+    "structured_logs": true
+  },
+  "policy": {
+    "allow_non_gguf": true,
+    "require_local_artifact": true,
+    "fail_apply_on_missing_model": true
+  }
+}

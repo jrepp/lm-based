@@ -1,0 +1,31 @@
+{
+  "api_version": "v1",
+  "host": {
+    "id": "mac-studio-local",
+    "class": "mac128"
+  },
+  "backends": {
+    "supported": [
+      "llama-server",
+      "transformers-serve",
+      "ouro"
+    ],
+    "preferred": {
+      "gguf": "llama-server",
+      "transformers": "transformers-serve"
+    }
+  },
+  "limits": {
+    "memory_class": "128g",
+    "accelerator": "apple-metal",
+    "supports_large_bf16": false,
+    "supports_long_context_heavy_models": "limited"
+  },
+  "profiles": {
+    "excluded": [],
+    "preferred": [
+      "qwen2.5-coder-transformers",
+      "qwen3.6"
+    ]
+  }
+}

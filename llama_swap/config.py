@@ -1,17 +1,11 @@
 from __future__ import annotations
 
 import os
-import shutil
-import subprocess
-import sys
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import yaml
-
-from llama_swap.bin import ensure_binary, find_binary
 
 PROJECT_ROOT = Path(__file__).parent.parent
 MODELS_DIR = PROJECT_ROOT / "models"
@@ -71,92 +65,24 @@ class ModelConfig:
         return d
 
 
-def _resolve_model_path(sidecar_path: Path) -> Path:
-    import json
-    with sidecar_path.open(encoding="utf-8") as f:
-        rec = json.load(f)
-
-    artifact = rec.get("artifact", {})
-    launcher = rec.get("launcher", {})
-    recommended_env = launcher.get("recommended_env", {})
-
-    model_file = recommended_env.get("MODEL_FILE") or artifact.get("filename", "")
-    local_path_raw = artifact.get("local_path", model_file)
-    local_path = Path(local_path_raw)
-
-    if local_path.is_absolute():
-        return local_path
-    project_relative = PROJECT_ROOT / local_path
-    artifacts_relative = PROJECT_ROOT / "artifacts" / local_path
-    return project_relative if project_relative.exists() else artifacts_relative
+def _shell_quote(value: str) -> str:
+    if not value:
+        return "''"
+    return "'" + value.replace("'", """'"'"'""") + "'"
 
 
-OURO_REPO_ROOT = Path("/Users/jrepp/d/ouro")
-
-
-def _build_ouro_server_cmd(model_path: Path, port: int) -> str:
-    venv_python = OURO_REPO_ROOT / ".venv" / "bin" / "python"
-    server_file = OURO_REPO_ROOT / "server.py"
-    if not venv_python.exists():
-        venv_python = shutil.which("python") or "python"
-    return (
-        f"{venv_python} {server_file}"
-        f" --port {port}"
-        f" --host 127.0.0.1"
-    )
-
-
-def _build_llama_server_cmd(
-    model_path: Path,
-    profile: str,
-    port: int,
-) -> str:
-    model_file = os.environ.get("MODEL_FILE", "")
-    profile_env = os.environ.get("PROFILE", profile)
-
-    cmd_parts = [
-        shutil.which("llama-server") or "llama-server",
-        f"--port {port}",
-        f"--model '{model_path}'",
+def _build_run_server_cmd(slug: str, port: int) -> str:
+    worker_id = f"swap-{slug}"
+    parts = [
+        f"MODEL_SLUG={_shell_quote(slug)}",
+        "HOST=127.0.0.1",
+        f"PORT={port}",
+        "RUN_MODE=swap_worker",
+        f"SUPERVISOR_WORKER_ID={_shell_quote(worker_id)}",
+        "ENABLE_RUN_CAPTURE=0",
+        "./run-server.py",
     ]
-
-    common_flags = [
-        "--flash-attn auto",
-        "--ctx-size 262144",
-        "--batch-size 2048",
-        "--ubatch-size 512",
-        "--parallel 1",
-        "--threads 8",
-        "--threads-batch 8",
-        "--gpu-layers all",
-        "--log-verbosity 3",
-    ]
-
-    if profile in ("qwen3-coder-next",):
-        common_flags.extend([
-            "--ctx-size 1048576",
-            "--rope-scaling yarn",
-            "--rope-scale 4.0",
-            "--yarn-orig-ctx 262144",
-            "--temperature 1.0",
-            "--top-k 40",
-            "--top-p 0.95",
-            "--min-p 0.0",
-            "--batch-size 1024",
-            "--ubatch-size 256",
-        ])
-
-    if profile in ("gemma4",):
-        common_flags.extend([
-            "--ctx-size 32768",
-            "--batch-size 512",
-            "--ubatch-size 128",
-        ])
-
-    for flag in common_flags:
-        cmd_parts.append(flag)
-
-    return " ".join(cmd_parts)
+    return " ".join(parts)
 
 
 def _sidecar_to_model_config(sidecar_path: Path, port: int) -> ModelConfig | None:
@@ -176,27 +102,11 @@ def _sidecar_to_model_config(sidecar_path: Path, port: int) -> ModelConfig | Non
         return None
 
     profile = recommended_env.get("PROFILE") or launcher.get("profile", "auto")
-    model_file = recommended_env.get("MODEL_FILE") or artifact.get("filename", "")
-    local_path_raw = artifact.get("local_path", model_file)
-    local_path = Path(local_path_raw)
-
-    if local_path.is_absolute():
-        model_path = local_path
-    else:
-        project_relative = PROJECT_ROOT / local_path
-        artifacts_relative = PROJECT_ROOT / "artifacts" / local_path
-        model_path = project_relative if project_relative.exists() else artifacts_relative
-
     fmt = artifact.get("format", "gguf")
-    is_gguf = fmt == "gguf"
-    is_ouro = profile == "ouro"
-
-    if is_ouro:
-        cmd = _build_ouro_server_cmd(model_path, port)
-    elif is_gguf:
-        cmd = _build_llama_server_cmd(model_path, profile, port)
-    else:
+    if fmt not in {"gguf", "safetensors"} and profile != "ouro":
         return None
+
+    cmd = _build_run_server_cmd(slug, port)
 
     name = artifact.get("quantization") or ""
 

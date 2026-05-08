@@ -65,6 +65,7 @@ class ServerSettings(BaseSettings):
     model_file: str = ""
     model_path: Path | None = None
     profile: str = "auto"
+    run_mode: str = "direct"
 
     host: str = "0.0.0.0"
     additional_hosts: str = ""
@@ -150,11 +151,14 @@ class ServerSettings(BaseSettings):
                 "local_path", str(self.model_dir / self.model_file)
             )
             local_path = Path(local_path_raw)
-            self.model_path = (
-                local_path
-                if local_path.is_absolute()
-                else self.model_dir / local_path
-            )
+            if local_path.is_absolute():
+                self.model_path = local_path
+            else:
+                project_relative = _PROJECT_ROOT / local_path
+                artifacts_relative = self.model_dir / local_path
+                self.model_path = (
+                    project_relative if project_relative.exists() else artifacts_relative
+                )
             if self.profile == "auto":
                 self.profile = launcher.get("profile", self.profile)
             if self.alias is None:
@@ -185,6 +189,9 @@ class ServerSettings(BaseSettings):
 
         if self.enable_repetition_guard and self.presence_penalty is None:
             self.presence_penalty = self.repetition_guard_presence_penalty
+
+        if self.run_mode == "swap_worker" and "enable_run_capture" not in self.model_fields_set:
+            self.enable_run_capture = False
 
         return self
 

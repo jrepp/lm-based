@@ -34,7 +34,7 @@ def _system_arch() -> str:
 
 def find_binary() -> Path | None:
     for name in ("llama-swap", "llama-swap.exe"):
-        path = shutil.find_executable(name)
+        path = shutil.which(name)
         if path:
             return Path(path)
     return None
