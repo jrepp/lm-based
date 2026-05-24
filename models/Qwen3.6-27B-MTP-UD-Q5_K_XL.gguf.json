@@ -6,8 +6,8 @@
     "local_path": "Qwen3.6-27B-UD-Q5_K_XL.gguf",
     "format": "gguf",
     "quantization": "UD-Q5_K_XL",
-    "size_bytes": null,
-    "sha256": null
+    "size_bytes": 20350682240,
+    "sha256": "5a3c61033581754d507ffdcbf0629214cbfbd58a2edbec80d93f6ec2af44d227"
   },
   "model": {
     "slug": "qwen36-27b-mtp-ud-q5k-xl",
@@ -18,7 +18,7 @@
   "source": {
     "gguf_model_card": "https://huggingface.co/unsloth/Qwen3.6-27B-MTP-GGUF",
     "publisher": "unsloth",
-    "provenance_status": "planned_download"
+    "provenance_status": "user_reported"
   },
   "download": {
     "provider": "huggingface",
@@ -38,6 +38,7 @@
   "notes": [
     "MTP-preserved GGUF for testing native draft-mtp speculative decoding in current llama.cpp builds.",
     "Selected as the initial M4 Max 128 GB target because it should leave more context headroom than Q6 while retaining better quality than Q4.",
-    "Record kept conservative until the artifact is downloaded locally and checksum is verified."
+    "Local file size and SHA-256 were recorded after download on 2026-05-24.",
+    "Upstream provenance should still be treated as unverified until this SHA-256 is matched against a published source checksum."
   ]
 }
