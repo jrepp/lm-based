@@ -1,4 +1,10 @@
-#!/usr/bin/env -S uv run
+#!/usr/bin/env -S uv run --python 3.11 --script
+# /// script
+# requires-python = ">=3.11,<3.14"
+# dependencies = [
+#   "huggingface_hub>=0.34,<1",
+# ]
+# ///
 
 from __future__ import annotations
 
@@ -73,9 +79,11 @@ def download_record(record: dict, output_dir: Path | None, token: str | None) ->
     else:
         requested_files = [download["filename"]] if download.get("filename") else []
     revision = download.get("revision")
-    local_dir = output_dir or Path(record["artifact"]["local_path"]).resolve().parent
+    local_dir = output_dir or Path(
+        download.get("local_dir") or artifact["local_path"]
+    ).resolve().parent
 
-    if download.get("snapshot"):
+    if download.get("snapshot") or download.get("type") == "snapshot":
         allow_patterns = download.get("allow_patterns")
         path = snapshot_download(
             repo_id=repo_id,
@@ -86,6 +94,9 @@ def download_record(record: dict, output_dir: Path | None, token: str | None) ->
             allow_patterns=allow_patterns,
         )
         return [Path(path)]
+
+    if not requested_files:
+        raise SystemExit(f"No filename configured for {record_id(record)}")
 
     paths: list[Path] = []
     for filename in requested_files:

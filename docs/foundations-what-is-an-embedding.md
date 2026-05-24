@@ -17,10 +17,12 @@ Computers are good at numbers. Language is not numbers. There is a gap.
 
 The naive approach to bridging that gap is to assign each word an integer ID:
 
-```
+```text
+
 "cat"   → 4821
 "dog"   → 9302
 "feline" → 2201
+
 ```
 
 This does not work for meaning-sensitive tasks. The number 4821 is not close to 2201. But
@@ -30,10 +32,12 @@ information about semantic relationships.
 An embedding is a different kind of representation: instead of one integer, each word or text
 gets a **vector** — a list of floating-point numbers.
 
-```
+```text
+
 "cat"    → [0.21, -0.45, 0.03, 0.88, ...]  (1536 numbers)
 "feline" → [0.23, -0.42, 0.01, 0.91, ...]  (1536 numbers)
 "dog"    → [0.18,  0.31, 0.55, 0.12, ...]  (1536 numbers)
+
 ```
 
 The key property: **similar meanings produce similar vectors**. "cat" and "feline" are close
@@ -52,8 +56,10 @@ visualize it, but the geometry still works the same way as 2D or 3D:
 
 The classic illustration uses word vectors trained on large text corpora:
 
-```
+```text
+
 vector("king") - vector("man") + vector("woman") ≈ vector("queen")
+
 ```
 
 The direction from "man" to "woman" in the vector space captures the concept of gender. The
@@ -71,10 +77,12 @@ model's weights so that **texts that should be similar end up nearby in vector s
 
 The most common training objective for modern embedding models is **contrastive learning**:
 
-```
+```text
+
 Given: (query, relevant_document, irrelevant_document)
 Goal:  make vector(query) close to vector(relevant_document)
        make vector(query) far from vector(irrelevant_document)
+
 ```
 
 This is called a **triplet** or **(anchor, positive, negative)** setup. The loss function
@@ -117,12 +125,14 @@ always got the same vector, regardless of context.
 Modern embedding models (BERT, RoBERTa, and their successors) are **contextual**. The same
 word gets a different vector depending on the surrounding text:
 
-```
+```text
+
 "bank" in "I went to the bank to deposit money"
     → vector reflecting financial institution
 
 "bank" in "we sat on the bank of the river"
     → vector reflecting a riverbank
+
 ```
 
 These models produce one vector per **token** (a subword unit — see
@@ -169,18 +179,24 @@ uses that context to produce an answer.
 Both are transformer models, but they operate differently:
 
 **Bi-encoder (embedding model):**
-```
+
+```text
+
 query  → [encoder] → query_vector
 doc    → [encoder] → doc_vector
 score  = similarity(query_vector, doc_vector)
+
 ```
 
 The query and document are encoded independently. This is fast because document vectors can
 be precomputed and stored in an index.
 
 **Cross-encoder (reranker):**
-```
+
+```text
+
 [query + doc] → [encoder] → relevance_score
+
 ```
 
 The query and document are read together. The model can reason about their interaction
@@ -220,8 +236,10 @@ Key properties for retrieval:
 
 - **Asymmetric matching**: short query ("python list sorting") should be close to long
   document explaining `list.sort()`, even though they're very different in length and style
+
 - **Out-of-vocabulary robustness**: the model should handle domain-specific terms it has not
   seen exactly during training
+
 - **Cross-lingual capability** (when needed): query in English, document in Chinese should
   still match if they say the same thing
 

@@ -33,7 +33,9 @@ def _is_transformers_model() -> bool:
 
 
 def _is_mlx_model() -> bool:
-    if PROFILE.startswith("mlx"):
+    if PROFILE.startswith("mlx") or PROFILE.endswith("-mlx") or PROFILE == "mlx":
+        return True
+    if os.getenv("MLX_MODEL"):
         return True
     if MODEL_SLUG and ("bonsai" in MODEL_SLUG.lower() or "mlx" in MODEL_SLUG.lower()):
         return True

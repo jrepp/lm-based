@@ -3,6 +3,7 @@
 ASCII sketch based on the provided diagram:
 
 ```text
+
 +-----------+                           +----------+
 | tailscale |                           | telegram |
 +-----------+                           +----------+
@@ -29,4 +30,5 @@ ASCII sketch based on the provided diagram:
                                    +----------------+
                                    | local model    |
                                    +----------------+
+
 ```

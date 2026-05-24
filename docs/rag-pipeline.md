@@ -20,12 +20,14 @@ Related documents:
 
 RAG has two distinct phases that run at different times and at different frequencies:
 
-```
+```text
+
 INDEXING PHASE (offline, once per document)
   Raw document → extract text → chunk → embed → store in index
 
 QUERY PHASE (online, once per question)
   Question → embed → search index → retrieve chunks → assemble context → generate answer
+
 ```
 
 The indexing phase is batch work: slow, expensive, done in advance. The query phase must be
@@ -49,14 +51,17 @@ At this step, also extract metadata: source URL or path, title, author, creation
 document type. This metadata travels with every chunk the document produces.
 
 Failure modes:
+
 - PDF with scanned images: text extraction returns nothing. Requires OCR.
 - PDF with ligature fonts: some extractors corrupt `fi`, `fl` ligatures into garbage
   characters (e.g., "efficient" becomes "e cient").
+
 - HTML with JavaScript-rendered content: static extraction misses content loaded dynamically.
 
 ### Step 2: Text cleaning
 
 Before chunking, normalize the extracted text:
+
 - Remove boilerplate (headers, footers, page numbers, navigation)
 - Normalize whitespace and Unicode (ligatures, smart quotes, zero-width spaces)
 - Optionally repair broken words from PDF column extraction
@@ -71,6 +76,7 @@ retrieval precision you need. See [chunking-strategies.md](chunking-strategies.m
 full decision tree.
 
 Key decisions at this step:
+
 - Chunk size (characters or tokens)
 - Overlap (0–20% is typical)
 - Split strategy (fixed, sentence-boundary, structure-aware, semantic)
@@ -82,16 +88,20 @@ Output: a list of `(chunk_text, chunk_metadata)` pairs.
 
 Pass each chunk through the embedding model to produce a vector.
 
-```
+```text
+
 chunk_text  → [embedding model] → [0.21, -0.45, 0.03, ...]
+
 ```
 
 This is the most computationally expensive step. Strategies:
 
 - **Batch embedding:** send multiple chunks per API call (up to 2,048 for OpenAI). Reduces
   round-trip overhead by orders of magnitude vs. one call per chunk.
+
 - **Local vs. API:** local ONNX models (BGE, nomic-embed) have zero per-call cost but require
   GPU/CPU capacity. OpenAI API has per-token cost but no infrastructure overhead.
+
 - **Caching:** if re-indexing a partially updated corpus, skip chunks whose text has not
   changed (hash the chunk text to detect unchanged content).
 
@@ -102,6 +112,7 @@ Output: a list of `(vector, chunk_text, chunk_metadata)` triples.
 Write each `(vector, chunk_text, chunk_metadata)` into the storage backend.
 
 What gets stored:
+
 - The vector (for ANN search)
 - The chunk text (to return as context to the LLM)
 - The metadata (for filtering and attribution)
@@ -112,7 +123,8 @@ rebuild at the end of ingestion, depending on the backend.
 
 ### Indexing pipeline summary
 
-```
+```text
+
 [raw docs]
     │
     ▼
@@ -129,6 +141,7 @@ rebuild at the end of ingestion, depending on the backend.
     │
     ▼
 [store]         ←── vector index + optional BM25 index
+
 ```
 
 ---
@@ -142,9 +155,11 @@ The user submits a question or search string. Before doing anything else, consid
 - **Query type:** Is this a factual lookup ("what is the default ef_construction for HNSW?"),
   a synthesis request ("explain the tradeoffs of different chunking strategies"), or a
   conversational follow-up ("what about the overlap setting?")?
+
 - **Query transformation:** Should the query be rewritten before retrieval? Common techniques:
   - Hypothetical Document Embedding (HyDE): ask the LLM to write a hypothetical document that
     would answer the question, then embed that document instead of the bare query
+
   - Query expansion: append related terms to improve recall
   - Sub-question decomposition: split a complex query into simpler sub-questions, retrieve
     for each, then combine
@@ -154,8 +169,10 @@ The user submits a question or search string. Before doing anything else, consid
 Embed the query using the same model used to embed the documents. This is non-negotiable —
 the query and document vectors must live in the same vector space.
 
-```
+```text
+
 query_text → [same embedding model] → query_vector
+
 ```
 
 If query instructions are used (as with Qwen3-Embedding), wrap the query in the appropriate
@@ -166,24 +183,32 @@ instruction template before embedding. See [embedding-concepts.md](embedding-con
 Search the index for the chunks most similar to the query vector. This has two sub-modes:
 
 **Pure vector search:**
-```
+
+```text
+
 query_vector → ANN search → top-k chunks ranked by vector similarity
+
 ```
 
 **Hybrid search (BM25 + vector):**
-```
+
+```text
+
 query_text   → BM25 search → lex_results (ranked by keyword relevance)
 query_vector → ANN search  → vec_results (ranked by semantic similarity)
 lex_results + vec_results   → RRF fusion → merged_results
+
 ```
 
 Hybrid search consistently outperforms either modality alone, especially on:
+
 - Queries with exact-match terms (version numbers, names, code identifiers)
 - Queries where the vocabulary gap between query and document is small
 
 ### Step 4: Filter
 
 Apply metadata filters to the candidate set:
+
 - Date range ("only documents from the last 6 months")
 - Source type ("only from the API documentation")
 - Access control ("only documents this user can see")
@@ -196,11 +221,13 @@ silently produce fewer results than requested if many candidates are filtered ou
 
 Pass the top candidates through a cross-encoder reranker to produce a more precise ordering.
 
-```
+```text
+
 (query, candidate_1) → [reranker] → 0.92
 (query, candidate_2) → [reranker] → 0.87
 (query, candidate_3) → [reranker] → 0.41
 ...
+
 ```
 
 The reranker reads the query and each candidate together, producing a relevance score that
@@ -226,12 +253,14 @@ middle.
 
 **Attribution:** Include source metadata in the context block so the LLM can cite sources:
 
-```
+```text
+
 [Source: llama-server-cache-architecture-explainer.md, Section: KV Cache Mechanics]
 The KV cache stores key and value tensors from previously processed tokens...
 
 [Source: retrieval-concepts.md, Section: HNSW]
 HNSW builds a multi-layer graph where each node is a document vector...
+
 ```
 
 **Parent-child expansion:** If using parent-child chunking, swap retrieved child chunks for
@@ -242,7 +271,9 @@ their parent chunk at this step to give the LLM richer context.
 Construct the final prompt and call the LLM.
 
 Typical prompt structure:
-```
+
+```text
+
 SYSTEM:
 You are a helpful assistant. Answer questions using only the provided context.
 If the context does not contain the answer, say so.
@@ -254,16 +285,19 @@ USER:
 [original question]
 
 ASSISTANT:
+
 ```
 
 The system prompt should instruct the LLM to:
+
 1. Use the provided context as the primary source
 2. Acknowledge when the context does not contain the answer (rather than hallucinating)
 3. Cite sources when the information is specific
 
 ### Query phase summary
 
-```
+```text
+
 [user question]
     │
     ▼
@@ -289,6 +323,7 @@ The system prompt should instruct the LLM to:
     │
     ▼
 [response]
+
 ```
 
 ---
@@ -300,6 +335,7 @@ The system prompt should instruct the LLM to:
 **Symptom:** The LLM says "I don't know" but the answer is in the corpus.
 
 Probable causes:
+
 - Chunk boundary split the answer across two chunks; neither retrieved individually
 - Query vocabulary doesn't match document vocabulary (semantic gap); try hybrid search or HyDE
 - `top_k` too small; the right chunk is at rank 12 but only top 5 are retrieved
@@ -308,6 +344,7 @@ Probable causes:
 **Symptom:** Retrieved chunks are consistently wrong (off-topic).
 
 Probable causes:
+
 - Chunks are too large; the relevant sentence is buried in an irrelevant chunk
 - Embedding model is not well-suited to the domain; consider fine-tuning or a domain-specific model
 - No reranker; vector proximity is imprecise for this query type
@@ -317,6 +354,7 @@ Probable causes:
 **Symptom:** LLM ignores the context and answers from its parametric memory.
 
 Probable causes:
+
 - System prompt does not strongly instruct the model to use context
 - Context block is too long; relevant chunks are in the "lost in the middle" zone
 - Model temperature too high; try 0.0–0.3 for fact retrieval tasks
@@ -324,6 +362,7 @@ Probable causes:
 **Symptom:** LLM cites sources that are not in the context.
 
 Probable causes:
+
 - Model hallucinating citations; add explicit instruction "only cite sources from the provided context"
 - Context metadata is missing or ambiguous; add clear source labels
 
@@ -332,15 +371,18 @@ Probable causes:
 **Symptom:** Re-indexing takes much longer than expected.
 
 Probable causes:
+
 - Embedding every chunk individually instead of batching
 - No caching of embeddings for unchanged content
 
 **Symptom:** Index quality degrades over time as documents are updated.
 
 Probable causes:
+
 - Stale vectors from old document versions still in the index
 - Backend does not support correct deletions (see memvid HNSW limitation in
   [retrieval-backends.md](retrieval-backends.md))
+
 - No mechanism to detect and re-embed changed content
 
 ---

@@ -22,8 +22,8 @@ Related documents:
 
 Source annotations:
 
-- RTEB launch and benchmark design: https://huggingface.co/blog/rteb
-- Benchmark registry and slices: https://embeddings-benchmark.github.io/mteb/overview/available_benchmarks/
+- RTEB launch and benchmark design: <https://huggingface.co/blog/rteb>
+- Benchmark registry and slices: <https://embeddings-benchmark.github.io/mteb/overview/available_benchmarks/>
 
 ---
 
@@ -42,9 +42,9 @@ Why it was selected:
 
 Source annotations:
 
-- Qwen3-Embedding-4B-GGUF model card: https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF
-- Qwen3-Embedding-0.6B-GGUF model card: https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF
-- Qwen3-Embedding-8B-GGUF model card: https://huggingface.co/Qwen/Qwen3-Embedding-8B-GGUF
+- Qwen3-Embedding-4B-GGUF model card: <https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF>
+- Qwen3-Embedding-0.6B-GGUF model card: <https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF>
+- Qwen3-Embedding-8B-GGUF model card: <https://huggingface.co/Qwen/Qwen3-Embedding-8B-GGUF>
 
 Best lightweight fallback:
 
@@ -81,8 +81,8 @@ RTEB's approach:
 
 References:
 
-- https://huggingface.co/blog/rteb
-- https://embeddings-benchmark.github.io/mteb/overview/available_benchmarks/
+- <https://huggingface.co/blog/rteb>
+- <https://embeddings-benchmark.github.io/mteb/overview/available_benchmarks/>
 
 ### What RTEB shows about Qwen3-Embedding
 
@@ -98,10 +98,10 @@ What the indirect evidence suggests:
 
 Source annotations:
 
-- Octen mention and RTEB framing come from the Hugging Face RTEB launch post: https://huggingface.co/blog/rteb
+- Octen mention and RTEB framing come from the Hugging Face RTEB launch post: <https://huggingface.co/blog/rteb>
 - Qwen3 benchmark claims and training description come from the Qwen Hugging Face model cards:
-  https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF
-  https://huggingface.co/Qwen/Qwen3-Embedding-8B-GGUF
+  <https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF>
+  <https://huggingface.co/Qwen/Qwen3-Embedding-8B-GGUF>
 
 Tentative interpretation: Qwen3-Embedding is probably not severely contaminated, but "probably not" is not the same as confirmed. The gap is a known risk for any model released after MTEB became the dominant leaderboard.
 
@@ -122,14 +122,15 @@ Tentative interpretation: Qwen3-Embedding is probably not severely contaminated,
 
 Source annotations:
 
-- RTEB scores and leaderboard framing: https://huggingface.co/blog/rteb
-- BGE-M3 model card: https://huggingface.co/BAAI/bge-m3
+- RTEB scores and leaderboard framing: <https://huggingface.co/blog/rteb>
+- BGE-M3 model card: <https://huggingface.co/BAAI/bge-m3>
 
 For local llama.cpp serving specifically, BGE-M3 is the strongest RTEB-adjacent alternative:
 
 - `BAAI/bge-m3` — GGUF quantizations available from community publishers
 - supports dense, sparse (SPLADE), and ColBERT-style retrieval in a single model
   (see [Retrieval Architectures](embedding-concepts.md#retrieval-architectures))
+
 - well-established generalization reputation predating the MTEB contamination era
 - 8,192 token context vs Qwen3-Embedding's 32K (usually sufficient for chunked retrieval)
 
@@ -149,7 +150,7 @@ Run the RTEB leaderboard check first. If Qwen3-Embedding has an entry with a sma
 
 Hugging Face:
 
-- https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF
+- <https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF>
 
 Key findings from the model card:
 
@@ -162,12 +163,13 @@ Key findings from the model card:
   `llama-embedding ... --pooling last`
   and
   `llama-server -m model.gguf --embedding --pooling last`
+
 - the card reports `Qwen3-Embedding-4B` at `69.45` on multilingual MTEB and `74.60` on MTEB English v2
 - the same card reports the 8B model at the top of the multilingual MTEB leaderboard as of June 5, 2025
 
 Source annotations:
 
-- https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF
+- <https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF>
 
 Fit assessment:
 
@@ -183,7 +185,7 @@ Practical footprint:
 
 Hugging Face:
 
-- https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF
+- <https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF>
 
 Key findings:
 
@@ -197,7 +199,7 @@ Key findings:
 
 Source annotations:
 
-- https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF
+- <https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF>
 
 Fit assessment:
 
@@ -213,7 +215,7 @@ Practical footprint:
 
 Hugging Face:
 
-- https://huggingface.co/Qwen/Qwen3-Embedding-8B-GGUF
+- <https://huggingface.co/Qwen/Qwen3-Embedding-8B-GGUF>
 
 Key findings:
 
@@ -224,7 +226,7 @@ Key findings:
 
 Source annotations:
 
-- https://huggingface.co/Qwen/Qwen3-Embedding-8B-GGUF
+- <https://huggingface.co/Qwen/Qwen3-Embedding-8B-GGUF>
 
 Fit assessment:
 
@@ -235,7 +237,7 @@ Fit assessment:
 
 Hugging Face:
 
-- https://huggingface.co/BAAI/bge-m3
+- <https://huggingface.co/BAAI/bge-m3>
 
 Key findings:
 
@@ -246,7 +248,7 @@ Key findings:
 
 Source annotations:
 
-- https://huggingface.co/BAAI/bge-m3
+- <https://huggingface.co/BAAI/bge-m3>
 
 Fit assessment:
 
@@ -261,19 +263,20 @@ Inference:
 
 Hugging Face:
 
-- https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1
+- <https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1>
 
 Key findings:
 
 - strong English embedding model
 - the card says retrieval queries should use the prompt
   `Represent this sentence for searching relevant passages:`
+
 - supports Matryoshka representation learning and quantization
 - the card reports strong March 2024 MTEB results and compares favorably with `text-embedding-3-large`
 
 Source annotations:
 
-- https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1
+- <https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1>
 
 Fit assessment:
 
@@ -288,7 +291,7 @@ Inference:
 
 Hugging Face:
 
-- https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF
+- <https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF>
 
 Key findings:
 
@@ -301,7 +304,7 @@ Key findings:
 
 Source annotations:
 
-- https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF
+- <https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF>
 
 Fit assessment:
 
@@ -340,14 +343,14 @@ Why this recommendation is defensible:
 
 Source annotations:
 
-- Qwen3-Embedding-4B-GGUF: https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF
-- RTEB retrieval-benchmark framing: https://huggingface.co/blog/rteb
+- Qwen3-Embedding-4B-GGUF: <https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF>
+- RTEB retrieval-benchmark framing: <https://huggingface.co/blog/rteb>
 
 ## Sources
 
-- Qwen3-Embedding-4B-GGUF: https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF
-- Qwen3-Embedding-0.6B-GGUF: https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF
-- Qwen3-Embedding-8B-GGUF: https://huggingface.co/Qwen/Qwen3-Embedding-8B-GGUF
-- BAAI/bge-m3: https://huggingface.co/BAAI/bge-m3
-- mixedbread-ai/mxbai-embed-large-v1: https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1
-- nomic-embed-text-v1.5-GGUF: https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF
+- Qwen3-Embedding-4B-GGUF: <https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF>
+- Qwen3-Embedding-0.6B-GGUF: <https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF>
+- Qwen3-Embedding-8B-GGUF: <https://huggingface.co/Qwen/Qwen3-Embedding-8B-GGUF>
+- BAAI/bge-m3: <https://huggingface.co/BAAI/bge-m3>
+- mixedbread-ai/mxbai-embed-large-v1: <https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1>
+- nomic-embed-text-v1.5-GGUF: <https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF>

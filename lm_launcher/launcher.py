@@ -62,6 +62,7 @@ def build_args(settings: ServerSettings) -> list[str]:
     add_arg(args, "--top-p", settings.top_p)
     add_arg(args, "--min-p", settings.min_p)
     add_arg(args, "--presence-penalty", settings.presence_penalty)
+    add_arg(args, "--repeat-penalty", settings.repetition_penalty)
     add_arg(args, "--rope-scaling", settings.rope_scaling)
     add_arg(args, "--rope-scale", settings.rope_scale)
     add_arg(args, "--rope-freq-base", settings.rope_freq_base)
@@ -123,6 +124,7 @@ def print_startup(settings: ServerSettings) -> None:
         f"top_p={settings.top_p if settings.top_p is not None else 'model'}, "
         f"min_p={settings.min_p if settings.min_p is not None else 'model'}, "
         f"presence={settings.presence_penalty if settings.presence_penalty is not None else 'off'}, "
+        f"repeat={settings.repetition_penalty if settings.repetition_penalty is not None else 'model'}, "
         f"rep_guard={'on' if settings.enable_repetition_guard else 'off'}"
     )
     print(f"  kv:    {settings.cache_type_k}/{settings.cache_type_v}")

@@ -1,0 +1,24 @@
+{
+  "kev": {
+    "repo": "jaredpalmer/kev-4b",
+    "revision": "139fdd94f1b6a6ad80cc15e08fcb99cac885a101"
+  },
+  "base": {
+    "repo": "Qwen/Qwen3.5-4B-Base",
+    "revision": "1001bb4d826a52d1f399e183466143f4da7b741b"
+  },
+  "kev_code": {
+    "repo": "https://github.com/jaredpalmer/kev",
+    "commit": "5920c5fe4ca8e0970ed4209ac2c9b8e18bea5109"
+  },
+  "method": "LoRA merged into the bf16 base in fp32 (kev.mlx_model.merge_lora), then mlx.nn.quantize bits=8 group_size=64 on every Linear/Embedding whose input dim divides by 64; the pointer head (head.pt) is the fp32 head from this Kev revision, including its temperature 2.406050072164233",
+  "quantization": {
+    "bits": 8,
+    "group_size": 64
+  },
+  "model.safetensors": {
+    "sha256": "83adf34ef8f2433166225960d0f074def35d3de52449fa8861bc356398312d31",
+    "bytes": 4469640165
+  },
+  "built_by": "Qualm (src/qualm/kevserve.py)"
+}

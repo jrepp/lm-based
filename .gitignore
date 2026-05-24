@@ -13,6 +13,7 @@ clawrouter.json
 llama-swap.yaml
 
 # Runtime artifacts
+artifacts/
 runs/
 .runtime/
 /serve-manager
