@@ -104,7 +104,7 @@ def profile_defaults(profile: str, model_name: str) -> dict[str, object]:
     if profile == "qwen3.6-mtp":
         defaults.update(
             {
-                "ctx_size": 131072,
+                "ctx_size": 262144,
                 "alias": "qwen36-27b-mtp",
                 "cache_type_k": "q4_0",
                 "cache_type_v": "q4_0",

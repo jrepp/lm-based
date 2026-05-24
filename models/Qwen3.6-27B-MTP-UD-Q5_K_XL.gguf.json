@@ -37,7 +37,9 @@
   },
   "notes": [
     "MTP-preserved GGUF for testing native draft-mtp speculative decoding in current llama.cpp builds.",
-    "Selected as the initial M4 Max 128 GB target because it should leave more context headroom than Q6 while retaining better quality than Q4.",
+    "Qwen documents 262,144 tokens as the native context length for Qwen3.6; the local qwen3.6-mtp profile uses that native context.",
+    "The local llama.cpp profile uses --spec-type draft-mtp and --spec-draft-n-max 4.",
+    "Selected as the initial Apple Silicon 128 GB target because UD-Q5_K_XL balances quality and memory headroom better than Q6 while retaining more precision than Q4.",
     "Local file size and SHA-256 were recorded after download on 2026-05-24.",
     "Upstream provenance should still be treated as unverified until this SHA-256 is matched against a published source checksum."
   ]

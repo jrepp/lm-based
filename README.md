@@ -114,7 +114,7 @@ Then open `http://localhost:3000`. See [docs/open-webui-local-server.md](docs/op
 | `qwen3-coder-next-iq4xs` | Qwen3-Coder-Next | IQ4_XS | — |
 | `qwen35-35b-a3b-q4km` | Qwen3.5 35B A3B | Q4_K_M | 22 GB |
 | `qwen36-27b-q6k` | Qwen3.6-27B | Q6_K | 22.5 GB |
-| `qwen36-27b-mtp-ud-q5k-xl` | Qwen3.6-27B-MTP | UD-Q5_K_XL | — |
+| `qwen36-27b-mtp-ud-q5k-xl` | Qwen3.6-27B-MTP | UD-Q5_K_XL | 20.4 GB |
 
 Full metadata: [`docs/model-card-index.md`](docs/model-card-index.md)
 
