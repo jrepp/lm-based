@@ -14,6 +14,8 @@ def infer_profile(model_name: str, requested: str) -> str:
     lowered = model_name.lower()
     if "qwen3-coder-next" in lowered:
         return "qwen3-coder-next"
+    if "qwen3-coder-480b" in lowered:
+        return "qwen3-coder-480b"
     if "qwen2.5-coder" in lowered:
         return "qwen2.5-coder-transformers"
     if "qwen3.6" in lowered and "mtp" in lowered:
@@ -129,6 +131,25 @@ def profile_defaults(profile: str, model_name: str) -> dict[str, object]:
                 "top_p": 0.8,
                 "min_p": 0.0,
                 "presence_penalty": 1.5,
+            }
+        )
+
+    if profile in ("qwen3-coder-480b", "qwen3-coder-480b-mlx"):
+        # Qwen's Qwen3-Coder-480B-A35B-Instruct card recommends
+        # temperature=0.7, top_p=0.8, top_k=20, repetition_penalty=1.05.
+        defaults.update(
+            {
+                "ctx_size": 262144,
+                "alias": "qwen3-coder-480b-a35b-instruct",
+                "batch_size": 1024,
+                "ubatch_size": 256,
+                "temperature": 0.7,
+                "top_k": 20,
+                "top_p": 0.8,
+                "max_tokens": 65536,
+                "repetition_penalty": 1.05,
+                "cache_type_k": "q4_0",
+                "cache_type_v": "q4_0",
             }
         )
 

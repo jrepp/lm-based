@@ -206,12 +206,12 @@ Chapter 3.
 Chapter 4.
 [23] [24] [25]
 Overfull \hbox (27.07501pt too wide) in paragraph at lines 177--187
- [] 
+ []
 ) [26] (./chapters/05-model-selection.tex
 Chapter 5.
 [27] [28]
 Overfull \hbox (40.985pt too wide) in paragraph at lines 138--150
- [] 
+ []
 [29]) [30] [31] [32] (./chapters/06-retrieval-architectures.tex
 Chapter 6.
 Missing character: There is no ≈ (U+2248) in font [lmmono10-regular]:!
@@ -221,7 +221,7 @@ Overfull \hbox (21.42996pt too wide) in paragraph at lines 78--80
  document about “Python 2.7”
 
 Overfull \hbox (28.60501pt too wide) in paragraph at lines 85--95
- [] 
+ []
 [34] [35]
 Overfull \hbox (171.67494pt too wide) in paragraph at lines 188--191
 []\TU/lmr/m/n/10 Use dense retrieval with Qwen3-Embedding-4B. Serve with \TU/lm
@@ -272,12 +272,12 @@ Missing character: There is no ─ (U+2500) in font [lmmono10-regular]:!
 Missing character: There is no ─ (U+2500) in font [lmmono10-regular]:!
 
 Overfull \hbox (65.01497pt too wide) in paragraph at lines 41--50
- [] 
+ []
 [37] [38] [39]) [40] (./chapters/08-ranking-bm25-rrf.tex
 Chapter 8.
 
 Overfull \hbox (0.54695pt too wide) in paragraph at lines 10--13
-\TU/lmr/m/n/10 BM25 is the dominant full-text ranking algorithm used in search 
+\TU/lmr/m/n/10 BM25 is the dominant full-text ranking algorithm used in search
 engines (Elasticsearch, Lucene,
 [41] [42]
 Missing character: There is no ─ (U+2500) in font [lmmono10-regular]:!
@@ -355,16 +355,16 @@ Missing character: There is no ˷ (U+02F7) in font [lmmono10-regular]:!
 
 Overfull \hbox (3.01984pt too wide) in paragraph at lines 44--45
 []\TU/lmr/m/n/10 Local ONNX (BGE-small 384d, BGE-base 768d, nomic-embed-text 76
-8d, gte-large 1024d) 
+8d, gte-large 1024d)
 [61]
 Overfull \hbox (3.72496pt too wide) in paragraph at lines 54--67
- [] 
+ []
 
 Overfull \hbox (49.52498pt too wide) in paragraph at lines 97--110
- [] 
+ []
 [62]
 Overfull \hbox (172.00504pt too wide) in paragraph at lines 121--134
- [] 
+ []
 [63]) [64] [65] [66] [67] [68] (./chapters/12-llama-server.tex
 Chapter 12.
 [69]
@@ -602,12 +602,12 @@ Chapter 3.
 Chapter 4.
 [23] [24] [25]
 Overfull \hbox (27.07501pt too wide) in paragraph at lines 177--187
- [] 
+ []
 ) [26] (./chapters/05-model-selection.tex
 Chapter 5.
 [27] [28]
 Overfull \hbox (40.985pt too wide) in paragraph at lines 138--150
- [] 
+ []
 [29]) [30] [31] [32] (./chapters/06-retrieval-architectures.tex
 Chapter 6.
 Missing character: There is no ≈ (U+2248) in font [lmmono10-regular]:!
@@ -617,7 +617,7 @@ Overfull \hbox (21.42996pt too wide) in paragraph at lines 78--80
  document about “Python 2.7”
 
 Overfull \hbox (28.60501pt too wide) in paragraph at lines 85--95
- [] 
+ []
 [34] [35]
 Overfull \hbox (171.67494pt too wide) in paragraph at lines 188--191
 []\TU/lmr/m/n/10 Use dense retrieval with Qwen3-Embedding-4B. Serve with \TU/lm
@@ -668,12 +668,12 @@ Missing character: There is no ─ (U+2500) in font [lmmono10-regular]:!
 Missing character: There is no ─ (U+2500) in font [lmmono10-regular]:!
 
 Overfull \hbox (65.01497pt too wide) in paragraph at lines 41--50
- [] 
+ []
 [37] [38] [39]) [40] (./chapters/08-ranking-bm25-rrf.tex
 Chapter 8.
 
 Overfull \hbox (0.54695pt too wide) in paragraph at lines 10--13
-\TU/lmr/m/n/10 BM25 is the dominant full-text ranking algorithm used in search 
+\TU/lmr/m/n/10 BM25 is the dominant full-text ranking algorithm used in search
 engines (Elasticsearch, Lucene,
 [41] [42]
 Missing character: There is no ─ (U+2500) in font [lmmono10-regular]:!
@@ -751,16 +751,16 @@ Missing character: There is no ˷ (U+02F7) in font [lmmono10-regular]:!
 
 Overfull \hbox (3.01984pt too wide) in paragraph at lines 44--45
 []\TU/lmr/m/n/10 Local ONNX (BGE-small 384d, BGE-base 768d, nomic-embed-text 76
-8d, gte-large 1024d) 
+8d, gte-large 1024d)
 [61]
 Overfull \hbox (3.72496pt too wide) in paragraph at lines 54--67
- [] 
+ []
 
 Overfull \hbox (49.52498pt too wide) in paragraph at lines 97--110
- [] 
+ []
 [62]
 Overfull \hbox (172.00504pt too wide) in paragraph at lines 121--134
- [] 
+ []
 [63]) [64] [65] [66] [67] [68] (./chapters/12-llama-server.tex
 Chapter 12.
 [69]

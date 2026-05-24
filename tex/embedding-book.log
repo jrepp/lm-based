@@ -29,7 +29,7 @@ File: bk10.clo 2025/01/22 v1.4n Standard LaTeX file (size option)
 (/usr/local/texlive/2026/texmf-dist/tex/latex/fontspec/fontspec.sty
 (/usr/local/texlive/2026/texmf-dist/tex/latex/l3packages/xparse/xparse.sty
 (/usr/local/texlive/2026/texmf-dist/tex/latex/l3kernel/expl3.sty
-Package: expl3 2026-01-19 L3 programming layer (loader) 
+Package: expl3 2026-01-19 L3 programming layer (loader)
 
 (/usr/local/texlive/2026/texmf-dist/tex/latex/l3backend/l3backend-xetex.def
 File: l3backend-xetex.def 2025-10-09 L3 backend support: XeTeX
@@ -744,7 +744,7 @@ LaTeX Font Info:    ... okay on input line 14.
 LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 14.
 LaTeX Font Info:    ... okay on input line 14.
 
-Package fontspec Info: 
+Package fontspec Info:
 (fontspec)             Adjusting the maths setup (use [no-math] to avoid
 (fontspec)             this).
 
@@ -808,7 +808,7 @@ LaTeX Font Info:    Overwriting math alphabet `\mathtt' in version `bold'
 * paper: custom
 * layout: <same size as paper>
 * layoutoffset:(h,v)=(0.0pt,0.0pt)
-* modes: twoside 
+* modes: twoside
 * h-part:(L,W,R)=(54.2025pt, 408.32507pt, 43.36243pt)
 * v-part:(T,H,B)=(54.2025pt, 560.0925pt, 54.2025pt)
 * \paperwidth=505.89pt
@@ -932,7 +932,7 @@ LaTeX Font Info:    Font shape `TU/lmtt/bx/n' in size <12> not available
 Chapter 4.
 [23] [24] [25]
 Overfull \hbox (27.07501pt too wide) in paragraph at lines 177--187
- [] 
+ []
  []
 
 ) [26]
@@ -947,7 +947,7 @@ Chapter 5.
 
 ] [28]
 Overfull \hbox (40.985pt too wide) in paragraph at lines 138--150
- [] 
+ []
  []
 
 [29]) [30] [31
@@ -971,7 +971,7 @@ Overfull \hbox (21.42996pt too wide) in paragraph at lines 78--80
 
 
 Overfull \hbox (28.60501pt too wide) in paragraph at lines 85--95
- [] 
+ []
  []
 
 [34] [35]
@@ -1031,7 +1031,7 @@ Missing character: There is no ─ (U+2500) in font [lmmono10-regular]:!
 Missing character: There is no ─ (U+2500) in font [lmmono10-regular]:!
 
 Overfull \hbox (65.01497pt too wide) in paragraph at lines 41--50
- [] 
+ []
  []
 
 [37
@@ -1046,7 +1046,7 @@ Overfull \hbox (65.01497pt too wide) in paragraph at lines 41--50
 Chapter 8.
 
 Overfull \hbox (0.54695pt too wide) in paragraph at lines 10--13
-\TU/lmr/m/n/10 BM25 is the dominant full-text ranking algorithm used in search 
+\TU/lmr/m/n/10 BM25 is the dominant full-text ranking algorithm used in search
 engines (Elasticsearch, Lucene,
  []
 
@@ -1161,22 +1161,22 @@ Missing character: There is no ˷ (U+02F7) in font [lmmono10-regular]:!
 
 Overfull \hbox (3.01984pt too wide) in paragraph at lines 44--45
 []\TU/lmr/m/n/10 Local ONNX (BGE-small 384d, BGE-base 768d, nomic-embed-text 76
-8d, gte-large 1024d) 
+8d, gte-large 1024d)
  []
 
 [61]
 Overfull \hbox (3.72496pt too wide) in paragraph at lines 54--67
- [] 
+ []
  []
 
 
 Overfull \hbox (49.52498pt too wide) in paragraph at lines 97--110
- [] 
+ []
  []
 
 [62]
 Overfull \hbox (172.00504pt too wide) in paragraph at lines 121--134
- [] 
+ []
  []
 
 [63]) [64] [65] [66
@@ -1249,7 +1249,7 @@ L3 programming layer <2026-01-19>
  ***********
 Package rerunfilecheck Info: File `embedding-book.out' has not changed.
 (rerunfilecheck)             Checksum: E17C480CCEDF0678EAD718F91BDD6D89;37301.
- ) 
+ )
 Here is how much of TeX's memory you used:
  25555 strings out of 468168
  524445 string characters out of 5432815

@@ -18,10 +18,12 @@ what kind of index you build and how query-document similarity is computed.
 
 The standard approach. One vector per text.
 
-```
+```text
+
 query  → [single vector]
 doc    → [single vector]
 score  = dot_product(query_vec, doc_vec)
+
 ```
 
 Fast at query time. Index is compact. Works well when queries and documents are semantically
@@ -35,10 +37,12 @@ distinct aspects of a document can lose signal.
 Instead of a dense vector, the model outputs a sparse weighted term vocabulary — like a
 learned BM25.
 
-```
+```text
+
 query → {term: weight, term: weight, ...}  (most weights ~0)
 doc   → {term: weight, term: weight, ...}
 score = sum of overlapping weighted terms
+
 ```
 
 Good at exact and near-exact term matching. Complements dense retrieval on queries where
@@ -50,7 +54,8 @@ BGE-M3 includes a sparse retrieval head alongside its dense head.
 
 ColBERT keeps one vector per token rather than collapsing to a single vector.
 
-```
+```text
+
 query: [what]  [is]  [the]  [capital]
           ↓      ↓     ↓       ↓
           q1     q2    q3      q4
@@ -58,12 +63,15 @@ query: [what]  [is]  [the]  [capital]
 doc:  [Paris] [is] [a] [city] [in] [France]
           ↓      ↓   ↓    ↓      ↓     ↓
           d1     d2  d3   d4     d5    d6
+
 ```
 
 Similarity (MaxSim):
 
-```
+```text
+
 score = sum over each qi of: max(dot(qi, dj) for all dj)
+
 ```
 
 Each query token independently finds its best matching document token, then scores are summed.
@@ -72,8 +80,10 @@ Why it matters:
 
 - "bank of a river" and "bank loan" map to the same dense vector in ambiguous models; ColBERT
   keeps them distinct because `river` and `loan` match different document tokens
+
 - multi-aspect queries ("fast AND cheap AND local") get each aspect separately matched rather
   than compressed into one average direction
+
 - exact token sensitivity: "Python 3.11 migration" won't match a document about "Python 2.7"
   because `3.11` and `2.7` pull in different directions
 
@@ -119,12 +129,14 @@ are sparse long-range connections (like highways); lower layers are dense local 
 (like local roads). At query time, navigate top-down from the sparse layer to the dense layer,
 greedily following edges toward the query vector.
 
-```
+```text
+
 Layer 2 (sparse):  A ─────────────────── E
 Layer 1 (medium):  A ──── B ──── D ───── E
 Layer 0 (dense):   A ─ B ─ C ─ D ─ E ─ F ─ G
                                ↑
                            query lands here
+
 ```
 
 Key parameters:
@@ -243,8 +255,9 @@ A strong modern local retrieval stack:
 Embedding and reranking scores should not be treated as interchangeable.
 
 Source annotations:
-- Qwen retrieval stack framing: https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF
-- Retrieval-benchmark framing: https://huggingface.co/blog/rteb
+
+- Qwen retrieval stack framing: <https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF>
+- Retrieval-benchmark framing: <https://huggingface.co/blog/rteb>
 
 ---
 
@@ -254,16 +267,20 @@ BM25 is the dominant full-text ranking algorithm used in search engines (Elastic
 Lucene, Solr, Tantivy). It scores documents against a query based on term frequency and
 inverse document frequency with saturation corrections:
 
-```
+```text
+
 score(D, Q) = sum over query terms t of:
   IDF(t) * (tf(t,D) * (k1 + 1)) / (tf(t,D) + k1 * (1 - b + b * |D| / avgdl))
+
 ```
 
 Where:
+
 - `tf(t, D)` — how many times term `t` appears in document `D`
 - `IDF(t)` — how rare the term is across all documents (log-scaled)
 - `k1` — term frequency saturation (typically 1.2–2.0); prevents a term appearing 100× from
   dominating
+
 - `b` — length normalization (typically 0.75); penalizes long documents
 - `avgdl` — average document length in the corpus
 
@@ -284,9 +301,11 @@ not in the same range as cosine similarity values).
 
 RRF merges them by rank position, not by raw score:
 
-```
+```text
+
 RRF_score(doc) = sum over each ranked list L of:
   1 / (k + rank_in_L(doc))
+
 ```
 
 Where `k` is a constant (typically 60). The `k` value dampens the advantage of rank 1 over
@@ -294,10 +313,12 @@ rank 2 — it prevents a single list from dominating just because one result was
 
 Example with k=60 and two lists:
 
-```
+```text
+
 doc A: rank 1 in BM25, rank 4 in vector  → 1/61 + 1/64 = 0.0321
 doc B: rank 2 in BM25, rank 2 in vector  → 1/62 + 1/62 = 0.0323
 doc C: rank 1 in vector, not in BM25     → 0    + 1/61 = 0.0164
+
 ```
 
 Doc B wins because consistent top performance across both lists beats a single dominant rank.
@@ -312,8 +333,10 @@ matter. This makes it robust for combining any retrieval methods without normali
 
 L2 distance measures the straight-line distance between two points in vector space:
 
-```
+```text
+
 L2(a, b) = sqrt( sum_i (a_i - b_i)^2 )
+
 ```
 
 For embedding search, a smaller L2 distance means the vectors are more similar.
@@ -322,8 +345,10 @@ Some backends convert L2 to a similarity score via `similarity = 1.0 - distance`
 makes sense when vectors are L2-normalized (unit length), because on the unit hypersphere L2
 distance and cosine distance are monotonically related:
 
-```
+```text
+
 L2(a, b)^2 = 2 * (1 - cosine_similarity(a, b))
+
 ```
 
 If vectors are not normalized, `1.0 - L2_distance` produces incorrect similarity scores —
@@ -342,9 +367,11 @@ first-class parameter; memvid hardcodes L2.
 When an ANN search returns a ranked list of results, not all of them are useful. The score
 distribution typically looks like:
 
-```
+```text
+
 rank:  1     2     3     4     5     6     7     8
 score: 0.91  0.88  0.86  0.85  0.51  0.49  0.47  0.44
+
 ```
 
 There is a sharp drop between rank 4 and rank 5. Everything from rank 5 onward is a different
@@ -371,12 +398,14 @@ Common cutoff strategies (as implemented in memvid's `AdaptiveConfig`):
 
 **SPO triplets** are a way to represent facts as structured relationships:
 
-```
+```text
+
 Subject        Predicate       Object
 ───────────    ─────────────   ──────────────
 Alice          works_at        Acme Corp
 Bob            lives_in        San Francisco
 project-X      depends_on      library-Y
+
 ```
 
 SPO extraction parses free text and produces a graph of entities and their relationships.

@@ -196,11 +196,14 @@ def validate_records(records: list[dict[str, Any]]) -> list[Issue]:
             issues.append(Issue("warning", f"{src}: launcher.script should point at run-server.py"))
 
         local_path = artifact.get("local_path")
+        artifact_format = artifact.get("format", "gguf")
         if local_path:
             p = Path(local_path)
-            if not p.exists():
+            candidates = [p] if p.is_absolute() else [PROJECT_ROOT / p, PROJECT_ROOT / "artifacts" / p]
+            existing = next((candidate for candidate in candidates if candidate.exists()), None)
+            if existing is None:
                 issues.append(Issue("warning", f"{src}: artifact not present locally at {p}"))
-            elif p.suffix != ".gguf":
+            elif artifact_format == "gguf" and existing.suffix != ".gguf":
                 issues.append(Issue("warning", f"{src}: artifact does not end in .gguf"))
 
     if not records:

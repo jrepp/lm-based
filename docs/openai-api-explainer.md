@@ -3,21 +3,25 @@
 This document explains the main areas of the OpenAI API from the perspective of this repo, which exposes a local OpenAI-compatible endpoint at:
 
 ```text
+
 http://127.0.0.1:8001/v1
+
 ```
 
 For Dockerized Open WebUI, use:
 
 ```text
+
 http://host.docker.internal:8001/v1
+
 ```
 
 Official references:
 
-- https://platform.openai.com/docs/api-reference/responses
-- https://platform.openai.com/docs/api-reference/chat
-- https://platform.openai.com/docs/api-reference/embeddings
-- https://platform.openai.com/docs/api-reference/authentication
+- <https://platform.openai.com/docs/api-reference/responses>
+- <https://platform.openai.com/docs/api-reference/chat>
+- <https://platform.openai.com/docs/api-reference/embeddings>
+- <https://platform.openai.com/docs/api-reference/authentication>
 
 ## Mental model
 
@@ -25,12 +29,16 @@ The OpenAI API is not one single shape. It is a family of compatible endpoint st
 
 - `Responses API`
   This is the modern general-purpose API for model output.
+
 - `Chat Completions API`
   The older but still widely used chat interface built around `messages`.
+
 - `Completions API`
   The older prompt-in, text-out style API used by legacy clients.
+
 - `Embeddings API`
   Returns vectors instead of text.
+
 - `Realtime / streaming patterns`
   Ways to receive partial output before the request fully completes.
 
@@ -47,7 +55,9 @@ That matters here because a local OpenAI-compatible wrapper may behave like the 
 OpenAI-style APIs usually expect:
 
 ```http
+
 Authorization: Bearer <API_KEY>
+
 ```
 
 Hosted OpenAI requires a real key.
@@ -61,7 +71,9 @@ Local OpenAI-compatible servers often accept:
 That is why Open WebUI in this repo is configured with:
 
 ```text
+
 OPENAI_API_KEY=dummy
+
 ```
 
 The key is only there to satisfy clients that require the header.
@@ -71,7 +83,9 @@ The key is only there to satisfy clients that require the header.
 Clients normally discover available models through:
 
 ```text
+
 GET /v1/models
+
 ```
 
 That endpoint returns model IDs the client can use in subsequent requests.
@@ -94,10 +108,12 @@ The `Responses API` is the newer general interface. Conceptually, it is:
 Typical shape:
 
 ```json
+
 {
   "model": "gpt-4.1",
   "input": "Write a haiku about KV cache reuse."
 }
+
 ```
 
 Why it matters:
@@ -123,6 +139,7 @@ This is still the most important compatibility surface in local model stacks.
 Typical shape:
 
 ```json
+
 {
   "model": "local-model",
   "messages": [
@@ -130,11 +147,13 @@ Typical shape:
     {"role": "user", "content": "Explain streaming briefly."}
   ]
 }
+
 ```
 
 Typical response shape:
 
 ```json
+
 {
   "id": "chatcmpl-...",
   "object": "chat.completion",
@@ -149,6 +168,7 @@ Typical response shape:
     }
   ]
 }
+
 ```
 
 Why this endpoint matters here:
@@ -162,10 +182,12 @@ Why this endpoint matters here:
 This is the older prompt-based interface:
 
 ```json
+
 {
   "model": "legacy-model",
   "prompt": "Write one sentence about context windows."
 }
+
 ```
 
 This API is useful to understand because:
@@ -194,17 +216,21 @@ This is critical for:
 In OpenAI-compatible APIs, streaming is usually enabled with:
 
 ```json
+
 {
   "stream": true
 }
+
 ```
 
 For `chat/completions`, the server usually returns server-sent events where each chunk contains a partial delta. Conceptually:
 
 ```text
+
 data: {"choices":[{"delta":{"content":"Strea"}}]}
 data: {"choices":[{"delta":{"content":"ming"}}]}
 data: [DONE]
+
 ```
 
 Important debugging points:
@@ -270,28 +296,34 @@ This is a separate endpoint from chat/completions — a server can support one w
 
 ### Endpoint
 
-```
+```text
+
 POST /v1/embeddings
+
 ```
 
 ### Request shape
 
 ```json
+
 {
   "model": "text-embedding-3-small",
   "input": "llama.cpp KV cache",
   "encoding_format": "float"
 }
+
 ```
 
 `input` can be a single string or an array of strings for batching:
 
 ```json
+
 {
   "model": "text-embedding-3-small",
   "input": ["first document", "second document", "third document"],
   "encoding_format": "float"
 }
+
 ```
 
 `encoding_format` is `"float"` (default, array of f32) or `"base64"` (base64-encoded binary,
@@ -300,6 +332,7 @@ smaller over the wire).
 ### Response shape
 
 ```json
+
 {
   "object": "list",
   "data": [
@@ -315,6 +348,7 @@ smaller over the wire).
     "total_tokens": 8
   }
 }
+
 ```
 
 Each element in `data` corresponds to one input string. The `index` field gives the position
@@ -337,11 +371,13 @@ Max batch size per request: **2,048 inputs** for all three models.
 truncates the output to a smaller size while preserving most of the semantic signal:
 
 ```json
+
 {
   "model": "text-embedding-3-small",
   "input": "example",
   "dimensions": 512
 }
+
 ```
 
 This is useful for reducing storage and ANN index size when the full 1,536 or 3,072 dims are
@@ -370,7 +406,9 @@ request is typically ignored or matched to whatever model is loaded.
 For `open-webui` RAG or memvid with a local backend, override the base URL:
 
 ```python
+
 config = OpenAIConfig.default().with_base_url("http://127.0.0.1:8001/v1")
+
 ```
 
 The API key can be any non-empty string when talking to a local server that doesn't validate
@@ -380,6 +418,7 @@ don't check the value.
 ### Smoke test
 
 ```bash
+
 curl -s http://127.0.0.1:8001/v1/embeddings \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer dummy' \
@@ -388,6 +427,7 @@ curl -s http://127.0.0.1:8001/v1/embeddings \
     "input": "test sentence",
     "encoding_format": "float"
   }' | jq '.data[0].embedding | length'
+
 ```
 
 Expected output: the embedding dimension (e.g., `1536`). If the server does not support
@@ -407,10 +447,13 @@ Common failure classes:
 
 - `401` or `403`
   Bad key, missing key, or a client that insists on auth headers.
+
 - `404`
   Wrong endpoint path, such as `/v1/responses` against a server that only supports `chat/completions`.
+
 - `400`
   Request schema mismatch, unsupported fields, or invalid model ID.
+
 - `500`
   Backend crash, wrapper bug, or model-server failure.
 
@@ -422,8 +465,8 @@ For this repo's local server, default assumptions should be:
 - expect `GET /v1/models`
 - treat `Responses API` support as optional unless verified
 - use `OPENAI_API_KEY=dummy` when a client insists on a key
-- use host-side `http://127.0.0.1:8001/v1`
-- use Docker-side `http://host.docker.internal:8001/v1`
+- use host-side `<http://127.0.0.1:8001/v1`>
+- use Docker-side `<http://host.docker.internal:8001/v1`>
 
 If you are integrating a new client, the safest initial smoke test is:
 
@@ -437,12 +480,15 @@ If you are integrating a new client, the safest initial smoke test is:
 List models:
 
 ```bash
+
 curl -s http://127.0.0.1:8001/v1/models
+
 ```
 
 Basic chat completion:
 
 ```bash
+
 curl -s http://127.0.0.1:8001/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer dummy' \
@@ -452,11 +498,13 @@ curl -s http://127.0.0.1:8001/v1/chat/completions \
       {"role": "user", "content": "Say hello in one sentence."}
     ]
   }'
+
 ```
 
 Streaming chat completion:
 
 ```bash
+
 curl -N http://127.0.0.1:8001/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer dummy' \
@@ -467,6 +515,7 @@ curl -N http://127.0.0.1:8001/v1/chat/completions \
       {"role": "user", "content": "Count from one to five."}
     ]
   }'
+
 ```
 
 ## Practical takeaway

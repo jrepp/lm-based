@@ -20,8 +20,10 @@ practical problems:
 - **Vocabulary explosion.** English has hundreds of thousands of words, and new ones are
   coined constantly. A word-level vocabulary must either be huge or mark unknown words as
   `[UNK]`, losing all information about them.
+
 - **Morphological variants.** "run", "runs", "running", "ran" are four different vocabulary
   entries that share almost all meaning. A word-level model treats them as unrelated.
+
 - **Multilinguality.** Japanese and Chinese have no spaces. Arabic and Hebrew write without
   vowels. A word tokenizer that splits on spaces fails silently.
 
@@ -50,7 +52,8 @@ BPE is the most widely used tokenization algorithm (GPT-2 through GPT-4o, LLaMA,
 
 Training text: `"low lower lowest lower low"`
 
-```
+```text
+
 Initial: l o w   l o w e r   l o w e s t   l o w e r   l o w
 Step 1: merge 'l'+'o' → 'lo' (most frequent pair)
         lo w   lo w e r   lo w e s t   lo w e r   lo w
@@ -59,6 +62,7 @@ Step 2: merge 'lo'+'w' → 'low'
 Step 3: merge 'low'+'e' → 'lowe'
         low   lowe r   lowe s t   lowe r   low
 ...and so on
+
 ```
 
 After training on a large corpus, common words like "the", "is", "model" are single tokens.
@@ -79,9 +83,11 @@ Conceptually similar to BPE, but merges are chosen to maximize the likelihood of
 data under a language model, not just by raw pair frequency. Subword pieces are prefixed with
 `##` to indicate they are continuations rather than word starts:
 
-```
+```text
+
 "playing" → ["play", "##ing"]
 "unplayable" → ["un", "##play", "##able"]
+
 ```
 
 ---
@@ -141,6 +147,7 @@ Every embedding model has a maximum context length:
 - **Truncation:** the model silently discards tokens beyond the limit. The embedding
   represents only the first N tokens. Content in the truncated portion is invisible to
   retrieval.
+
 - **Error:** the API or model raises an error. Callers must pre-split.
 
 Truncation is the silent failure mode. If your chunks regularly exceed the model's token
@@ -163,8 +170,10 @@ Implications:
 
 - **Very short chunks** (1–3 sentences) embed well — the vector captures the specific topic
   of that chunk cleanly.
+
 - **Very long chunks** produce embeddings that represent a blend of all topics in the chunk.
   They retrieve for any of those topics at reduced precision.
+
 - **Asymmetric retrieval:** a 10-word query embedding will not be close to a 2,000-token
   document embedding even if the document contains the answer, because the document's vector
   is averaged over content unrelated to the query. This is why chunking exists.
@@ -196,6 +205,7 @@ For **CLS pooling** models, the `[CLS]` token is the output used as the embeddin
 ## Counting tokens without running the model
 
 Counting tokens before sending text to a model is useful for:
+
 - Ensuring chunks stay within limits
 - Estimating API cost
 - Debugging "why is this chunk being truncated?"
@@ -203,21 +213,25 @@ Counting tokens before sending text to a model is useful for:
 **Python (HuggingFace tokenizers):**
 
 ```python
+
 from transformers import AutoTokenizer
 
 tokenizer = AutoTokenizer.from_pretrained("BAAI/bge-small-en-v1.5")
 tokens = tokenizer.encode("The quick brown fox")
 print(len(tokens))  # 6
+
 ```
 
 **Python (tiktoken, for OpenAI models):**
 
 ```python
+
 import tiktoken
 
 enc = tiktoken.get_encoding("cl100k_base")  # used by text-embedding-3-*
 tokens = enc.encode("The quick brown fox")
 print(len(tokens))  # 5
+
 ```
 
 **Rule of thumb without a tokenizer:**
@@ -233,5 +247,6 @@ For code, divide by 3. For non-Latin scripts, divide by 2.
 - Exceeding the limit silently truncates the input in most implementations.
 - Set chunk size in tokens when working with models near their 512-token limit; character
   estimates are close enough for 8K+ token models.
+
 - Short chunks embed their specific topic precisely; long chunks produce averaged embeddings.
 - Special tokens consume 2–4 tokens of context budget per call.

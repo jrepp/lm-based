@@ -3,6 +3,7 @@
 # /// script
 # requires-python = ">=3.11,<3.14"
 # dependencies = [
+#   "mlx-lm>=0.28,<1",
 #   "pydantic>=2.11,<3",
 #   "pydantic-settings>=2.10,<3",
 # ]
@@ -40,6 +41,16 @@ def _is_transformers_model() -> bool:
     return False
 
 
+def _is_mlx_model() -> bool:
+    if PROFILE.endswith("-mlx") or PROFILE == "mlx":
+        return True
+    if os.getenv("MLX_MODEL"):
+        return True
+    if MODEL_SLUG and "mlx" in MODEL_SLUG.lower():
+        return True
+    return False
+
+
 if _is_ouro_model():
     from lm_launcher.ouro_server import main as ouro_main
 
@@ -50,6 +61,11 @@ elif _is_transformers_model():
 
     if __name__ == "__main__":
         transformers_main()
+elif _is_mlx_model():
+    from lm_launcher.mlx_server import main as mlx_main
+
+    if __name__ == "__main__":
+        mlx_main()
 else:
     from lm_launcher.launcher import main as llama_main
 

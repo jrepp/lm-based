@@ -12,6 +12,7 @@
 clawrouter.json
 
 # Runtime artifacts
+artifacts/
 runs/
 .runtime/
 /serve-manager

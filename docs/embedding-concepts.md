@@ -24,8 +24,8 @@ That is why the Qwen cards emphasize both embedding and ranking tasks.
 
 Source annotations:
 
-- Qwen3 embedding family overview: https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF
-- Qwen3 higher-end family context: https://huggingface.co/Qwen/Qwen3-Embedding-8B-GGUF
+- Qwen3 embedding family overview: <https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF>
+- Qwen3 higher-end family context: <https://huggingface.co/Qwen/Qwen3-Embedding-8B-GGUF>
 
 ### What the Qwen3 embedding series is trying to be good at
 
@@ -108,8 +108,8 @@ If a model performs well here, it is usually a good sign for:
 Source annotations:
 
 - Task targets and multilingual positioning in this section are drawn from the Qwen Hugging Face model cards:
-  https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF
-  https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF
+  <https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF>
+  <https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF>
 
 ## MTEB Explainer
 
@@ -117,9 +117,9 @@ MTEB stands for `Massive Text Embedding Benchmark`.
 
 Official references:
 
-- https://embeddings-benchmark.github.io/mteb/
-- https://github.com/embeddings-benchmark/mteb
-- https://huggingface.co/mteb
+- <https://embeddings-benchmark.github.io/mteb/>
+- <https://github.com/embeddings-benchmark/mteb>
+- <https://huggingface.co/mteb>
 
 Source annotations:
 
@@ -156,24 +156,34 @@ The official MTEB task taxonomy includes these core text task families:
 
 - `Retrieval`
   Retrieve relevant documents for a query from a corpus.
+
 - `Reranking`
   Reorder a candidate list for better top-of-list relevance.
+
 - `Classification`
   Assign a label to a text.
+
 - `MultilabelClassification`
   Assign multiple labels to a text.
+
 - `Clustering`
   Group texts by semantic similarity without labels.
+
 - `PairClassification`
   Classify the relationship between two texts.
+
 - `STS`
   Semantic textual similarity between two texts.
+
 - `Summarization`
   Evaluate summary-document semantic correspondence.
+
 - `BitextMining`
   Find semantically matching sentence pairs across languages.
+
 - `InstructionRetrieval`
   Retrieval tasks where instruction prompting is part of evaluation.
+
 - `InstructionReranking`
   Reranking tasks where instruction prompting is part of evaluation.
 
@@ -193,6 +203,7 @@ The exact task list evolves, but official MTEB retrieval and reranking pages inc
 
 - retrieval:
   `GermanQuAD-Retrieval`, `GermanDPR`, `XMarket`, `GerDaLIR`
+
 - reranking:
   `MIRACLReranking`
 
@@ -309,6 +320,7 @@ This makes it especially well suited to:
 
 - `DCG`
   Discounted Cumulative Gain
+
 - `IDCG`
   Ideal Discounted Cumulative Gain
 
@@ -326,6 +338,7 @@ That relevance can be:
 
 - binary
   relevant or not relevant
+
 - graded
   for example `0`, `1`, `2`, `3`
 
@@ -350,7 +363,9 @@ So the gain is discounted by rank position.
 A common graded-relevance formulation is:
 
 ```text
+
 DCG@k = sum_{i=1..k} (2^rel_i - 1) / log2(i + 1)
+
 ```
 
 You will also sometimes see simpler variants that use `rel_i` directly instead of `(2^rel_i - 1)`.
@@ -376,7 +391,9 @@ To normalize it:
 That gives:
 
 ```text
+
 nDCG@k = DCG@k / IDCG@k
+
 ```
 
 Result:
@@ -391,13 +408,17 @@ The earlier short example is directionally correct, but it is easier to understa
 Assume we use graded relevance and this DCG formula:
 
 ```text
+
 DCG@k = sum_{i=1..k} (2^rel_i - 1) / log2(i + 1)
+
 ```
 
 Now suppose the top 5 retrieved documents have relevance labels:
 
 ```text
+
 A = [3, 2, 0, 1, 0]
+
 ```
 
 Interpretation:
@@ -411,17 +432,20 @@ Interpretation:
 Then:
 
 ```text
+
 DCG_A@5
 = (2^3 - 1)/log2(2)
 + (2^2 - 1)/log2(3)
 + (2^0 - 1)/log2(4)
 + (2^1 - 1)/log2(5)
 + (2^0 - 1)/log2(6)
+
 ```
 
 Numerically:
 
 ```text
+
 = 7/1
 + 3/1.585
 + 0/2
@@ -429,28 +453,34 @@ Numerically:
 + 0/2.585
 ≈ 7 + 1.893 + 0 + 0.431 + 0
 ≈ 9.324
+
 ```
 
 Now compare that with a worse ordering of the same relevance labels:
 
 ```text
+
 B = [0, 1, 2, 3, 0]
+
 ```
 
 Then:
 
 ```text
+
 DCG_B@5
 = (2^0 - 1)/log2(2)
 + (2^1 - 1)/log2(3)
 + (2^2 - 1)/log2(4)
 + (2^3 - 1)/log2(5)
 + (2^0 - 1)/log2(6)
+
 ```
 
 Numerically:
 
 ```text
+
 = 0/1
 + 1/1.585
 + 3/2
@@ -458,6 +488,7 @@ Numerically:
 + 0/2.585
 ≈ 0 + 0.631 + 1.5 + 3.014 + 0
 ≈ 5.145
+
 ```
 
 So ranking `A` is much better than ranking `B`, even though both contain the exact same set of documents.
@@ -473,12 +504,15 @@ To normalize, we compare against the ideal ranking for these same relevance labe
 The ideal ordering is:
 
 ```text
+
 [3, 2, 1, 0, 0]
+
 ```
 
 So:
 
 ```text
+
 IDCG@5
 = 7/log2(2)
 + 3/log2(3)
@@ -487,13 +521,16 @@ IDCG@5
 + 0/log2(6)
 ≈ 7 + 1.893 + 0.5
 ≈ 9.393
+
 ```
 
 Now the normalized scores are:
 
 ```text
+
 nDCG_A@5 = 9.324 / 9.393 ≈ 0.993
 nDCG_B@5 = 5.145 / 9.393 ≈ 0.548
+
 ```
 
 That makes the interpretation much clearer:
@@ -652,8 +689,8 @@ RTEB stands for `Retrieval Embedding Benchmark`.
 
 Official references:
 
-- https://huggingface.co/blog/rteb
-- https://embeddings-benchmark.github.io/mteb/overview/available_benchmarks/
+- <https://huggingface.co/blog/rteb>
+- <https://embeddings-benchmark.github.io/mteb/overview/available_benchmarks/>
 
 The Hugging Face launch post was published on October 1, 2025.
 
@@ -685,7 +722,7 @@ So RTEB is explicitly trying to be:
 
 Source annotations:
 
-- This framing comes directly from the Hugging Face RTEB launch post: https://huggingface.co/blog/rteb
+- This framing comes directly from the Hugging Face RTEB launch post: <https://huggingface.co/blog/rteb>
 
 ### Why RTEB matters more than generic MTEB for local RAG
 
@@ -709,6 +746,7 @@ RTEB uses a hybrid benchmark design:
 
 - open datasets
   fully public and reproducible
+
 - private datasets
   evaluated by the maintainers to test generalization to unseen data
 
@@ -734,7 +772,7 @@ That matters because the benchmark is trying to balance:
 
 Source annotations:
 
-- https://huggingface.co/blog/rteb
+- <https://huggingface.co/blog/rteb>
 
 ### Default metric: nDCG@10
 
@@ -768,6 +806,7 @@ The Hugging Face post adds several concrete design points:
 - datasets are organized into simple groups rather than a complicated hierarchy
 - one dataset can belong to multiple groups
   for example, a German legal dataset can count as both `german` and `legal`
+
 - the benchmark currently covers 20 languages
 - datasets are intended to be meaningfully sized without becoming operationally absurd to run
   the launch post describes a minimum target of about `1,000` documents and `50` queries
@@ -786,19 +825,23 @@ The Hugging Face article also gives concrete open-dataset examples across domain
 
 - legal:
   `AILACasedocs`, `AILAStatutes`, `LegalSummarization`, `LegalQuAD`
+
 - finance:
   `FinanceBench`, `HC3Finance`, `FinQA`
+
 - code:
   `HumanEval`, `MBPP`, `APPS`, `DS1000`, `WikiSQL`
+
 - healthcare:
   `ChatDoctor_HealthCareMagic`, `HC3 Medicine`, `Cure`, `TripClick`
+
 - multilingual and general retrieval:
   `MIRACLHardNegatives`, `JaQuAD`, `FreshStack`
 
 Source annotations:
 
-- RTEB launch article: https://huggingface.co/blog/rteb
-- Benchmark slices and naming: https://embeddings-benchmark.github.io/mteb/overview/available_benchmarks/
+- RTEB launch article: <https://huggingface.co/blog/rteb>
+- Benchmark slices and naming: <https://embeddings-benchmark.github.io/mteb/overview/available_benchmarks/>
 
 That is a more useful picture than thinking of RTEB as just "one retrieval score."
 
@@ -833,10 +876,13 @@ For likely local usage in this repo, the most relevant slices are:
 
 - `RTEB(beta)`
   broad retrieval signal across domains
+
 - `RTEB(eng, beta)`
   best general-purpose check if most of your material is English
+
 - code-heavy tasks
   especially if you expect to retrieve source code, documentation, or engineering notes
+
 - multilingual retrieval tasks
   if your knowledge base or queries are not strictly English
 
@@ -905,7 +951,6 @@ So the right benchmark-reading order for this repo is:
 3. broader MTEB aggregate results
 4. only then secondary task families like clustering or classification
 
-
 ---
 
 ## Query Instruction Explainer
@@ -942,8 +987,8 @@ That is why the Qwen team reports a measurable retrieval drop when the query-sid
 Source annotations:
 
 - Query-instruction guidance in this section comes from the Qwen embedding model cards:
-  https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF
-  https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF
+  <https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF>
+  <https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF>
 
 ### The basic pattern
 
@@ -955,12 +1000,14 @@ The usual pattern is:
 Conceptually:
 
 ```text
+
 Query embedding input:
 "Instruct: Given a web search query, retrieve relevant passages that answer the query.
 Query: how does KV cache reuse work in llama.cpp?"
 
 Document embedding input:
 "KV cache reuse in llama.cpp allows ..."
+
 ```
 
 The instruction tells the model what "relevant" means for this query.
@@ -998,29 +1045,37 @@ Examples of retrieval modes that may want different instructions:
 General documentation retrieval:
 
 ```text
+
 Instruct: Given a question, retrieve passages that best answer it.
 Query: {query}
+
 ```
 
 Code retrieval:
 
 ```text
+
 Instruct: Given a software engineering question, retrieve code or documentation relevant to solving it.
 Query: {query}
+
 ```
 
 Multilingual retrieval:
 
 ```text
+
 Instruct: Given a multilingual search query, retrieve passages with the most relevant semantic meaning, even across languages.
 Query: {query}
+
 ```
 
 Internal knowledge-base retrieval:
 
 ```text
+
 Instruct: Given an internal operations question, retrieve documents that directly help answer the question.
 Query: {query}
+
 ```
 
 ### What the reported 1% to 5% drop means
@@ -1114,7 +1169,9 @@ Common pooling strategies include:
 For Qwen3 embedding GGUF models, the official card explicitly uses:
 
 ```text
+
 --pooling last
+
 ```
 
 That means the final embedding is derived from the last token representation in the way the model was trained to expect.
@@ -1125,7 +1182,7 @@ So for Qwen3 embedding models, `last` is not just an implementation detail. It i
 
 Source annotations:
 
-- `llama.cpp` / `llama-server` embedding usage and `--pooling last`: https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF
+- `llama.cpp` / `llama-server` embedding usage and `--pooling last`: <https://huggingface.co/Qwen/Qwen3-Embedding-4B-GGUF>
 
 ### `llama-embedding` vs `llama-server --embedding`
 

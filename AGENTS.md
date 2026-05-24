@@ -18,17 +18,20 @@ ClawRouter routing config, and documents the full local-LLM stack (see `docs/arc
 
 ## Adding a model (checklist)
 
-```
+```text
+
 1. Write  models/<Artifact-QUANT>.gguf.json   (schema below)
 2. Extend lm_launcher/profiles.py if a new serving profile is needed
 3. Append row to docs/model-card-index.md
 4. Run    ./route-config.py               (regenerate routing config)
 5. Verify ./download_model.py --list           (new slug appears)
+
 ```
 
 ### Minimal sidecar schema
 
 ```json
+
 {
   "schema_version": 1,
   "recorded_at": "YYYY-MM-DD",
@@ -67,6 +70,7 @@ ClawRouter routing config, and documents the full local-LLM stack (see `docs/arc
   },
   "notes": []
 }
+
 ```
 
 ## Profile guidelines
@@ -90,21 +94,27 @@ The `llama_swap/` Python package wraps it:
 | `llama_swap/cli.py` | CLI entry point |
 
 Key commands:
+
 ```bash
+
 ./llama-swap-runner.py ensure   # download/install llama-swap binary
 ./llama-swap-runner.py config    # generate llama-swap.yaml from sidecars
 ./llama-swap-runner.py start     # launch the proxy
 ./llama-swap-runner.py status    # show loaded models
 ./llama-swap-runner.py logs      # stream logs
+
 ```
 
 Or via `just`:
+
 ```bash
+
 just swap-ensure    # install binary
 just swap-config     # generate yaml
 just swap-start      # launch proxy
 just swap-status     # check status
 just swap-logs       # stream logs
+
 ```
 
 `llama-swap.yaml` is gitignored; it is generated from sidecar metadata and llama-server
@@ -118,6 +128,7 @@ To add a cloud provider: add a `CloudProvider(...)` entry to `CLOUD_PROVIDERS`
 in `route-config.py`, then regenerate.
 
 Credential model (see `docs/credentials.md`):
+
 - Each provider has a `key_env` and `base_env` in `CLOUD_PROVIDERS`.
 - Key set + direct_base known → `routing=direct` in generated JSON.
 - Key absent → `routing=proxy` (x402).
@@ -125,11 +136,13 @@ Credential model (see `docs/credentials.md`):
 - Never hard-code API keys in any file.
 
 ```bash
+
 ./route-config.py --providers  # credential audit
 ./route-config.py --doctor     # full health check
 ./route-config.py --status     # summarise current config
 ./route-config.py --validate   # sidecar lint only
 ./route-config.py              # regenerate clawrouter.json
+
 ```
 
 ## Commit style
@@ -142,5 +155,7 @@ Markdown files are linted through pre-commit using `markdownlint-cli2`.
 Before publishing doc-heavy changes, run:
 
 ```bash
+
 pre-commit run --all-files
+
 ```

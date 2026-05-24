@@ -69,11 +69,13 @@ There is no universal optimal. Test on representative queries from your domain.
 
 Split every N characters (or tokens), regardless of content boundaries.
 
-```
+```text
+
 document = "The model uses attention mechanisms. Attention allows..."
 
 chunk 1 = "The model uses attention mec"   ← breaks mid-word
 chunk 2 = "hanisms. Attention allows..."
+
 ```
 
 **Advantage:** Simple. Predictable chunk sizes. Easy to implement.
@@ -89,13 +91,15 @@ Fixed-size chunking without overlap is rarely useful in practice.
 
 Like fixed-size, but each chunk shares some content with the previous and next chunk.
 
-```
+```text
+
 chunk_size = 500 tokens
 overlap    = 100 tokens
 
 chunk 1: tokens 0–499
 chunk 2: tokens 400–899    ← shares 100 tokens with chunk 1
 chunk 3: tokens 800–1299   ← shares 100 tokens with chunk 2
+
 ```
 
 **Why overlap exists:** If the relevant answer spans a chunk boundary, overlap ensures the
@@ -116,12 +120,14 @@ storage-constrained deployments.
 Accumulate text until reaching the size target, but only split at sentence boundaries (`.`,
 `!`, `?`, paragraph breaks).
 
-```
+```text
+
 target = 400 tokens
 
 chunk 1: [sentence 1] [sentence 2] [sentence 3]   → 395 tokens
 chunk 2: [sentence 4] [sentence 5]                → 410 tokens
 chunk 3: [sentence 6] [sentence 7] [sentence 8]   → 388 tokens
+
 ```
 
 **Advantage:** Each chunk is semantically coherent. No broken sentences. Better embedding
@@ -140,13 +146,15 @@ This is the preferred baseline for most RAG systems. memvid approximates this wi
 Split on the most natural boundary available, falling back to coarser splits only when
 necessary.
 
-```
+```text
+
 Priority order: paragraph → sentence → word → character
 
 1. Try splitting on "\n\n" (paragraph breaks)
 2. If any resulting chunk is too large, split that chunk on ". " (sentences)
 3. If still too large, split on " " (words)
 4. If still too large, split on "" (characters)
+
 ```
 
 This is the default strategy in LangChain and LlamaIndex. It preserves document structure
@@ -188,12 +196,14 @@ Split based on **topic shift** rather than size targets. Embed each sentence, co
 cosine similarity between adjacent sentence vectors, and insert a chunk boundary where
 similarity drops sharply (a semantic "cliff").
 
-```
+```text
+
 sentence 1 → vector
 sentence 2 → vector  similarity(1,2) = 0.92  → no split
 sentence 3 → vector  similarity(2,3) = 0.89  → no split
 sentence 4 → vector  similarity(3,4) = 0.41  → SPLIT HERE
 sentence 5 → vector  similarity(4,5) = 0.88  → no split
+
 ```
 
 **Advantage:** Chunk boundaries align with actual topic transitions. Each chunk has a single
@@ -213,11 +223,13 @@ For short uniform documents (product descriptions, Q&A pairs) it adds cost witho
 Index small chunks for retrieval precision, but return the larger parent chunk to the LLM for
 context richness.
 
-```
+```text
+
 Parent chunk:  full section (1200 tokens)  ← not directly indexed
 Child chunks:  each paragraph (~200 tokens) ← these are embedded and indexed
 
 Query → retrieve child chunks → return their parent to the LLM
+
 ```
 
 **Why this works:** Small child chunks match queries precisely (embedding a 200-token paragraph
@@ -225,6 +237,7 @@ captures its topic tightly). But the LLM benefits from the broader context of th
 section, which includes surrounding sentences that explain the child chunk.
 
 **Variants:**
+
 - Sentence → paragraph (retrieve sentences, return paragraphs)
 - Paragraph → section (retrieve paragraphs, return sections)
 - Chunk → full document (retrieve chunks, return whole document)
@@ -242,9 +255,11 @@ still include irrelevant content. Works best when document sections have natural
 An emerging strategy for ColBERT-style models. Rather than chunking before embedding, embed
 the whole document and then extract chunk-level embeddings from the token-level outputs.
 
-```
+```text
+
 Document → [embedding model] → token vectors (one per token)
                               → pool each chunk's token range into one vector
+
 ```
 
 This preserves full document context during embedding (each token sees the whole document)
@@ -264,10 +279,12 @@ Currently experimental.
 
 Overlap is a cost-quality trade-off:
 
-```
+```text
+
 100 chunks with 0% overlap  → 100 vectors, 100× storage
 100 chunks with 20% overlap → ~125 vectors, 25% more storage
 100 chunks with 50% overlap → ~200 vectors, 2× storage
+
 ```
 
 At query time, overlapping chunks create duplicate results. If chunk 5 (tokens 400–899) and
@@ -285,6 +302,7 @@ questions frequently reference content near chunk boundaries.
 A retrieved chunk is more useful to the LLM when it carries context about where it came from:
 
 ```json
+
 {
   "chunk_id": "doc-42-chunk-7",
   "parent_doc": "llama-server-cache-architecture-explainer.md",
@@ -292,12 +310,14 @@ A retrieved chunk is more useful to the LLM when it carries context about where 
   "page": 3,
   "text": "The KV cache stores key and value tensors..."
 }
+
 ```
 
 Without source metadata, the LLM cannot cite the source or distinguish between conflicting
 chunks from different documents.
 
 Minimum useful metadata per chunk:
+
 - Source document identifier (path, URI, or title)
 - Section heading (if available)
 - Creation or modification date (for recency-sensitive queries)

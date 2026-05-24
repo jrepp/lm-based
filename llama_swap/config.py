@@ -75,7 +75,7 @@ def _build_run_server_cmd(slug: str, port: int) -> str:
     worker_id = f"swap-{slug}"
     parts = [
         f"MODEL_SLUG={_shell_quote(slug)}",
-        "HOST=127.0.0.1",
+        "HOST=0.0.0.0",
         f"PORT={port}",
         "RUN_MODE=swap_worker",
         f"SUPERVISOR_WORKER_ID={_shell_quote(worker_id)}",
@@ -103,7 +103,7 @@ def _sidecar_to_model_config(sidecar_path: Path, port: int) -> ModelConfig | Non
 
     profile = recommended_env.get("PROFILE") or launcher.get("profile", "auto")
     fmt = artifact.get("format", "gguf")
-    if fmt not in {"gguf", "safetensors"} and profile != "ouro":
+    if fmt not in {"gguf", "safetensors", "mlx"} and profile not in {"ouro"} and not profile.endswith("-mlx"):
         return None
 
     cmd = _build_run_server_cmd(slug, port)

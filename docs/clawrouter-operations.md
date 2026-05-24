@@ -7,31 +7,41 @@
 Regenerate the config after changing model sidecars or cloud backends:
 
 ```bash
+
 ./route-config.py
+
 ```
 
 Show the current config in a compact, human-readable form:
 
 ```bash
+
 ./route-config.py --status
+
 ```
 
 Validate sidecars and fail on structural errors:
 
 ```bash
+
 ./route-config.py --validate
+
 ```
 
 Run a broader health check:
 
 ```bash
+
 ./route-config.py --doctor
+
 ```
 
 Show credential status for every cloud provider:
 
 ```bash
+
 ./route-config.py --providers
+
 ```
 
 ## What `--doctor` checks
@@ -48,13 +58,17 @@ Show credential status for every cloud provider:
 Host-side tools:
 
 ```text
+
 http://127.0.0.1:8001/v1
+
 ```
 
 Dockerized Open WebUI:
 
 ```text
+
 http://host.docker.internal:8001/v1
+
 ```
 
 ## Typical workflow
