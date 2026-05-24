@@ -14,6 +14,10 @@ def infer_profile(model_name: str, requested: str) -> str:
     lowered = model_name.lower()
     if "qwen3-coder-next" in lowered:
         return "qwen3-coder-next"
+    if "qwen2.5-coder" in lowered:
+        return "qwen2.5-coder-transformers"
+    if "qwen3.6" in lowered:
+        return "qwen3.6"
     if "qwen3.5" in lowered:
         return "qwen3.5"
     if "gemma" in lowered:
@@ -80,6 +84,33 @@ def profile_defaults(profile: str, model_name: str) -> dict[str, object]:
                 "min_p": 0.0,
                 "cache_type_k": "q4_0",
                 "cache_type_v": "q4_0",
+            }
+        )
+
+    if profile == "qwen3.6":
+        defaults.update(
+            {
+                "ctx_size": 262144,
+                "alias": slugify_model_alias(model_name),
+                "cache_type_k": "q4_0",
+                "cache_type_v": "q4_0",
+                "batch_size": 1024,
+                "ubatch_size": 256,
+            }
+        )
+
+    if profile == "qwen2.5-coder-transformers":
+        defaults.update(
+            {
+                "ctx_size": 131072,
+                "alias": slugify_model_alias(model_name),
+                "batch_size": 1024,
+                "ubatch_size": 256,
+                "temperature": 0.7,
+                "top_k": 20,
+                "top_p": 0.8,
+                "min_p": 0.0,
+                "presence_penalty": 1.5,
             }
         )
 

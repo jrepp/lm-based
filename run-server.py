@@ -28,11 +28,28 @@ def _is_ouro_model() -> bool:
     return False
 
 
+def _is_transformers_model() -> bool:
+    if PROFILE == "qwen2.5-coder-transformers":
+        return True
+    if MODEL_SLUG and "qwen25-coder-7b-instruct" in MODEL_SLUG.lower():
+        return True
+    if PROFILE == "auto" and MODEL_SLUG is None:
+        model_file = os.getenv("MODEL_FILE", "")
+        if "qwen2.5-coder-7b-instruct" in model_file.lower():
+            return True
+    return False
+
+
 if _is_ouro_model():
     from lm_launcher.ouro_server import main as ouro_main
 
     if __name__ == "__main__":
         ouro_main()
+elif _is_transformers_model():
+    from lm_launcher.transformers_server import main as transformers_main
+
+    if __name__ == "__main__":
+        transformers_main()
 else:
     from lm_launcher.launcher import main as llama_main
 

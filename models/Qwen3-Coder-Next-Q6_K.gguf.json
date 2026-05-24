@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-04-27",
+  "artifact": {
+    "filename": "Qwen3-Coder-Next-Q6_K-00001-of-00003.gguf",
+    "local_path": "Q6_K/Qwen3-Coder-Next-Q6_K-00001-of-00003.gguf",
+    "format": "gguf",
+    "quantization": "Q6_K",
+    "size_bytes": null,
+    "sha256": null
+  },
+  "model": {
+    "slug": "qwen3-coder-next-q6k",
+    "family": "Qwen3-Coder-Next",
+    "name": "Qwen3-Coder-Next",
+    "canonical_model_card": "https://huggingface.co/Qwen/Qwen3-Coder-Next"
+  },
+  "source": {
+    "gguf_model_card": "https://huggingface.co/unsloth/Qwen3-Coder-Next-GGUF",
+    "publisher": "unsloth",
+    "provenance_status": "planned_download"
+  },
+  "download": {
+    "provider": "huggingface",
+    "repo_id": "unsloth/Qwen3-Coder-Next-GGUF",
+    "filenames": [
+      "Q6_K/Qwen3-Coder-Next-Q6_K-00001-of-00003.gguf",
+      "Q6_K/Qwen3-Coder-Next-Q6_K-00002-of-00003.gguf",
+      "Q6_K/Qwen3-Coder-Next-Q6_K-00003-of-00003.gguf"
+    ],
+    "revision": null
+  },
+  "launcher": {
+    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "profile": "qwen3-coder-next",
+    "recommended_env": {
+      "MODEL_FILE": "Q6_K/Qwen3-Coder-Next-Q6_K-00001-of-00003.gguf",
+      "PROFILE": "qwen3-coder-next"
+    }
+  },
+  "notes": [
+    "Selected for single-GPU H100 80 GB deployment because it materially improves quality over 4-bit while remaining below device memory capacity for weights.",
+    "This quant is published by Unsloth as a 3-shard GGUF under the Q6_K/ prefix; all listed shards must be present locally.",
+    "Record kept conservative until the downloaded artifact size and SHA-256 are verified locally."
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-04-29",
+  "artifact": {
+    "filename": "model.safetensors.index.json",
+    "local_path": "Qwen2.5-Coder-7B-Instruct/model.safetensors.index.json",
+    "format": "safetensors",
+    "quantization": "BF16",
+    "size_bytes": null,
+    "sha256": null
+  },
+  "model": {
+    "slug": "qwen25-coder-7b-instruct",
+    "family": "Qwen2.5-Coder",
+    "name": "Qwen2.5-Coder-7B-Instruct",
+    "canonical_model_card": "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct"
+  },
+  "source": {
+    "gguf_model_card": "https://huggingface.co/unsloth/Qwen2.5-Coder-7B-Instruct",
+    "publisher": "unsloth",
+    "provenance_status": "user_reported"
+  },
+  "download": {
+    "provider": "huggingface",
+    "repo_id": "unsloth/Qwen2.5-Coder-7B-Instruct",
+    "repo_type": "model",
+    "snapshot": true,
+    "allow_patterns": [
+      "README.md",
+      "added_tokens.json",
+      "config.json",
+      "generation_config.json",
+      "merges.txt",
+      "model-*.safetensors",
+      "model.safetensors.index.json",
+      "special_tokens_map.json",
+      "tokenizer.json",
+      "tokenizer_config.json",
+      "vocab.json"
+    ],
+    "revision": null
+  },
+  "launcher": {
+    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "profile": "qwen2.5-coder-transformers",
+    "recommended_env": {
+      "MODEL_FILE": "Qwen2.5-Coder-7B-Instruct",
+      "PROFILE": "qwen2.5-coder-transformers"
+    }
+  },
+  "notes": [
+    "Full Unsloth Transformers snapshot for fast local tool-calling experiments.",
+    "This repo serves it through transformers serve rather than llama-server.",
+    "Snapshot downloaded locally on 2026-04-29; keep the shard set and tokenizer files together."
+  ]
+}

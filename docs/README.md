@@ -12,6 +12,23 @@ Reference documentation for the lm-based local LLM stack.
 | [credentials.md](credentials.md) | API key env vars, direct vs. x402 proxy routing |
 | [open-webui-local-server.md](open-webui-local-server.md) | Open WebUI setup, embedding backend config |
 
+## Serving Design
+
+| Document | Contents |
+|---|---|
+| [serving/README.md](serving/README.md) | Index of the serving architecture planning docs |
+| [serving/architecture-overview.md](serving/architecture-overview.md) | Target architecture for supervisor-managed multi-backend serving |
+| [serving/edge-proxy-haproxy.md](serving/edge-proxy-haproxy.md) | HAProxy edge-proxy role in the serving stack |
+| [serving/observability-architecture.md](serving/observability-architecture.md) | Vector + Prometheus observability design for serving |
+| [serving/config-schema-v1.md](serving/config-schema-v1.md) | Initial serving policy and host capability schema design |
+| [serving/lifecycle-sequences.md](serving/lifecycle-sequences.md) | Lifecycle flows for startup, apply, reload, drain, and stop |
+| [serving/porting-map-v1.md](serving/porting-map-v1.md) | Migration map for moving control-plane responsibilities into Go |
+| [serving/implementation-backlog-v1.md](serving/implementation-backlog-v1.md) | Concrete milestone and backlog plan for the serving migration |
+| [serving/serve-manager-go-spec-v1.md](serving/serve-manager-go-spec-v1.md) | Concrete Go serve-manager specification for runtime management |
+| [serving/supervisor-spec-v1.md](serving/supervisor-spec-v1.md) | Proposed operator surface and supervisor responsibilities |
+| [serving/transitions-and-state.md](serving/transitions-and-state.md) | Generation lifecycle, runtime states, and transition model |
+| [serving/host-topology.md](serving/host-topology.md) | Deployment model for Macs, H100 hosts, and future multi-host routing |
+
 ## Models
 
 | Document | Contents |

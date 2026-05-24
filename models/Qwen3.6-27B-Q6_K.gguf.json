@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-04-27",
+  "artifact": {
+    "filename": "Qwen3.6-27B-Q6_K.gguf",
+    "local_path": "Qwen3.6-27B-Q6_K.gguf",
+    "format": "gguf",
+    "quantization": "Q6_K",
+    "size_bytes": 22523238624,
+    "sha256": "ec1805fe87e6519c461c1ed2d179865464a875ed241032ead65a354f979cfe14"
+  },
+  "model": {
+    "slug": "qwen36-27b-q6k",
+    "family": "Qwen3.6",
+    "name": "Qwen3.6-27B",
+    "canonical_model_card": "https://huggingface.co/Qwen/Qwen3.6-27B"
+  },
+  "source": {
+    "gguf_model_card": "https://huggingface.co/unsloth/Qwen3.6-27B-GGUF",
+    "publisher": "unsloth",
+    "provenance_status": "user_reported"
+  },
+  "download": {
+    "provider": "huggingface",
+    "repo_id": "unsloth/Qwen3.6-27B-GGUF",
+    "filename": "Qwen3.6-27B-Q6_K.gguf",
+    "revision": null
+  },
+  "launcher": {
+    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "profile": "qwen3.6",
+    "recommended_env": {
+      "MODEL_FILE": "Qwen3.6-27B-Q6_K.gguf",
+      "PROFILE": "qwen3.6"
+    }
+  },
+  "notes": [
+    "Selected as the direct Unsloth GGUF release for the dense Qwen3.6-27B line.",
+    "Local file size and SHA-256 were recorded after download on 2026-04-28.",
+    "Upstream provenance should still be treated as unverified until this SHA-256 is matched against a published source checksum."
+  ]
+}

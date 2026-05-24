@@ -13,7 +13,7 @@ import json
 import os
 from pathlib import Path
 
-from huggingface_hub import hf_hub_download
+from huggingface_hub import hf_hub_download, snapshot_download
 
 
 ROOT = Path(__file__).resolve().parent
@@ -66,24 +66,45 @@ def list_models(records: list[dict]) -> None:
         print(f"  local_path: {artifact.get('local_path')}")
 
 
-def download_record(record: dict, output_dir: Path | None, token: str | None) -> Path:
+def download_record(record: dict, output_dir: Path | None, token: str | None) -> list[Path]:
     download = record.get("download")
     if not download or download.get("provider") != "huggingface":
         raise SystemExit(f"No supported download metadata for {record_id(record)}")
 
     repo_id = download["repo_id"]
-    filename = download["filename"]
+    repo_type = download.get("repo_type")
+    filenames = download.get("filenames")
+    if filenames:
+        requested_files = filenames
+    else:
+        requested_files = [download["filename"]] if download.get("filename") else []
     revision = download.get("revision")
     local_dir = output_dir or Path(record["artifact"]["local_path"]).resolve().parent
 
-    path = hf_hub_download(
-        repo_id=repo_id,
-        filename=filename,
-        revision=revision,
-        local_dir=str(local_dir),
-        token=token,
-    )
-    return Path(path)
+    if download.get("snapshot"):
+        allow_patterns = download.get("allow_patterns")
+        path = snapshot_download(
+            repo_id=repo_id,
+            repo_type=repo_type,
+            revision=revision,
+            local_dir=str(local_dir),
+            token=token,
+            allow_patterns=allow_patterns,
+        )
+        return [Path(path)]
+
+    paths: list[Path] = []
+    for filename in requested_files:
+        path = hf_hub_download(
+            repo_id=repo_id,
+            filename=filename,
+            repo_type=repo_type,
+            revision=revision,
+            local_dir=str(local_dir),
+            token=token,
+        )
+        paths.append(Path(path))
+    return paths
 
 
 def parse_args() -> argparse.Namespace:
@@ -121,8 +142,9 @@ def main() -> None:
 
     token = os.getenv("HF_TOKEN")
     record = resolve_record(records, selector)
-    path = download_record(record, args.output_dir, token)
-    print(path)
+    paths = download_record(record, args.output_dir, token)
+    for path in paths:
+        print(path)
 
 
 if __name__ == "__main__":

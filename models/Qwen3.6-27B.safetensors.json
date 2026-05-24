@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-04-27",
+  "artifact": {
+    "filename": "model.safetensors.index.json",
+    "local_path": "Qwen3.6-27B/model.safetensors.index.json",
+    "format": "safetensors",
+    "quantization": "BF16",
+    "size_bytes": null,
+    "sha256": null
+  },
+  "model": {
+    "slug": "qwen36-27b-unsloth",
+    "family": "Qwen3.6",
+    "name": "Qwen3.6-27B",
+    "canonical_model_card": "https://huggingface.co/Qwen/Qwen3.6-27B"
+  },
+  "source": {
+    "gguf_model_card": "https://huggingface.co/unsloth/Qwen3.6-27B",
+    "publisher": "unsloth",
+    "provenance_status": "planned_download"
+  },
+  "download": {
+    "provider": "huggingface",
+    "repo_id": "unsloth/Qwen3.6-27B",
+    "repo_type": "model",
+    "snapshot": true,
+    "allow_patterns": [
+      "README.md",
+      "LICENSE",
+      "added_tokens.json",
+      "chat_template.jinja",
+      "config.json",
+      "configuration.json",
+      "generation_config.json",
+      "merges.txt",
+      "model-*.safetensors",
+      "model.safetensors.index.json",
+      "preprocessor_config.json",
+      "special_tokens_map.json",
+      "tokenizer.json",
+      "tokenizer_config.json",
+      "video_preprocessor_config.json",
+      "vocab.json"
+    ],
+    "revision": null
+  },
+  "launcher": {
+    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "profile": "qwen3.6",
+    "recommended_env": {
+      "MODEL_FILE": "Qwen3.6-27B",
+      "PROFILE": "qwen3.6"
+    }
+  },
+  "notes": [
+    "This is the full Unsloth Transformers repository snapshot rather than a single GGUF artifact.",
+    "The local anchor file is model.safetensors.index.json; the full shard set and tokenizer files must remain together in the Qwen3.6-27B directory.",
+    "Record kept conservative until the downloaded snapshot is verified locally."
+  ]
+}

@@ -21,7 +21,7 @@ ARCH_MAP = {
     "aarch64": "arm64",
 }
 
-DEFAULT_VERSION = "v209"
+DEFAULT_VERSION = "v203"
 
 
 def _system_platform() -> str:
