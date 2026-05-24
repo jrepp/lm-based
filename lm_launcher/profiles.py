@@ -16,6 +16,8 @@ def infer_profile(model_name: str, requested: str) -> str:
         return "qwen3-coder-next"
     if "qwen2.5-coder" in lowered:
         return "qwen2.5-coder-transformers"
+    if "qwen3.6" in lowered and "mtp" in lowered:
+        return "qwen3.6-mtp"
     if "qwen3.6" in lowered:
         return "qwen3.6"
     if "qwen3.5" in lowered:
@@ -96,6 +98,22 @@ def profile_defaults(profile: str, model_name: str) -> dict[str, object]:
                 "cache_type_v": "q4_0",
                 "batch_size": 1024,
                 "ubatch_size": 256,
+            }
+        )
+
+    if profile == "qwen3.6-mtp":
+        defaults.update(
+            {
+                "ctx_size": 131072,
+                "alias": "qwen36-27b-mtp",
+                "cache_type_k": "q4_0",
+                "cache_type_v": "q4_0",
+                "batch_size": 1024,
+                "ubatch_size": 256,
+                "parallel": 1,
+                "flash_attn": "on",
+                "spec_type": "draft-mtp",
+                "spec_draft_n_max": 4,
             }
         )
 

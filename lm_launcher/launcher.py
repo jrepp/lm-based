@@ -101,6 +101,7 @@ def build_args(settings: ServerSettings) -> list[str]:
     add_arg(args, "--ctx-size-draft", settings.ctx_size_draft)
     add_arg(args, "--gpu-layers-draft", settings.gpu_layers_draft)
     add_arg(args, "--spec-type", settings.spec_type)
+    add_arg(args, "--spec-draft-n-max", settings.spec_draft_n_max)
     add_arg(args, "--cache-reuse", settings.cache_reuse)
     add_arg(args, "--log-file", settings.log_file)
 
@@ -145,6 +146,12 @@ def print_startup(settings: ServerSettings) -> None:
         f"cont_batching={'on' if settings.enable_cont_batching else 'off'}, "
         f"context_shift={'on' if settings.enable_context_shift else 'off'}, "
         f"cache_reuse={settings.cache_reuse or 'model'}"
+    )
+    print(
+        "  spec:  "
+        f"type={settings.spec_type or 'off'}, "
+        f"draft_n={settings.spec_draft_n_max or 'model'}, "
+        f"draft_model={settings.model_draft or 'none'}"
     )
     print(f"  perf:  {'on' if settings.enable_perf else 'off'}")
     print(f"  met:   {'on' if settings.enable_metrics else 'off'}")

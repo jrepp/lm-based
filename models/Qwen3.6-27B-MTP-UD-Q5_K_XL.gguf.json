@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-05-24",
+  "artifact": {
+    "filename": "Qwen3.6-27B-UD-Q5_K_XL.gguf",
+    "local_path": "Qwen3.6-27B-UD-Q5_K_XL.gguf",
+    "format": "gguf",
+    "quantization": "UD-Q5_K_XL",
+    "size_bytes": null,
+    "sha256": null
+  },
+  "model": {
+    "slug": "qwen36-27b-mtp-ud-q5k-xl",
+    "family": "Qwen3.6-MTP",
+    "name": "Qwen3.6-27B-MTP",
+    "canonical_model_card": "https://huggingface.co/Qwen/Qwen3.6-27B"
+  },
+  "source": {
+    "gguf_model_card": "https://huggingface.co/unsloth/Qwen3.6-27B-MTP-GGUF",
+    "publisher": "unsloth",
+    "provenance_status": "planned_download"
+  },
+  "download": {
+    "provider": "huggingface",
+    "repo_id": "unsloth/Qwen3.6-27B-MTP-GGUF",
+    "filename": "Qwen3.6-27B-UD-Q5_K_XL.gguf",
+    "revision": null
+  },
+  "launcher": {
+    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "profile": "qwen3.6-mtp",
+    "recommended_env": {
+      "MODEL_FILE": "Qwen3.6-27B-UD-Q5_K_XL.gguf",
+      "PROFILE": "qwen3.6-mtp",
+      "LLAMA_SERVER_BIN": "/Users/jrepp/d/llama.cpp/build/bin/llama-server"
+    }
+  },
+  "notes": [
+    "MTP-preserved GGUF for testing native draft-mtp speculative decoding in current llama.cpp builds.",
+    "Selected as the initial M4 Max 128 GB target because it should leave more context headroom than Q6 while retaining better quality than Q4.",
+    "Record kept conservative until the artifact is downloaded locally and checksum is verified."
+  ]
+}

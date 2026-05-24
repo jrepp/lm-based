@@ -15,6 +15,11 @@ clawrouter.json
 runs/
 .runtime/
 /serve-manager
+/-
+
+# Local Hugging Face snapshots (large model directories)
+/Qwen2.5-Coder-7B-Instruct/
+/Qwen3.6-27B/
 
 # Local artifact tracking (machine-specific provenance state, never committed)
 artifacts/STATUS.md

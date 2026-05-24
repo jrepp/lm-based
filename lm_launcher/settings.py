@@ -126,6 +126,7 @@ class ServerSettings(BaseSettings):
     ctx_size_draft: int | None = None
     gpu_layers_draft: str | None = None
     spec_type: str | None = None
+    spec_draft_n_max: int | None = None
     cache_reuse: int | None = None
     api_key: str | None = None
     min_model_bytes: int = 0
