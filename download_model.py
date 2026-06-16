@@ -79,10 +79,16 @@ def download_record(record: dict, output_dir: Path | None, token: str | None) ->
     else:
         requested_files = [download["filename"]] if download.get("filename") else []
     revision = download.get("revision")
-    local_dir = output_dir or Path(record["artifact"]["local_path"]).resolve().parent
+    artifact = record.get("artifact", {})
+    artifact_format = artifact.get("format")
+    local_dir = output_dir or Path(
+        download.get("local_dir") or artifact["local_path"]
+    ).resolve().parent
 
-    if download.get("snapshot"):
+    if download.get("snapshot") or download.get("type") == "snapshot" or artifact_format == "mlx":
         allow_patterns = download.get("allow_patterns")
+        if output_dir is None and (download.get("local_dir") or artifact_format == "mlx"):
+            local_dir = Path(download.get("local_dir") or artifact["local_path"]).resolve()
         path = snapshot_download(
             repo_id=repo_id,
             repo_type=repo_type,
@@ -92,6 +98,9 @@ def download_record(record: dict, output_dir: Path | None, token: str | None) ->
             allow_patterns=allow_patterns,
         )
         return [Path(path)]
+
+    if not requested_files:
+        raise SystemExit(f"No filename configured for {record_id(record)}")
 
     paths: list[Path] = []
     for filename in requested_files:

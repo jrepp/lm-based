@@ -27,6 +27,7 @@ Embeddings are stored as raw `Vec<f32>` in the WAL at ingest time, materialized 
 vector index on `commit()`.
 
 Index selection at build time:
+
 - **< 1,000 vectors** → flat scan (bincode `Vec<VecDocument>`, linear L2 with SIMD)
 - **≥ 1,000 vectors** → HNSW (M=16, ef_construction=200, hardcoded constants)
 - **Optional PQ96** → 16× compression via product quantization, needs ≥ 100 vectors
@@ -35,6 +36,7 @@ Distance metric is **L2 (Euclidean)** throughout. Similarity score = `1.0 - dist
 Callers must normalize vectors externally for cosine equivalence.
 
 Supported embedding sources:
+
 - Local ONNX (BGE-small 384d, BGE-base 768d, nomic-embed-text 768d, gte-large 1024d)
 - OpenAI API (text-embedding-3-small 1536d, text-embedding-3-large 3072d, ada-002 1536d)
 - CLIP visual (MobileCLIP-S2, 512d)
@@ -75,6 +77,7 @@ Query operators in `search()`: implicit AND, `OR` explicit, field filters (`titl
 ### Memory and Agent Features
 
 `MemoryCard` types: facts, preferences, events, relationships. Populated via:
+
 - Explicit `put_memory_card()` API call
 - Auto-extraction by enrichment workers (background, feature-gated)
 - SPO triplet extractor (`TripletExtractor`) that parses Subject-Predicate-Object from content
@@ -88,6 +91,7 @@ crate. Default timezone hardcoded to `America/Chicago` — bug for non-US deploy
 ### Configuration Knobs
 
 **Per-document (`PutOptions`):**
+
 - `auto_tag`, `extract_dates`, `extract_triplets` — enrichment toggles (default: all on)
 - `enable_embedding` — on-device ONNX embedding (default: off)
 - `instant_index` — soft Tantivy commit after WAL append (default: on)
@@ -96,6 +100,7 @@ crate. Default timezone hardcoded to `America/Chicago` — bug for non-US deploy
 - `extraction_budget_ms` — PDF extraction time limit (default: 350ms)
 
 **Batch mode (`PutManyOpts`):**
+
 - `compression_level` — 0=none, 1=fast, 3=default, 11=max
 - `disable_auto_checkpoint` — caller-driven commits only (default: on in batch mode)
 - `skip_sync` — skip fsync, not crash-safe (default: off)
@@ -109,6 +114,7 @@ crate. Default timezone hardcoded to `America/Chicago` — bug for non-US deploy
 ### Performance Profile
 
 From their own benchmarks on local retrieval:
+
 - P50: **0.025ms**, P99: **0.075ms**
 - HNSW threshold and PQ minimums are hardcoded (1,000 and 100 vectors respectively)
 
@@ -163,7 +169,8 @@ agent memory semantics valued.
 
 Self-hosted via Docker, Rust-native, disk-based HNSW with correct deletions. Inline payload
 filtering during ANN search (exact pre-filter at small scale, sampling at large scale). Sparse
-+ dense hybrid search using FastEmbed for on-device BM25. Named collections map cleanly to
+
+- dense hybrid search using FastEmbed for on-device BM25. Named collections map cleanly to
 per-model or per-agent namespaces.
 
 Quantization options are configurable at index creation time (scalar int8, PQ, binary).
@@ -235,4 +242,3 @@ A viable hybrid: use **memvid for agent memory** (structured facts, conversation
 time-travel replay) and **Qdrant for document RAG** (large corpus, filtered ANN, correct
 deletes). Route queries through clawrouter with memory context injected from memvid alongside
 document context from Qdrant.
-

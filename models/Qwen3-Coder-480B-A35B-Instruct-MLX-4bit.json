@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-05-23",
+  "artifact": {
+    "filename": "Qwen3-Coder-480B-A35B-Instruct-MLX-4bit",
+    "local_path": "Qwen3-Coder-480B-A35B-Instruct-MLX-4bit",
+    "format": "mlx",
+    "quantization": "4bit",
+    "size_bytes": null,
+    "sha256": null
+  },
+  "model": {
+    "slug": "qwen3-coder-480b-a35b-mlx-4bit",
+    "family": "Qwen3-Coder-480B-A35B",
+    "name": "Qwen3-Coder-480B-A35B-Instruct MLX 4bit",
+    "canonical_model_card": "https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"
+  },
+  "source": {
+    "gguf_model_card": null,
+    "mlx_model_card": "https://huggingface.co/lmstudio-community/Qwen3-Coder-480B-A35B-Instruct-MLX-4bit",
+    "publisher": "lmstudio-community",
+    "provenance_status": "planned_download"
+  },
+  "download": {
+    "provider": "huggingface",
+    "type": "snapshot",
+    "repo_id": "lmstudio-community/Qwen3-Coder-480B-A35B-Instruct-MLX-4bit",
+    "filename": "Qwen3-Coder-480B-A35B-Instruct-MLX-4bit",
+    "revision": null
+  },
+  "launcher": {
+    "script": "/Users/michaelweingartner/dev/lm-based/run-server.py",
+    "profile": "qwen3-coder-480b-mlx",
+    "recommended_env": {
+      "MODEL_FILE": "Qwen3-Coder-480B-A35B-Instruct-MLX-4bit",
+      "MLX_MODEL": "lmstudio-community/Qwen3-Coder-480B-A35B-Instruct-MLX-4bit",
+      "PROFILE": "qwen3-coder-480b-mlx",
+      "HOST": "0.0.0.0"
+    }
+  },
+  "serving": {
+    "server": "mlx_lm.server",
+    "listen_host": "0.0.0.0",
+    "context_length": 262144,
+    "max_output_tokens": 65536,
+    "recommended_generation": {
+      "temperature": 0.7,
+      "top_p": 0.8,
+      "top_k": 20,
+      "repetition_penalty": 1.05
+    }
+  },
+  "notes": [
+    "Prepared for Apple Silicon serving through mlx_lm.server.",
+    "Default listen host is 0.0.0.0 so LAN clients can reach the server; override HOST for loopback-only serving.",
+    "The LM Studio MLX repository config marks this as a 4-bit MLX quant with group_size=64.",
+    "The MLX repo generation_config.json repeats Qwen's recommended temperature=0.7, top_p=0.8, top_k=20, repetition_penalty=1.05.",
+    "If the local snapshot is absent, the MLX launcher uses MLX_MODEL so mlx_lm.server can resolve the Hugging Face repo directly."
+  ]
+}

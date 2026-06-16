@@ -24,11 +24,11 @@ These files describe desired serving behavior and host constraints. They do not 
 
 ## File 1: `serve-policy.yaml`
 
-### Purpose
+### Policy Purpose
 
 Describe the desired serving behavior for one host-local supervisor instance.
 
-### Suggested shape
+### Policy Suggested Shape
 
 ```yaml
 api_version: v1
@@ -160,13 +160,13 @@ Fields:
 
 ## File 2: `host-capabilities.yaml`
 
-### Purpose
+### Host Purpose
 
 Describe the capabilities and constraints of the current host.
 
 This file is host-specific. It is not model metadata.
 
-### Suggested shape
+### Host Suggested Shape
 
 ```yaml
 api_version: v1

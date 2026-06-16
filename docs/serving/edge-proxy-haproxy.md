@@ -112,6 +112,6 @@ Vector should also collect HAProxy logs as part of the unified local telemetry p
 ## Sources
 
 - HAProxy HTTP reverse proxy support:
-  https://www.haproxy.com/documentation/haproxy-configuration-tutorials/protocol-support/http/
+  <https://www.haproxy.com/documentation/haproxy-configuration-tutorials/protocol-support/http/>
 - HAProxy Prometheus exporter:
-  https://www.haproxy.com/documentation/haproxy-configuration-tutorials/alerts-and-monitoring/prometheus/
+  <https://www.haproxy.com/documentation/haproxy-configuration-tutorials/alerts-and-monitoring/prometheus/>

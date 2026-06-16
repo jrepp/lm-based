@@ -422,7 +422,7 @@ Local source and notes:
 
 External docs:
 
-- Qwen llama.cpp guide: https://qwen.readthedocs.io/en/latest/run_locally/llama.cpp.html
-- Qwen3-Coder-Next model card: https://huggingface.co/Qwen/Qwen3-Coder-Next
-- Qwen3-Coder-Next GGUF card: https://huggingface.co/Qwen/Qwen3-Coder-Next-GGUF
-- OpenCode docs: https://opencode.ai/docs/
+- Qwen llama.cpp guide: <https://qwen.readthedocs.io/en/latest/run_locally/llama.cpp.html>
+- Qwen3-Coder-Next model card: <https://huggingface.co/Qwen/Qwen3-Coder-Next>
+- Qwen3-Coder-Next GGUF card: <https://huggingface.co/Qwen/Qwen3-Coder-Next-GGUF>
+- OpenCode docs: <https://opencode.ai/docs/>

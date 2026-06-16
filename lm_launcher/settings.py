@@ -64,6 +64,7 @@ class ServerSettings(BaseSettings):
     model_slug: str | None = None
     model_file: str = ""
     model_path: Path | None = None
+    mlx_model: str | None = None
     profile: str = "auto"
     run_mode: str = "direct"
 
@@ -86,7 +87,9 @@ class ServerSettings(BaseSettings):
     top_k: int | None = None
     top_p: float | None = None
     min_p: float | None = None
+    max_tokens: int | None = None
     presence_penalty: float | None = None
+    repetition_penalty: float | None = None
     enable_repetition_guard: bool = False
     repetition_guard_presence_penalty: float = 0.5
     poll: int | None = None
@@ -173,6 +176,10 @@ class ServerSettings(BaseSettings):
                 profile_env = recommended_env.get("PROFILE")
                 if profile_env:
                     self.profile = profile_env
+            if self.mlx_model is None:
+                mlx_model_env = recommended_env.get("MLX_MODEL")
+                if mlx_model_env:
+                    self.mlx_model = mlx_model_env
 
         return self
 

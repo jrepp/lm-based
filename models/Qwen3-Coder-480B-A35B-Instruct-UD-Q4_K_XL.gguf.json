@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-05-23",
+  "artifact": {
+    "filename": "Qwen3-Coder-480B-A35B-Instruct-UD-Q4_K_XL-00001-of-00006.gguf",
+    "local_path": "Qwen3-Coder-480B-A35B-Instruct-GGUF/UD-Q4_K_XL/Qwen3-Coder-480B-A35B-Instruct-UD-Q4_K_XL-00001-of-00006.gguf",
+    "format": "gguf",
+    "quantization": "UD-Q4_K_XL",
+    "size_bytes": null,
+    "sha256": null
+  },
+  "model": {
+    "slug": "qwen3-coder-480b-a35b-ud-q4kxl",
+    "family": "Qwen3-Coder-480B-A35B",
+    "name": "Qwen3-Coder-480B-A35B-Instruct",
+    "canonical_model_card": "https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"
+  },
+  "source": {
+    "gguf_model_card": "https://huggingface.co/unsloth/Qwen3-Coder-480B-A35B-Instruct-GGUF",
+    "publisher": "unsloth",
+    "provenance_status": "planned_download"
+  },
+  "download": {
+    "provider": "huggingface",
+    "type": "snapshot",
+    "repo_id": "unsloth/Qwen3-Coder-480B-A35B-Instruct-GGUF",
+    "filename": "Qwen3-Coder-480B-A35B-Instruct-UD-Q4_K_XL-00001-of-00006.gguf",
+    "local_dir": "Qwen3-Coder-480B-A35B-Instruct-GGUF",
+    "allow_patterns": [
+      "UD-Q4_K_XL/*"
+    ],
+    "revision": null
+  },
+  "launcher": {
+    "script": "/Users/michaelweingartner/dev/lm-based/run-server.py",
+    "profile": "qwen3-coder-480b",
+    "recommended_env": {
+      "MODEL_FILE": "Qwen3-Coder-480B-A35B-Instruct-GGUF/UD-Q4_K_XL/Qwen3-Coder-480B-A35B-Instruct-UD-Q4_K_XL-00001-of-00006.gguf",
+      "PROFILE": "qwen3-coder-480b",
+      "HOST": "0.0.0.0"
+    }
+  },
+  "serving": {
+    "listen_host": "0.0.0.0",
+    "context_length": 262144,
+    "max_output_tokens": 65536,
+    "recommended_generation": {
+      "temperature": 0.7,
+      "top_p": 0.8,
+      "top_k": 20,
+      "repetition_penalty": 1.05
+    }
+  },
+  "notes": [
+    "Unsloth's UD-Q4_K_XL GGUF is split into six shards; serve by pointing llama-server at shard 00001 with the remaining shards in the same directory.",
+    "Default listen host is 0.0.0.0 so LAN clients can reach the server; override HOST for loopback-only serving.",
+    "Qwen's model card lists native 262144-token context and says 1M context is possible with YaRN; this sidecar keeps the native window as the serving default.",
+    "Recommended sampling settings were copied from the Qwen HF model card: temperature=0.7, top_p=0.8, top_k=20, repetition_penalty=1.05.",
+    "Qwen recommends max output length 65536 for most queries; enforce that at request/client level where supported."
+  ]
+}

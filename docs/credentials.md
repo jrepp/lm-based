@@ -7,7 +7,8 @@ micropayments automatically.
 
 ## Two-tier model
 
-```
+```text
+
 Your code / open-webui
         │
         ▼
@@ -20,6 +21,7 @@ Direct API           x402 proxy :8402
 (key in env)         (no key needed)
    │                      │
 provider endpoint    provider endpoint
+
 ```
 
 **Direct routing** — when `OPENAI_API_KEY` (etc.) is set in your environment,
@@ -38,8 +40,10 @@ and written into `clawrouter.json`.  Re-generate whenever you add or remove keys
 Copy `.env.example` to `.env` and fill in the keys you have:
 
 ```bash
+
 cp .env.example .env
 $EDITOR .env
+
 ```
 
 `.env` is gitignored.  Never commit real keys.
@@ -47,22 +51,27 @@ $EDITOR .env
 After editing `.env`, regenerate the routing config:
 
 ```bash
+
 ./route-config.py
+
 ```
 
 ## Checking what's configured
 
 ```bash
+
 # Show credential status for all providers (reads live env)
 ./route-config.py --providers
 
 # Full stack check: sidecars, endpoints, credential audit
 ./route-config.py --doctor
+
 ```
 
 Example `--providers` output:
 
-```
+```text
+
 Cloud provider credentials  (set keys in .env — see docs/credentials.md)
 
   Provider                  Env var             Status    Routing
@@ -76,6 +85,7 @@ Cloud provider credentials  (set keys in .env — see docs/credentials.md)
   · Gemini 2.5 Pro          GEMINI_API_KEY      [not set] x402 proxy
 
   1 direct  ·  6 via x402 proxy
+
 ```
 
 ## Provider env var reference
@@ -83,12 +93,12 @@ Cloud provider credentials  (set keys in .env — see docs/credentials.md)
 | Provider              | Key env var        | Base URL env var    | Default direct endpoint |
 |-----------------------|--------------------|---------------------|-------------------------|
 | GLM-5                 | `GLM_API_KEY`      | `GLM_API_BASE`      | _(proxy only)_          |
-| ChatGPT / GPT-4o      | `OPENAI_API_KEY`   | `OPENAI_API_BASE`   | `https://api.openai.com/v1` |
+| ChatGPT / GPT-4o      | `OPENAI_API_KEY`   | `OPENAI_API_BASE`   | `<https://api.openai.com/v1`> |
 | MiniMax M2.7          | `MINIMAX_API_KEY`  | `MINIMAX_API_BASE`  | _(proxy only)_          |
-| DeepSeek Chat         | `DEEPSEEK_API_KEY` | `DEEPSEEK_API_BASE` | `https://api.deepseek.com/v1` |
-| Claude Sonnet 4.6     | `ANTHROPIC_API_KEY`| `ANTHROPIC_API_BASE`| `https://api.anthropic.com/v1` |
-| Grok 4.1 Fast         | `XAI_API_KEY`      | `XAI_API_BASE`      | `https://api.x.ai/v1` |
-| Gemini 2.5 Pro        | `GEMINI_API_KEY`   | `GEMINI_API_BASE`   | `https://generativelanguage.googleapis.com/v1beta/openai` |
+| DeepSeek Chat         | `DEEPSEEK_API_KEY` | `DEEPSEEK_API_BASE` | `<https://api.deepseek.com/v1`> |
+| Claude Sonnet 4.6     | `ANTHROPIC_API_KEY`| `ANTHROPIC_API_BASE`| `<https://api.anthropic.com/v1`> |
+| Grok 4.1 Fast         | `XAI_API_KEY`      | `XAI_API_BASE`      | `<https://api.x.ai/v1`> |
+| Gemini 2.5 Pro        | `GEMINI_API_KEY`   | `GEMINI_API_BASE`   | `<https://generativelanguage.googleapis.com/v1beta/openai`> |
 
 ## Base URL overrides
 
@@ -103,7 +113,7 @@ default `direct_base`.
 
 ## clawrouter.json security
 
-`clawrouter.json` stores `api_key_env` (the env var *name*), never the
+`clawrouter.json` stores `api_key_env` (the env var _name_), never the
 resolved secret.  The file is gitignored but can safely be shared or committed
 if needed — it contains no credentials.
 

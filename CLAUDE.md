@@ -30,16 +30,20 @@ See `docs/architecture.html` for a rendered diagram of the full stack:
 ## First-time setup
 
 ```bash
+
 cp .env.example .env        # fill in MODEL_SLUG and any API keys
 ./route-config.py      # generate clawrouter.json
+
 ```
 
 ## Adding a model
 
 1. Create `models/<Artifact-QUANT>.gguf.json` (schema_version 1).
    Required keys: `schema_version`, `recorded_at`, `artifact`, `model`, `source`, `download`, `launcher`, `notes`.
+
 2. If the model needs custom serving params, add a profile in
    `lm_launcher/profiles.py` → `profile_defaults()` and update `infer_profile()`.
+
 3. Append a row to `docs/model-card-index.md`.
 4. Regenerate: `./route-config.py`
 5. Verify: `./download_model.py --list` — new slug should appear.
@@ -61,9 +65,11 @@ See `docs/credentials.md` for the full explanation. Short version:
 - `clawrouter.json` stores `api_key_env` (the var *name*), never the resolved secret
 
 ```bash
+
 ./route-config.py --providers  # credential status per provider
 ./route-config.py --doctor     # full stack: sidecars + endpoints + credentials
 ./route-config.py --status     # summary of current clawrouter.json
+
 ```
 
 ## Adding a cloud provider
