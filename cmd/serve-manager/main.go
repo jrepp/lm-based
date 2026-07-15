@@ -348,6 +348,22 @@ func runStatus(paths runtimePaths, args []string) int {
 		}
 		fmt.Println()
 	}
+	policy, policyErr := loadServePolicy(filepath.Join(paths.projectRoot, "serve-policy.yaml"))
+	records, recordsErr := loadModelRecords(filepath.Join(paths.projectRoot, "models"))
+	switch {
+	case policyErr == nil && recordsErr == nil:
+		enabled := policy.Models.Enabled
+		fmt.Printf("models:             hot=%d all=%d\n", len(enabled), len(records))
+		if len(enabled) == 0 {
+			fmt.Println("  hot (enabled):    (none declared; routing includes all models)")
+		} else {
+			fmt.Printf("  hot (enabled):    %s\n", strings.Join(enabled, ", "))
+		}
+	case policyErr != nil:
+		fmt.Println("models:             (serve-policy.yaml unavailable)")
+	default:
+		fmt.Println("models:             (model index unavailable)")
+	}
 	return 0
 }
 
