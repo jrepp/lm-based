@@ -20,6 +20,7 @@ runs/
 # Local Hugging Face snapshots (large model directories)
 /Qwen2.5-Coder-7B-Instruct/
 /Qwen3.6-27B/
+/Ternary-Bonsai-27B-MLX-2bit/
 
 # Local artifact tracking (machine-specific provenance state, never committed)
 artifacts/STATUS.md
