@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Model Performance</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">serve-manager</p>
+          <h1>Model Performance</h1>
+        </div>
+        <div class="status" id="status">
+          <span class="status-dot"></span>
+          <span id="status-text">connecting</span>
+        </div>
+      </header>
+
+      <section class="metrics-strip" aria-label="current model performance">
+        <article class="metric">
+          <span class="metric-label">Decode</span>
+          <strong id="decode-rate">--</strong>
+          <span class="metric-unit">tok/s</span>
+        </article>
+        <article class="metric">
+          <span class="metric-label">Prompt</span>
+          <strong id="prompt-rate">--</strong>
+          <span class="metric-unit">tok/s</span>
+        </article>
+        <article class="metric">
+          <span class="metric-label">Context</span>
+          <strong id="context-used">--</strong>
+          <span class="metric-unit">tokens</span>
+        </article>
+        <article class="metric">
+          <span class="metric-label">Cache</span>
+          <strong id="cache-used">--</strong>
+          <span class="metric-unit">tokens</span>
+        </article>
+      </section>
+
+      <section class="timeline-panel">
+        <div class="timeline-header">
+          <div>
+            <h2>Timeline</h2>
+            <p id="model-source">--</p>
+            <p id="bucket-summary">--</p>
+          </div>
+          <div class="legend" aria-label="timeline legend">
+            <span><i class="decode-swatch"></i>Decode</span>
+            <span><i class="prompt-swatch"></i>Prompt</span>
+          </div>
+        </div>
+        <canvas id="timeline" width="1280" height="460" aria-label="model performance timeline"></canvas>
+      </section>
+
+      <section class="details-grid" aria-label="runtime details">
+        <article>
+          <span class="detail-label">Slot</span>
+          <strong id="slot-state">--</strong>
+        </article>
+        <article>
+          <span class="detail-label">MTP</span>
+          <strong id="mtp-state">--</strong>
+        </article>
+        <article>
+          <span class="detail-label">Decode Mean</span>
+          <strong id="decode-mean">--</strong>
+        </article>
+        <article>
+          <span class="detail-label">Generated</span>
+          <strong id="decoded-total">--</strong>
+        </article>
+        <article>
+          <span class="detail-label">Remaining</span>
+          <strong id="remaining-total">--</strong>
+        </article>
+        <article>
+          <span class="detail-label">Observed</span>
+          <strong id="observed-at">--</strong>
+        </article>
+      </section>
+    </main>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>

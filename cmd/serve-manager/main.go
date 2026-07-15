@@ -17,6 +17,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	managerdashboard "lm-based/cmd/serve-manager/internal/dashboard"
+	managerstats "lm-based/cmd/serve-manager/internal/stats"
 )
 
 type ServePolicy struct {
@@ -185,6 +188,12 @@ func main() {
 		os.Exit(runDoctor(paths, os.Args[2:]))
 	case "status":
 		os.Exit(runStatus(paths, os.Args[2:]))
+	case "stats":
+		os.Exit(runStats(paths, os.Args[2:]))
+	case "stats-poll":
+		os.Exit(runStatsPoll(paths, os.Args[2:]))
+	case "dashboard":
+		os.Exit(runDashboard(paths, os.Args[2:]))
 	case "apply":
 		os.Exit(runApply(paths, os.Args[2:]))
 	case "stop":
@@ -198,7 +207,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Println("serve-manager <plan|apply|status|doctor|stop|logs>")
+	fmt.Println("serve-manager <plan|apply|status|stats|stats-poll|dashboard|doctor|stop|logs>")
 }
 
 func resolvePaths() (runtimePaths, error) {
@@ -338,6 +347,114 @@ func runStatus(paths runtimePaths, args []string) int {
 			fmt.Printf(" (pid=%s)", pid)
 		}
 		fmt.Println()
+	}
+	return 0
+}
+
+func runStats(paths runtimePaths, args []string) int {
+	fs := flag.NewFlagSet("stats", flag.ContinueOnError)
+	output := fs.String("output", filepath.Join(paths.runtimeRoot, "stats", "llama-server.json"), "rolling stats JSON file")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	data, err := os.ReadFile(*output)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		return 1
+	}
+	fmt.Print(string(data))
+	return 0
+}
+
+func runStatsPoll(paths runtimePaths, args []string) int {
+	fs := flag.NewFlagSet("stats-poll", flag.ContinueOnError)
+	baseURL := fs.String("url", "http://127.0.0.1:8001", "llama-server base URL")
+	interval := fs.Duration("interval", 200*time.Millisecond, "poll interval")
+	window := fs.Duration("window", time.Second, "rolling stats window")
+	bucket := fs.Duration("bucket", 10*time.Second, "history bucket width")
+	retention := fs.Duration("retention", time.Hour, "history retention")
+	trendRecent := fs.Duration("trend-recent", 5*time.Minute, "uncompressed recent trend horizon")
+	trendPoints := fs.Int("trend-points", 1440, "maximum compacted trend points")
+	timeout := fs.Duration("timeout", 10*time.Second, "HTTP timeout")
+	output := fs.String("output", filepath.Join(paths.runtimeRoot, "stats", "llama-server.json"), "rolling stats JSON file")
+	once := fs.Bool("once", false, "write one sample and exit")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *interval <= 0 {
+		fmt.Fprintln(os.Stderr, "error: interval must be positive")
+		return 2
+	}
+	if *window <= 0 {
+		fmt.Fprintln(os.Stderr, "error: window must be positive")
+		return 2
+	}
+	if *timeout <= 0 {
+		fmt.Fprintln(os.Stderr, "error: timeout must be positive")
+		return 2
+	}
+	if *bucket <= 0 {
+		fmt.Fprintln(os.Stderr, "error: bucket must be positive")
+		return 2
+	}
+	if *retention <= 0 {
+		fmt.Fprintln(os.Stderr, "error: retention must be positive")
+		return 2
+	}
+	if *trendRecent <= 0 {
+		fmt.Fprintln(os.Stderr, "error: trend-recent must be positive")
+		return 2
+	}
+	if *trendPoints < 2 {
+		fmt.Fprintln(os.Stderr, "error: trend-points must be at least 2")
+		return 2
+	}
+
+	poller := managerstats.NewPoller(*baseURL, *timeout)
+	history := managerstats.NewHistory(*bucket, *retention)
+	history.ConfigureTrend(*trendRecent, *trendPoints)
+	var samples []managerstats.Sample
+	for {
+		sample, err := poller.Poll()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "poll warning:", err)
+		} else {
+			history.Observe(sample)
+			samples = append(samples, sample)
+			samples = managerstats.TrimWindow(samples, sample.At, *window)
+			snapshot := managerstats.BuildSnapshot(poller.Source(), *window, samples)
+			history.Attach(&snapshot)
+			if err := writeJSON(*output, snapshot); err != nil {
+				fmt.Fprintln(os.Stderr, "error:", err)
+				return 1
+			}
+			if *once {
+				fmt.Printf("wrote %s\n", *output)
+				return 0
+			}
+		}
+		time.Sleep(*interval)
+	}
+}
+
+func runDashboard(paths runtimePaths, args []string) int {
+	fs := flag.NewFlagSet("dashboard", flag.ContinueOnError)
+	listen := fs.String("listen", "127.0.0.1:9092", "dashboard listen address")
+	statsPath := fs.String("stats", filepath.Join(paths.runtimeRoot, "stats", "llama-server.json"), "rolling stats JSON file")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	handler, err := managerdashboard.NewHandler(managerdashboard.Config{
+		StatsPath: *statsPath,
+	})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		return 1
+	}
+	fmt.Printf("dashboard: http://%s\n", *listen)
+	if err := http.ListenAndServe(*listen, handler); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		return 1
 	}
 	return 0
 }

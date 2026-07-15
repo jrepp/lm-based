@@ -19,6 +19,85 @@ Implementation direction:
 - long-lived orchestration and service management should be implemented in Go
 - backend-specific runtime adapters may remain in Python
 
+## Architecture Diagram
+
+```text
+                             operator
+                                |
+                                v
+                  +-----------------------------+
+                  | serve-manager               |
+                  |-----------------------------|
+                  | plan / apply / status       |
+                  | generation state            |
+                  | child process supervision   |
+                  | stats poller + dashboard    |
+                  +---------------+-------------+
+                                  |
+              generated runtime   |   runtime observation
+              config + lifecycle  |
+                                  v
+      +---------------------------+----------------------------+
+      |                                                        |
+      v                                                        v
++-------------+                                      +----------------+
+| HAProxy     |                                      | stats outputs  |
+|-------------|                                      |----------------|
+| stable edge |                                      | current JSON   |
+| health      |                                      | buckets        |
+| metrics     |                                      | compact trends |
++------+------+                                      +-------+--------+
+       |                                                     ^
+       | client traffic                                      |
+       v                                                     |
++-------------+       worker command        +----------------+--------+
+| llama-swap  +---------------------------->+ run-server.py            |
+|-------------|                             |--------------------------|
+| model route |                             | sidecar lookup           |
+| hot swap    |                             | profile resolution       |
+| warm / cold |                             | backend adapter launch   |
++------+------+                             +------------+-------------+
+       |                                                 |
+       | proxied model traffic                            |
+       v                                                 v
++------+------+       +----------------+       +----------------------+
+| worker A    |       | worker B       |       | worker N             |
+|-------------|       |----------------|       |----------------------|
+| llama-server|       | transformers   |       | future vLLM/SGLang   |
+| GGUF        |       | safetensors    |       | backend adapters     |
++------+------+       +-------+--------+       +----------+-----------+
+       ^                      ^                           ^
+       |                      |                           |
+       +----------+-----------+------------+--------------+
+                  |
+                  v
+        +------------------------+
+        | model metadata         |
+        |------------------------|
+        | models/*.json sidecars |
+        | lm_launcher/profiles.py|
+        | local artifacts        |
+        +------------------------+
+```
+
+Traffic path:
+
+```text
+client -> HAProxy -> llama-swap -> selected worker backend
+```
+
+Control path:
+
+```text
+operator -> serve-manager -> generated configs -> managed children
+```
+
+Observation path:
+
+```text
+worker /slots + /metrics -> stats poller -> rolling JSON -> dashboard/API
+```
+
 ## Core Components
 
 ### Supervisor
