@@ -10,6 +10,9 @@ slug="$1"
 port="$2"
 base_url="http://127.0.0.1:${port}"
 
+repo_root="${LM_BASED_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+models_dir="${repo_root}/models"
+
 current_model_id() {
   python3 - "$base_url" <<'PY'
 import json
@@ -31,10 +34,35 @@ print(models[0].get("id", ""))
 PY
 }
 
+# Different backends report different /v1/models ids: llama-server uses the
+# alias (the slug); mlx_lm / transformers serve use the absolute model dir.
+# Resolve every id that should count as "this slug is already served".
+acceptable_ids() {
+  PYTHONPATH="${repo_root}" python3 -c '
+import sys
+from lm_launcher.model_identity import acceptable_model_ids
+for mid in acceptable_model_ids(sys.argv[1], sys.argv[2], sys.argv[3]):
+    print(mid)
+' "$models_dir" "$slug" "$repo_root"
+}
+
+mapfile -t ACCEPT < <(acceptable_ids 2>/dev/null || true)
+if [[ ${#ACCEPT[@]} -eq 0 ]]; then
+  ACCEPT=("$slug")
+fi
+
+id_matches() {
+  local needle="$1" id
+  for id in "${ACCEPT[@]}"; do
+    [[ "$id" == "$needle" ]] && return 0
+  done
+  return 1
+}
+
 if current="$(current_model_id 2>/dev/null)"; then
-  if [[ "${current}" == "${slug}" ]]; then
-    echo "adopting existing ${slug} server on ${base_url}"
-    while current="$(current_model_id 2>/dev/null)" && [[ "${current}" == "${slug}" ]]; do
+  if id_matches "${current}"; then
+    echo "adopting existing ${slug} server on ${base_url} (id=${current})"
+    while current="$(current_model_id 2>/dev/null)" && id_matches "${current}"; do
       sleep 5
     done
     echo "existing ${slug} server disappeared or changed"
