@@ -26,12 +26,14 @@ pi  ->  sampler-proxy (:8002)  ->  direct worker (:8001)
 ## Bring up the worker and proxy
 
 ```bash
-./up ternary-bonsai-27b-mlx-2bit        # worker on :8001 + stats + dashboard
-UPSTREAM=http://127.0.0.1:8001 \
-LISTEN=127.0.0.1:8002 \
-REPETITION_PENALTY=1.15 \
-  ./support/sampler-proxy               # sampler proxy on :8002
+./up ternary-bonsai-27b-mlx-2bit
+# brings up: worker :8001 + sampler-proxy :8002 + stats + dashboard
 ```
+
+`./up` includes the sampler proxy automatically for MLX slugs (it is omitted for
+GGUF models, which already get a repetition penalty from their serving profile).
+The proxy defaults to `REPETITION_PENALTY=1.15`; run `./support/sampler-proxy`
+directly with custom env to tune it.
 
 ## pi provider config
 
