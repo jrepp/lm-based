@@ -23,6 +23,7 @@ Current design direction:
 | [transitions-and-state.md](transitions-and-state.md) | Transition model, generation lifecycle, worker states, and runtime state directory layout |
 | [host-topology.md](host-topology.md) | Single-host and mixed-hardware deployment model for 128 GB Macs and H100-backed hosts |
 | [tmux-service-setup.md](tmux-service-setup.md) | Local tmux service-set launcher design for `./up` and per-service PTY shims |
+| [hot-models.md](hot-models.md) | Hot (enabled) vs all models, llama-swap routing, and dynamic discovery |
 
 ## Status
 

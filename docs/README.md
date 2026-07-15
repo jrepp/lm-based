@@ -12,6 +12,7 @@ Reference documentation for the lm-based local LLM stack.
 | [credentials.md](credentials.md) | API key env vars, direct vs. x402 proxy routing |
 | [open-webui-local-server.md](open-webui-local-server.md) | Open WebUI setup, embedding backend config |
 | [llama-cpp-latest-build.md](llama-cpp-latest-build.md) | Rebase and build latest llama.cpp with Metal and MTP support |
+| [pi-local-model.md](pi-local-model.md) | Configure pi to use a local direct model (sampler proxy, thinking) |
 
 ## Serving Design
 
