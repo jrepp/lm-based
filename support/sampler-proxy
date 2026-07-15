@@ -1,0 +1,180 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11,<3.14"
+# ///
+"""Sampler-defaults reverse proxy for local OpenAI-compatible servers.
+
+Injects sampling defaults (e.g. ``repetition_penalty``) into
+``/v1/chat/completions`` and ``/v1/completions`` request bodies, then streams
+the upstream response back unchanged.
+
+Why this exists
+---------------
+``mlx_lm.server`` has no CLI flag for ``repetition_penalty``, and most clients
+(including pi) do not send one. Extreme low-bit models (e.g. the 1.71 bpw
+ternary Bonsai) then degenerate into repetition loops on long generations,
+especially in thinking mode. This proxy applies sane sampler defaults for any
+client without per-client configuration.
+
+Environment
+-----------
+UPSTREAM            Upstream OpenAI-compatible base URL (default http://127.0.0.1:8001)
+LISTEN              Bind address for the proxy (default 127.0.0.1:8002)
+REPETITION_PENALTY  Injected if unset (default 1.1; set to 1.0 or empty to disable)
+REPETITION_CONTEXT  Injected if unset (default unset -> upstream default)
+MIN_P               Injected if unset (default unset)
+
+A field already present in the request body is never overwritten.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.client import HTTPConnection
+from urllib.parse import urlsplit
+
+UPSTREAM = os.environ.get("UPSTREAM", "http://127.0.0.1:8001")
+LISTEN = os.environ.get("LISTEN", "127.0.0.1:8002")
+INJECT_PATHS = {"/v1/chat/completions", "/v1/completions"}
+HOP_BY_HOP = {
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailers",
+    "transfer-encoding",
+    "upgrade",
+}
+
+
+def sampler_overrides() -> dict[str, float | int]:
+    overrides: dict[str, float | int] = {}
+    penalty = os.environ.get("REPETITION_PENALTY", "1.1").strip()
+    if penalty and penalty not in {"1", "1.0"}:
+        overrides["repetition_penalty"] = float(penalty)
+    context = os.environ.get("REPETITION_CONTEXT", "").strip()
+    if context:
+        overrides["repetition_context"] = int(context)
+    min_p = os.environ.get("MIN_P", "").strip()
+    if min_p:
+        overrides["min_p"] = float(min_p)
+    return overrides
+
+
+def inject_sampler_defaults(body: bytes) -> bytes:
+    overrides = sampler_overrides()
+    if not overrides:
+        return body
+    try:
+        obj = json.loads(body)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return body
+    if not isinstance(obj, dict):
+        return body
+    changed = False
+    for key, value in overrides.items():
+        if key not in obj:
+            obj[key] = value
+            changed = True
+    return json.dumps(obj).encode() if changed else body
+
+
+class Proxy(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, fmt: str, *args: object) -> None:
+        sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
+
+    def _read_body(self) -> bytes:
+        # pi (Node fetch) sends large POST bodies with Transfer-Encoding:
+        # chunked and no Content-Length; read either framing faithfully.
+        if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
+            body = b""
+            while True:
+                size_line = self.rfile.readline().split(b";", 1)[0].strip()
+                if not size_line:
+                    continue
+                size = int(size_line, 16)
+                if size == 0:
+                    # consume trailing CRLF / optional trailer block
+                    while self.rfile.readline().strip():
+                        pass
+                    break
+                body += self.rfile.read(size)
+                self.rfile.readline()  # CRLF after each chunk
+            return body
+        length = int(self.headers.get("Content-Length", 0) or 0)
+        return self.rfile.read(length) if length else b""
+
+    def _proxy(self) -> None:
+        body = self._read_body()
+        if self.command == "POST" and self.path.split("?", 1)[0] in INJECT_PATHS and body:
+            body = inject_sampler_defaults(body)
+
+        parsed = urlsplit(UPSTREAM)
+        conn = HTTPConnection(parsed.hostname, parsed.port or 80, timeout=None)
+        # Drop request-side framing/length headers; http.client will set
+        # Content-Length from the (possibly rewritten) body. Keeping the
+        # client's original Content-Length/Transfer-Encoding here truncates
+        # large bodies when the body length changes or case differs.
+        req_drop = HOP_BY_HOP | {"host", "content-length"}
+        headers = {k: v for k, v in self.headers.items() if k.lower() not in req_drop}
+        headers["Host"] = parsed.netloc
+        if body:
+            headers["Content-Length"] = str(len(body))
+        sys.stderr.write(
+            "proxy: %s %s TE=%s CL=%s body=%d\n"
+            % (
+                self.command,
+                self.path,
+                self.headers.get("Transfer-Encoding", "-"),
+                self.headers.get("Content-Length", "-"),
+                len(body),
+            )
+        )
+        conn.request(self.command, self.path, body=body, headers=headers)
+        resp = conn.getresponse()
+
+        # We stream raw bytes ourselves and close the connection after, so drop
+        # hop-by-hop/framing headers and signal Connection: close to the client.
+        self.send_response(resp.status, resp.reason)
+        for key, value in resp.getheaders():
+            if key.lower() in HOP_BY_HOP:
+                continue
+            self.send_header(key, value)
+        self.send_header("Connection", "close")
+        self.end_headers()
+
+        try:
+            while True:
+                chunk = resp.read(4096)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                self.wfile.flush()
+        finally:
+            conn.close()
+
+    do_GET = _proxy
+    do_POST = _proxy
+    do_PUT = _proxy
+    do_DELETE = _proxy
+    do_PATCH = _proxy
+    do_OPTIONS = _proxy
+
+
+def main() -> None:
+    host, _, port = LISTEN.partition(":")
+    print(
+        f"sampler-proxy: {LISTEN} -> {UPSTREAM}  inject={sampler_overrides() or 'none'}",
+        flush=True,
+    )
+    ThreadingHTTPServer((host, int(port)), Proxy).serve_forever()
+
+
+if __name__ == "__main__":
+    main()
