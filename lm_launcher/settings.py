@@ -173,6 +173,10 @@ class ServerSettings(BaseSettings):
                 profile_env = recommended_env.get("PROFILE")
                 if profile_env:
                     self.profile = profile_env
+            if "llama_server_bin" not in self.model_fields_set:
+                llama_server_bin_env = recommended_env.get("LLAMA_SERVER_BIN")
+                if llama_server_bin_env:
+                    self.llama_server_bin = llama_server_bin_env
 
         return self
 
