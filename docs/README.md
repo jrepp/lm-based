@@ -11,6 +11,7 @@ Reference documentation for the lm-based local LLM stack.
 | [clawrouter-operations.md](clawrouter-operations.md) | Generating and validating `clawrouter.json`, provider status |
 | [credentials.md](credentials.md) | API key env vars, direct vs. x402 proxy routing |
 | [open-webui-local-server.md](open-webui-local-server.md) | Open WebUI setup, embedding backend config |
+| [llama-cpp-latest-build.md](llama-cpp-latest-build.md) | Rebase and build latest llama.cpp with Metal and MTP support |
 
 ## Serving Design
 
