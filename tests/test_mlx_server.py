@@ -23,18 +23,21 @@ class MlxServerArgsTests(unittest.TestCase):
             "temperature": 0.7,
             "top_p": 0.95,
             "top_k": 20,
+            "backend_python": "3.14",
         }
         base.update(overrides)
         return types.SimpleNamespace(**base)
 
     def test_builds_mlx_lm_server_command_with_model_directory(self) -> None:
-        args = build_args(self._settings())  # type: ignore[arg-type]
+        settings = self._settings()  # type: ignore[arg-type]
+        args = build_args(settings)
 
-        # Non-deprecated mlx_lm.server console script via uv.
-        self.assertEqual(
-            args[:7],
-            ["uv", "run", "--python", "3.11", "--with", "mlx_lm", "mlx_lm.server"],
-        )
+        # Non-deprecated mlx_lm.server console script via uv; --python follows
+        # the per-model backend_python setting (defaults to the project pin).
+        self.assertEqual(args[:3], ["uv", "run", "--python"])
+        self.assertEqual(args[3], settings.backend_python)
+        self.assertEqual(args[args.index("--with") + 1], "mlx_lm")
+        self.assertIn("mlx_lm.server", args)
         # The model is passed as the directory (config.json's parent), not the file.
         self.assertIn("--model", args)
         self.assertEqual(
@@ -43,6 +46,12 @@ class MlxServerArgsTests(unittest.TestCase):
         )
         self.assertEqual(args[args.index("--host") + 1], "127.0.0.1")
         self.assertEqual(args[args.index("--port") + 1], "8001")
+
+    def test_backend_python_override_propagates_to_uv(self) -> None:
+        # Different models can pin a different backend Python via BACKEND_PYTHON.
+        settings = self._settings(backend_python="3.11")  # type: ignore[arg-type]
+        args = build_args(settings)
+        self.assertEqual(args[args.index("--python") + 1], "3.11")
 
     def test_includes_upstream_sampler_defaults(self) -> None:
         args = build_args(self._settings())  # type: ignore[arg-type]

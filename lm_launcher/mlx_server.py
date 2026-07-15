@@ -31,7 +31,7 @@ def build_args(settings: ServerSettings) -> list[str]:
         "uv",
         "run",
         "--python",
-        "3.11",
+        settings.backend_python,
         "--with",
         "mlx_lm",
         "mlx_lm.server",

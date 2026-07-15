@@ -11,6 +11,15 @@ from lm_launcher.profiles import infer_profile, profile_defaults
 _PROJECT_ROOT = Path(__file__).parent.parent
 
 
+def _read_project_python() -> str:
+    """Default Python for backend ephemeral envs; follows .python-version."""
+    version_file = _PROJECT_ROOT / ".python-version"
+    try:
+        return version_file.read_text().strip() or "3.14"
+    except OSError:
+        return "3.14"
+
+
 def _discover_lan_ips() -> list[str]:
     ips: set[str] = set()
     try:
@@ -59,6 +68,7 @@ class ServerSettings(BaseSettings):
     )
 
     llama_server_bin: str = "llama-server"
+    backend_python: str = _read_project_python()
     model_dir: Path = _PROJECT_ROOT / "artifacts"
     models_index_dir: Path = _PROJECT_ROOT / "models"
     model_slug: str | None = None
@@ -177,6 +187,10 @@ class ServerSettings(BaseSettings):
                 llama_server_bin_env = recommended_env.get("LLAMA_SERVER_BIN")
                 if llama_server_bin_env:
                     self.llama_server_bin = llama_server_bin_env
+            if "backend_python" not in self.model_fields_set:
+                backend_python_env = recommended_env.get("BACKEND_PYTHON")
+                if backend_python_env:
+                    self.backend_python = backend_python_env
 
         return self
 

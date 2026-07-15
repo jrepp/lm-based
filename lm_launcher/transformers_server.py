@@ -5,7 +5,6 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 from lm_launcher.run_capture import (
     RunContext,
@@ -30,7 +29,7 @@ def build_args(settings: ServerSettings) -> list[str]:
         "uv",
         "run",
         "--python",
-        "3.11",
+        settings.backend_python,
         "--with",
         "transformers[serving]>=4.57,<6",
         "--with",
