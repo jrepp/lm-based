@@ -10,6 +10,7 @@
 
 # Generated routing config (may reference resolved secrets at runtime)
 clawrouter.json
+llama-swap.yaml
 
 # Runtime artifacts
 runs/
