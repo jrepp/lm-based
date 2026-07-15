@@ -1,0 +1,445 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11,<3.14"
+# dependencies = [
+#   "rich>=13.9,<15",
+# ]
+# ///
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+
+try:
+    from rich import box
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+except ModuleNotFoundError:
+    box = None
+    Console = None
+    Panel = None
+    Table = None
+    Text = None
+
+
+SESSION = "lm-based"
+ROOT = Path(__file__).resolve().parent
+RUNTIME = ROOT / ".runtime" / "tmux"
+GENERATED = RUNTIME / "generated"
+SHIM = ROOT / "support" / "tmux-service-shim"
+console = Console() if Console is not None else None
+
+
+@dataclass(frozen=True)
+class Service:
+    name: str
+    command: str
+    description: str
+    deps: tuple[str, ...] = ()
+    window: str | None = None
+    env: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def window_name(self) -> str:
+        return self.window or self.name
+
+
+@dataclass(frozen=True)
+class Plan:
+    target: str
+    services: tuple[Service, ...]
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Start lm-based service sets in a tmux session.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Targets may be service sets, service names, or model slugs.\n"
+            "\n"
+            "Examples:\n"
+            "  ./up\n"
+            "  ./up direct\n"
+            "  ./up swap\n"
+            "  ./up qwen36-27b-mtp-ud-q5k-xl\n"
+            "  ./up dashboard --attach\n"
+        ),
+    )
+    parser.add_argument("target", nargs="?", default="core", help="service-set, service-name, or model slug")
+    parser.add_argument("--list", action="store_true", help="list known targets")
+    parser.add_argument("--dry-run", action="store_true", help="print resolved services without starting tmux")
+    parser.add_argument("--attach", action="store_true", help="attach to the tmux session after starting")
+    parser.add_argument("--no-restart", action="store_true", help="leave existing tmux windows running")
+    parser.add_argument("--session", default=SESSION, help="tmux session name")
+    args = parser.parse_args(argv)
+
+    registry = build_registry()
+    if args.list:
+        print_targets(registry)
+        return 0
+
+    try:
+        plan = resolve_target(args.target, registry)
+    except KeyError as exc:
+        print_error(f"unknown target {exc.args[0]!r}")
+        print("run ./up --list to see service sets, services, and model slugs", file=sys.stderr)
+        return 2
+
+    if args.dry_run:
+        print_plan(plan, args.session)
+        return 0
+
+    if shutil.which("tmux") is None:
+        print_error("tmux is not installed or not on PATH")
+        print("install tmux, then rerun this command", file=sys.stderr)
+        return 1
+
+    if not SHIM.exists():
+        print_error(f"missing service shim: {SHIM.relative_to(ROOT)}")
+        return 1
+
+    ensure_session(args.session)
+    for service in plan.services:
+        start_service(args.session, service, restart=not args.no_restart)
+
+    print_ensured(plan, args.session)
+
+    if args.attach:
+        return subprocess.call(["tmux", "attach", "-t", args.session])
+    return 0
+
+
+def build_registry() -> dict[str, Service | tuple[str, ...]]:
+    services: dict[str, Service | tuple[str, ...]] = {
+        "stats-poll": Service(
+            name="stats-poll",
+            window="stats",
+            description="poll llama-server metrics and write rolling stats JSON",
+            command=(
+                "GOCACHE=/tmp/go-build go run ./cmd/serve-manager stats-poll "
+                "--interval 500ms "
+                "--window 1s "
+                "--bucket 10s "
+                "--retention 1h "
+                "--trend-recent 5m "
+                "--trend-points 1440 "
+                "--timeout 20s "
+                "--url http://127.0.0.1:8001 "
+                "--output .runtime/serve-manager/stats/llama-server.json"
+            ),
+        ),
+        "dashboard": Service(
+            name="dashboard",
+            description="serve embedded model-performance dashboard",
+            deps=("stats-poll",),
+            command=(
+                "GOCACHE=/tmp/go-build go run ./cmd/serve-manager dashboard "
+                "--listen 127.0.0.1:9092 "
+                "--stats .runtime/serve-manager/stats/llama-server.json"
+            ),
+        ),
+        "llama-swap": Service(
+            name="llama-swap",
+            window="swap",
+            description="generate llama-swap config and run the hot-swap proxy",
+            command=(
+                "mkdir -p .runtime/tmux/generated "
+                "&& ./llama-swap-runner.py config --output .runtime/tmux/generated/llama-swap.yaml "
+                "&& ./llama-swap-runner.py start "
+                "--config .runtime/tmux/generated/llama-swap.yaml "
+                "--listen 127.0.0.1:8080 "
+                "--watch-config"
+            ),
+        ),
+        "serve-manager-status": Service(
+            name="serve-manager-status",
+            window="status",
+            description="periodically show serve-manager status",
+            command=(
+                "while true; do "
+                "clear; "
+                "date; "
+                "GOCACHE=/tmp/go-build go run ./cmd/serve-manager status; "
+                "sleep 5; "
+                "done"
+            ),
+        ),
+        "core": ("stats-poll", "dashboard", "serve-manager-status"),
+        "direct": ("model:qwen36-27b-mtp-ud-q5k-xl", "stats-poll", "dashboard", "serve-manager-status"),
+        "observability": ("stats-poll", "dashboard"),
+        "manager": ("stats-poll", "dashboard", "serve-manager-status"),
+        "swap": ("llama-swap", "stats-poll", "dashboard", "serve-manager-status"),
+        "all": ("llama-swap", "stats-poll", "dashboard", "serve-manager-status"),
+    }
+    for slug in model_slugs():
+        services[slug] = (f"model:{slug}", "stats-poll", "dashboard")
+    return services
+
+
+def model_slugs() -> list[str]:
+    slugs: list[str] = []
+    for path in sorted((ROOT / "models").glob("*.json")):
+        try:
+            data = json.loads(path.read_text())
+        except json.JSONDecodeError:
+            continue
+        slug = data.get("model", {}).get("slug")
+        if isinstance(slug, str) and slug:
+            slugs.append(slug)
+    return slugs
+
+
+def model_service(slug: str) -> Service:
+    port = "8001"
+    safe = safe_name(slug)
+    recommended_env = model_recommended_env(slug)
+    env = {
+        "MODEL_SLUG": slug,
+        "HOST": "127.0.0.1",
+        "PORT": port,
+        "RUN_MODE": "direct",
+    }
+    if recommended_env.get("LLAMA_SERVER_BIN"):
+        env["LLAMA_SERVER_BIN"] = recommended_env["LLAMA_SERVER_BIN"]
+    return Service(
+        name=f"model:{slug}",
+        window=f"model-{safe}"[:32],
+        description=f"run direct worker for model slug {slug}",
+        env=env,
+        command=f"./support/model-service {shell_quote(slug)} {shell_quote(port)}",
+    )
+
+
+def model_recommended_env(slug: str) -> dict[str, str]:
+    for path in sorted((ROOT / "models").glob("*.json")):
+        try:
+            data = json.loads(path.read_text())
+        except json.JSONDecodeError:
+            continue
+        if data.get("model", {}).get("slug") != slug:
+            continue
+        recommended_env = data.get("launcher", {}).get("recommended_env", {})
+        if isinstance(recommended_env, dict):
+            return {
+                str(key): str(value)
+                for key, value in recommended_env.items()
+                if isinstance(key, str) and value is not None
+            }
+    return {}
+
+
+def resolve_target(target: str, registry: dict[str, Service | tuple[str, ...]]) -> Plan:
+    seen: set[str] = set()
+    ordered: list[Service] = []
+
+    def visit(name: str) -> None:
+        if name in seen:
+            return
+        seen.add(name)
+        if name.startswith("model:"):
+            ordered.append(model_service(name.removeprefix("model:")))
+            return
+        entry = registry.get(name)
+        if entry is None:
+            raise KeyError(name)
+        if isinstance(entry, Service):
+            for dep in entry.deps:
+                visit(dep)
+            ordered.append(entry)
+            return
+        for dep in entry:
+            visit(dep)
+
+    visit(target)
+    return Plan(target=target, services=tuple(ordered))
+
+
+def print_targets(registry: dict[str, Service | tuple[str, ...]]) -> None:
+    slugs = model_slugs()
+    slug_set = set(slugs)
+    sets = sorted(
+        name
+        for name, entry in registry.items()
+        if isinstance(entry, tuple) and name not in slug_set
+    )
+    services = sorted(name for name, entry in registry.items() if isinstance(entry, Service))
+    if use_tui():
+        assert console is not None and Table is not None and Panel is not None and box is not None
+        table = Table(title="lm-based targets", box=box.SIMPLE_HEAVY)
+        table.add_column("Kind", style="cyan", no_wrap=True)
+        table.add_column("Name", style="bold")
+        table.add_column("Description")
+        for name in sets:
+            table.add_row("set", name, service_set_description(name))
+        for name in services:
+            service = registry[name]
+            assert isinstance(service, Service)
+            table.add_row("service", name, service.description)
+        for slug in slugs:
+            table.add_row("model", slug, "direct model worker with observability")
+        console.print(Panel(table, title="Available ./up Targets", border_style="cyan"))
+        return
+
+    print("service sets:")
+    for name in sets:
+        print(f"  {name}")
+    print("\nservices:")
+    for name in services:
+        service = registry[name]
+        assert isinstance(service, Service)
+        print(f"  {name:22s} {service.description}")
+    print("\nmodel slugs:")
+    for slug in slugs:
+        print(f"  {slug}")
+
+
+def print_plan(plan: Plan, session: str) -> None:
+    if use_tui():
+        assert console is not None and Table is not None and Panel is not None and box is not None
+        table = Table(box=box.SIMPLE_HEAVY)
+        table.add_column("Window", style="cyan", no_wrap=True)
+        table.add_column("Service", style="bold")
+        table.add_column("Description")
+        for service in plan.services:
+            table.add_row(
+                service.window_name,
+                service.name,
+                service.description,
+            )
+        console.print(
+            Panel(
+                table,
+                title=f"Plan: ./up {plan.target}",
+                subtitle=f"tmux session: {session}",
+                border_style="green",
+            )
+        )
+        return
+
+    print(f"session: {session}")
+    print(f"target:  {plan.target}")
+    for service in plan.services:
+        command = service_command(service)
+        print(f"\n[{service.window_name}] {service.name}")
+        print(f"  {service.description}")
+        print(f"  {command}")
+
+
+def print_ensured(plan: Plan, session: str) -> None:
+    if use_tui():
+        assert console is not None and Table is not None and Panel is not None and box is not None
+        table = Table(box=box.SIMPLE_HEAVY)
+        table.add_column("State", style="green", no_wrap=True)
+        table.add_column("Window", style="cyan", no_wrap=True)
+        table.add_column("Service", style="bold")
+        table.add_column("Description")
+        for service in plan.services:
+            table.add_row("ensured", service.window_name, service.name, service.description)
+        console.print(
+            Panel(
+                table,
+                title=f"tmux session: {session}",
+                subtitle=f"attach: tmux attach -t {session}",
+                border_style="green",
+            )
+        )
+        return
+
+    print(f"tmux session: {session}")
+    print("ensured windows:")
+    for service in plan.services:
+        print(f"  {service.window_name:22s} {service.description}")
+    print(f"attach: tmux attach -t {session}")
+
+
+def print_error(message: str) -> None:
+    if use_tui():
+        assert console is not None
+        console.print(f"[bold red]error:[/] {message}", file=sys.stderr)
+    else:
+        print(f"error: {message}", file=sys.stderr)
+
+
+def service_command(service: Service) -> str:
+    env = " ".join(f"{key}={value}" for key, value in service.env.items())
+    return f"{env} {service.command}".strip()
+
+
+def service_set_description(name: str) -> str:
+    return {
+        "core": "core services: stats, dashboard, status",
+        "direct": "default direct model worker plus core services",
+        "observability": "stats and dashboard only",
+        "manager": "core manager-facing services",
+        "swap": "llama-swap plus core services",
+        "all": "all currently managed service windows",
+    }.get(name, "")
+
+
+def use_tui() -> bool:
+    return console is not None and sys.stdout.isatty()
+
+
+def ensure_session(session: str) -> None:
+    if tmux_ok(["has-session", "-t", session]):
+        return
+    run_tmux(["new-session", "-d", "-s", session, "-n", "control"])
+    run_tmux(["send-keys", "-t", f"{session}:control", "printf 'lm-based tmux control window\\n'; exec $SHELL", "C-m"])
+
+
+def start_service(session: str, service: Service, restart: bool) -> None:
+    target = f"{session}:{service.window_name}"
+    if tmux_ok(["list-windows", "-t", session, "-F", "#{window_name}"], capture=True, match=service.window_name):
+        if not restart:
+            return
+        run_tmux(["kill-window", "-t", target])
+
+    env_prefix = " ".join(f"{key}={shell_quote(value)}" for key, value in service.env.items())
+    command = f"{env_prefix} {service.command}".strip()
+    shim_command = (
+        f"LM_BASED_ROOT={shell_quote(str(ROOT))} "
+        f"{shell_quote(str(SHIM))} {shell_quote(service.name)} -- "
+        f"bash -lc {shell_quote(command)}"
+    )
+    pane_script = (
+        f"{shim_command}; "
+        "service_status=$?; "
+        "printf '\\nservice exited with status %s; press Ctrl-D to close this pane\\n' \"$service_status\"; "
+        "exec \"${SHELL:-/bin/sh}\""
+    )
+    run_tmux(["new-window", "-t", session, "-n", service.window_name, f"bash -lc {shell_quote(pane_script)}"])
+
+
+def tmux_ok(args: list[str], *, capture: bool = False, match: str | None = None) -> bool:
+    result = subprocess.run(["tmux", *args], text=True, capture_output=True)
+    if result.returncode != 0:
+        return False
+    if match is not None:
+        return match in result.stdout.splitlines()
+    return True
+
+
+def run_tmux(args: list[str]) -> None:
+    subprocess.run(["tmux", *args], check=True)
+
+
+def shell_quote(value: str) -> str:
+    return "'" + value.replace("'", "'\"'\"'") + "'"
+
+
+def safe_name(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "-", value).strip("-")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

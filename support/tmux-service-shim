@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+if [[ $# -lt 2 ]]; then
+  echo "usage: tmux-service-shim <service-name> -- <command> [args...]" >&2
+  exit 2
+fi
+
+service_name="$1"
+shift
+if [[ "${1:-}" == "--" ]]; then
+  shift
+fi
+if [[ $# -eq 0 ]]; then
+  echo "tmux-service-shim: missing command for ${service_name}" >&2
+  exit 2
+fi
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="${LM_BASED_ROOT:-$(cd "${script_dir}/.." && pwd)}"
+runtime_dir="${LM_BASED_SERVICE_RUNTIME:-${repo_root}/.runtime/tmux/services/${service_name}}"
+log_path="${runtime_dir}/${service_name}.log"
+status_path="${runtime_dir}/status"
+pid_path="${runtime_dir}/shim.pid"
+exit_path="${runtime_dir}/last-exit"
+
+mkdir -p "${runtime_dir}"
+
+timestamp() {
+  date -u "+%Y-%m-%dT%H:%M:%SZ"
+}
+
+write_status() {
+  printf "%s %s\n" "$(timestamp)" "$1" >"${status_path}"
+}
+
+cleanup() {
+  local status=$?
+  printf "%s exit status=%s service=%s\n" "$(timestamp)" "${status}" "${service_name}" | tee -a "${log_path}"
+  printf "%s\n" "${status}" >"${exit_path}"
+  write_status "exited status=${status}"
+}
+
+trap cleanup EXIT
+trap 'write_status "signalled SIGINT"; exit 130' INT
+trap 'write_status "signalled SIGTERM"; exit 143' TERM
+
+cd "${repo_root}" || exit 1
+printf "%s\n" "$$" >"${pid_path}"
+write_status "running"
+
+{
+  printf "%s start service=%s cwd=%s\n" "$(timestamp)" "${service_name}" "${repo_root}"
+  printf "%s command:" "$(timestamp)"
+  printf " %q" "$@"
+  printf "\n"
+} | tee -a "${log_path}"
+
+set +e
+"$@" 2>&1 | tee -a "${log_path}"
+command_status=${PIPESTATUS[0]}
+set -e
+
+exit "${command_status}"
