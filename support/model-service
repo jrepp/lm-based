@@ -46,7 +46,11 @@ for mid in acceptable_model_ids(sys.argv[1], sys.argv[2], sys.argv[3]):
 ' "$models_dir" "$slug" "$repo_root"
 }
 
-mapfile -t ACCEPT < <(acceptable_ids 2>/dev/null || true)
+# Populate ACCEPT without bash 4+ mapfile (macOS ships bash 3.2).
+ACCEPT=()
+while IFS= read -r line; do
+  ACCEPT+=("$line")
+done < <(acceptable_ids 2>/dev/null || true)
 if [[ ${#ACCEPT[@]} -eq 0 ]]; then
   ACCEPT=("$slug")
 fi
