@@ -1,7 +1,8 @@
 #!/usr/bin/env -S uv run --script
 # /// script
-# requires-python = ">=3.11,<3.14"
+# requires-python = ">=3.14"
 # ///
+
 """Sampler-defaults reverse proxy for local OpenAI-compatible servers.
 
 Injects sampling defaults (e.g. ``repetition_penalty``) into
