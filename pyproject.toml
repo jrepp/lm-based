@@ -1,0 +1,19 @@
+[project]
+name = "lm-based"
+version = "1.0.0"
+description = "Local LLM serving stack: model artifacts, launcher, routing, and observability."
+requires-python = ">=3.14"
+dependencies = [
+    "pydantic>=2.11,<3",
+    "pydantic-settings>=2.10,<3",
+    "huggingface-hub>=0.34,<1",
+    "pyyaml>=6,<7",
+    "rich>=13.9,<15",
+]
+
+# Virtual project: uv manages the environment and lockfile, but lm_launcher and
+# llama_swap are not built/installed — entry scripts import them from the repo
+# root (their cwd). Backend runtimes (mlx_lm, transformers) are spawned
+# transiently via `uv run --with ...` and are intentionally not project deps.
+[tool.uv]
+package = false
