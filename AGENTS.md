@@ -144,3 +144,49 @@ Before publishing doc-heavy changes, run:
 ```bash
 pre-commit run --all-files
 ```
+
+## docs-cms (docuchango)
+
+Decision records, proposals, and notes live in the `docs-cms/` micro-CMS, kept
+separate from the `docs/` reference tree. It is managed with
+[docuchango](https://github.com/jrepp/docuchango).
+
+Document types (templates in `docs-cms/templates/`):
+
+| Type | When |
+| --- | --- |
+| ADR | a decision has been made or is being proposed |
+| RFC | a proposal or design needs review before implementation |
+| Memo | investigation results, status, meeting outcomes |
+| PRD | product requirements |
+
+Workflow:
+
+1. Copy the matching template into its folder (`adr/`, `rfcs/`, `memos/`, `prd/`).
+2. Fill the frontmatter; generate a fresh `doc_uuid`
+   (`python -c "import uuid; print(uuid.uuid4())"`) and set `project_id: lm-based`.
+3. Keep each document atomic (one decision or topic).
+4. Validate (see below), then commit using this repo's commit style.
+
+`docuchango validate` requires Python >= 3.10. The system install targets
+Python 3.9 and is broken (`TypeGuard` import), so always run it through uv:
+
+```bash
+uv run --python 3.11 --with docuchango==1.17.1 docuchango validate
+```
+
+The pre-commit `markdownlint-cli2` hook covers `docs/`, `README.md`, `AGENTS.md`,
+and `CLAUDE.md`. `docs-cms/` is governed by `docuchango validate` instead:
+docuchango's templates use per-section `#` headings, which conflict with
+markdownlint's single-H1 (MD025) rule. The pre-commit trailing-whitespace and
+end-of-file fixers still run on all Markdown.
+
+Agent guardrails (see `docuchango bootstrap --guide agent` for detail):
+
+- Propose, don't decide: create ADRs as `Proposed` and RFCs as `Draft` for human
+  review. Do not mark your own proposals `Accepted` without review.
+- Reference existing decisions when implementing (`per ADR-00X ...`).
+- The docuchango agent guide recommends Conventional Commits (`feat:` / `fix:`)
+  with AI trailers and semantic-release versioning. **That does not apply here**
+  — this repo uses plain imperative summaries with no trailers (see Commit
+  style). Only the documentation workflow above applies.
