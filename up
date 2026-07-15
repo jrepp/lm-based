@@ -173,6 +173,17 @@ def build_registry() -> dict[str, Service | tuple[str, ...]]:
                 "done"
             ),
         ),
+        "sampler-proxy": Service(
+            name="sampler-proxy",
+            window="sampler",
+            description="inject sampler defaults (repetition_penalty) in front of the :8001 worker",
+            env={
+                "UPSTREAM": "http://127.0.0.1:8001",
+                "LISTEN": "127.0.0.1:8002",
+                "REPETITION_PENALTY": "1.15",
+            },
+            command="./support/sampler-proxy",
+        ),
         "core": ("stats-poll", "dashboard", "serve-manager-status"),
         "direct": ("model:qwen36-27b-mtp-ud-q5k-xl", "stats-poll", "dashboard", "serve-manager-status"),
         "observability": ("stats-poll", "dashboard"),
@@ -181,7 +192,11 @@ def build_registry() -> dict[str, Service | tuple[str, ...]]:
         "all": ("llama-swap", "stats-poll", "dashboard", "serve-manager-status"),
     }
     for slug in model_slugs():
-        services[slug] = (f"model:{slug}", "stats-poll", "dashboard")
+        members: list[str] = [f"model:{slug}"]
+        if is_mlx_model(slug):
+            members.append("sampler-proxy")
+        members += ["stats-poll", "dashboard"]
+        services[slug] = tuple(members)
     return services
 
 
@@ -196,6 +211,19 @@ def model_slugs() -> list[str]:
         if isinstance(slug, str) and slug:
             slugs.append(slug)
     return slugs
+
+
+def is_mlx_model(slug: str) -> bool:
+    """True if the sidecar for ``slug`` is an MLX artifact (needs the sampler proxy)."""
+    for path in sorted((ROOT / "models").glob("*.json")):
+        try:
+            data = json.loads(path.read_text())
+        except json.JSONDecodeError:
+            continue
+        if data.get("model", {}).get("slug") == slug:
+            fmt = (data.get("artifact", {}).get("format") or "").lower()
+            return fmt == "mlx"
+    return False
 
 
 def model_service(slug: str) -> Service:

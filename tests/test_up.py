@@ -42,6 +42,21 @@ class UpResolverTests(unittest.TestCase):
             "/Users/jrepp/d/llama.cpp/build/bin/llama-server",
         )
 
+    def test_mlx_slug_includes_sampler_proxy(self) -> None:
+        registry = self.up.build_registry()
+        slug = "ternary-bonsai-27b-mlx-2bit"
+        plan = self.up.resolve_target(slug, registry)
+        self.assertEqual(
+            [service.name for service in plan.services],
+            [f"model:{slug}", "sampler-proxy", "stats-poll", "dashboard"],
+        )
+
+    def test_gguf_slug_omits_sampler_proxy(self) -> None:
+        registry = self.up.build_registry()
+        slug = "qwen36-27b-mtp-ud-q5k-xl"
+        plan = self.up.resolve_target(slug, registry)
+        self.assertNotIn("sampler-proxy", [service.name for service in plan.services])
+
     def test_direct_service_set_includes_status_window(self) -> None:
         registry = self.up.build_registry()
         plan = self.up.resolve_target("direct", registry)
