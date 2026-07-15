@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import os
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -11,6 +11,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 MODELS_DIR = PROJECT_ROOT / "models"
 DEFAULT_LISTEN = "127.0.0.1:8080"
 DEFAULT_PORT_START = 10001
+_HOT_DEFAULT = object()
 
 
 @dataclass
@@ -86,7 +87,6 @@ def _build_run_server_cmd(slug: str, port: int) -> str:
 
 
 def _sidecar_to_model_config(sidecar_path: Path, port: int) -> ModelConfig | None:
-    import json
     with sidecar_path.open(encoding="utf-8") as f:
         rec = json.load(f)
 
@@ -94,8 +94,6 @@ def _sidecar_to_model_config(sidecar_path: Path, port: int) -> ModelConfig | Non
     model = rec.get("model", {})
     launcher = rec.get("launcher", {})
     recommended_env = launcher.get("recommended_env", {})
-    download = rec.get("download", {})
-    source = rec.get("source", {})
 
     slug = model.get("slug", "")
     if not slug:
@@ -153,16 +151,45 @@ class LlamaSwapConfig:
         return d
 
 
-def build_config(models_dir: Path = MODELS_DIR) -> LlamaSwapConfig:
+def _read_enabled_slugs(policy_path: Path | None = None) -> set[str] | None:
+    """The 'hot' model slugs the operator declared available in serve-policy.yaml.
+
+    Returns the enabled slug set, or None when there is no policy / no enabled
+    list (meaning: no hot filter, include every model).
+    """
+    if policy_path is None:
+        policy_path = PROJECT_ROOT / "serve-policy.yaml"
+    try:
+        policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    enabled = policy.get("models", {}).get("enabled")
+    if not isinstance(enabled, list) or not enabled:
+        return None
+    return {str(slug) for slug in enabled}
+
+
+def build_config(
+    models_dir: Path = MODELS_DIR,
+    hot_slugs: set[str] | None | object = _HOT_DEFAULT,
+) -> LlamaSwapConfig:
     cfg = LlamaSwapConfig()
     sidecars = sorted(models_dir.glob("*.json"))
-    port = DEFAULT_PORT_START
 
+    if hot_slugs is _HOT_DEFAULT:
+        hot: set[str] | None = _read_enabled_slugs()
+    else:
+        hot = hot_slugs  # None -> every model; a set -> filter to those slugs
+
+    port = DEFAULT_PORT_START
     for sc in sidecars:
         mc = _sidecar_to_model_config(sc, port)
-        if mc:
-            cfg.models[mc.model_id] = mc
-            port += 1
+        if mc is None:
+            continue
+        if hot is not None and mc.model_id not in hot:
+            continue
+        cfg.models[mc.model_id] = mc
+        port += 1
 
     return cfg
 
