@@ -35,6 +35,22 @@ class ServerSettingsModelIndexTests(unittest.TestCase):
 
         self.assertEqual(settings.llama_server_bin, "/tmp/custom-llama-server")
 
+    def test_mlx_slug_resolves_mlx_bonsai_profile_and_anchor(self) -> None:
+        settings = ServerSettings(
+            model_slug="ternary-bonsai-27b-mlx-2bit",
+            enable_run_capture=False,
+        )
+
+        self.assertEqual(settings.profile, "mlx-bonsai")
+        self.assertEqual(settings.alias, "ternary-bonsai-27b-mlx-2bit")
+        self.assertEqual(settings.ctx_size, 262144)
+        self.assertEqual(settings.temperature, 0.7)
+        self.assertEqual(settings.top_p, 0.95)
+        self.assertEqual(settings.top_k, 20)
+        # config.json is the directory anchor; mlx_lm serves its parent.
+        self.assertEqual(settings.model_path.name, "config.json")
+        self.assertEqual(settings.model_path.parent.name, "Ternary-Bonsai-27B-MLX-2bit")
+
 
 if __name__ == "__main__":
     unittest.main()

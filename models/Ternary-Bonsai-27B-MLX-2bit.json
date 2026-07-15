@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-07-15",
+  "artifact": {
+    "filename": "config.json",
+    "local_path": "Ternary-Bonsai-27B-MLX-2bit/config.json",
+    "format": "mlx",
+    "quantization": "2-bit ternary g128",
+    "size_bytes": null,
+    "sha256": null
+  },
+  "model": {
+    "slug": "ternary-bonsai-27b-mlx-2bit",
+    "family": "Qwen3.6",
+    "name": "Ternary-Bonsai-27B-MLX-2bit",
+    "canonical_model_card": "https://huggingface.co/prism-ml/Ternary-Bonsai-27B-mlx-2bit"
+  },
+  "source": {
+    "gguf_model_card": "https://huggingface.co/prism-ml/Ternary-Bonsai-27B-mlx-2bit",
+    "publisher": "prism-ml",
+    "provenance_status": "planned_download"
+  },
+  "download": {
+    "provider": "huggingface",
+    "repo_id": "prism-ml/Ternary-Bonsai-27B-mlx-2bit",
+    "repo_type": "model",
+    "snapshot": true,
+    "allow_patterns": [
+      "README.md",
+      "LICENSE.txt",
+      "NOTICE.txt",
+      "config.json",
+      "model.safetensors",
+      "model.safetensors.index.json",
+      "tokenizer.json",
+      "tokenizer_config.json",
+      "vocab.json",
+      "merges.txt",
+      "chat_template.jinja",
+      "preprocessor_config.json",
+      "processor_config.json",
+      "video_preprocessor_config.json"
+    ],
+    "revision": null
+  },
+  "launcher": {
+    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "profile": "mlx-bonsai",
+    "recommended_env": {
+      "MODEL_FILE": "Ternary-Bonsai-27B-MLX-2bit",
+      "PROFILE": "mlx-bonsai"
+    }
+  },
+  "notes": [
+    "Qwen3.6-27B-derived ternary model (~1.71 bits/weight, group 128) for Apple MLX.",
+    "Architecture is qwen3_5 with hybrid attention (~75% linear / 25% full); 262144-token context.",
+    "Ternary 2-bit runs on stock mlx_lm; only the 1-bit binary variant needs the PrismML MLX fork.",
+    "The vision tower is bundled in model.safetensors and loads only on image input.",
+    "Verification gate: a recent mlx_lm must ship the qwen3_5 hybrid-attention loader.",
+    "Design rationale: docs-cms/adr/adr-004-mlx-serving-via-mlx-lm.md"
+  ]
+}

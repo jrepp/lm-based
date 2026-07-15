@@ -26,6 +26,8 @@ def infer_profile(model_name: str, requested: str) -> str:
         return "gemma4"
     if "ouro" in lowered:
         return "ouro"
+    if "bonsai" in lowered and "mlx" in lowered:
+        return "mlx-bonsai"
     return "generic"
 
 
@@ -141,6 +143,20 @@ def profile_defaults(profile: str, model_name: str) -> dict[str, object]:
                 "ubatch_size": 128,
                 "temperature": 0.7,
                 "top_p": 1.0,
+            }
+        )
+
+    if profile == "mlx-bonsai":
+        # Ternary Bonsai 27B (Qwen3.6-27B-derived, qwen3_5 hybrid attention)
+        # served via mlx_lm.server on Apple Silicon. Sampler defaults are the
+        # upstream thinking-mode best practices (temp 0.7 / top-p 0.95 / top-k 20).
+        # ctx_size is metadata only; mlx_lm grows the KV cache to fit.
+        defaults.update(
+            {
+                "ctx_size": 262144,
+                "temperature": 0.7,
+                "top_p": 0.95,
+                "top_k": 20,
             }
         )
 
