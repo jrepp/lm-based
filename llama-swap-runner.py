@@ -1,10 +1,4 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.11,<3.14"
-# dependencies = [
-#   "pyyaml",
-# ]
-# ///
+#!/usr/bin/env -S uv run
 
 """
 Standalone runner for llama-swap CLI.

@@ -1,7 +1,4 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.11,<3.14"
-# ///
+#!/usr/bin/env -S uv run
 """
 Generate and inspect routing config from model sidecars.
 

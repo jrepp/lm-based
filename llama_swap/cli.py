@@ -1,11 +1,3 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.11,<3.14"
-# dependencies = [
-#   "pyyaml",
-# ]
-# ///
-
 from __future__ import annotations
 
 import argparse

@@ -1,7 +1,4 @@
-#!/usr/bin/env -S uv run --python 3.11 --script
-# /// script
-# requires-python = ">=3.11,<3.14"
-# ///
+#!/usr/bin/env -S uv run
 
 from __future__ import annotations
 

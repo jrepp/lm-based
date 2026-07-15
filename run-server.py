@@ -1,13 +1,5 @@
 #!/usr/bin/env -S uv run
 
-# /// script
-# requires-python = ">=3.11,<3.14"
-# dependencies = [
-#   "pydantic>=2.11,<3",
-#   "pydantic-settings>=2.10,<3",
-# ]
-# ///
-
 from __future__ import annotations
 
 import os
