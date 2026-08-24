@@ -31,7 +31,7 @@ llama_swap/config.build_config()     <-- filters sidecars to enabled slugs
 llama-swap.yaml                      <-- only hot models present
         |
         v
-llama-swap :8080/v1/models           <-- clients dynamically query hot models
+llama-swap :8081/v1/models           <-- clients dynamically query hot models
 ```
 
 `llama_swap/config.py:build_config` reads `serve-policy.yaml` and includes only
@@ -82,7 +82,7 @@ demand.
 {
   "providers": {
     "local-swap": {
-      "baseUrl": "http://127.0.0.1:8080/v1",
+      "baseUrl": "http://127.0.0.1:8081/v1",
       "api": "openai-completions",
       "apiKey": "local",
       "compat": {
@@ -116,12 +116,27 @@ demand.
 ### Dynamic discovery (optional)
 
 Instead of maintaining the model list by hand, a tiny pi extension can fetch
-`http://127.0.0.1:8080/v1/models` at startup and register whatever the hot set
+`http://127.0.0.1:8081/v1/models` at startup and register whatever the hot set
 currently contains — see the pi
-[custom-provider docs](https://github.com/earendil-works/pi-coding-agent/blob/main/docs/custom-provider.md)
+[custom-provider docs](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/custom-provider.md)
 (async factory pattern). This is the fullest form of "dynamic querying of the
 hot models": the client never hardcodes a model list; it reflects whatever the
 operator enabled.
+
+## OpenCode configuration (dynamic bootstrap)
+
+Released OpenCode versions require explicit entries for custom-provider models. Use the
+repository bootstrap to query llama-swap and generate those entries from the live hot set:
+
+```bash
+./up swap
+./opencode-local
+```
+
+The generated config is written under `.runtime/opencode/`, layered over the global
+OpenCode config with `OPENCODE_CONFIG`, and rebuilt on every invocation. Absolute paths or
+IDs without matching sidecar slugs are rejected. See
+[../opencode-local-models.md](../opencode-local-models.md) for the full example.
 
 ## Status: hot vs all
 
@@ -136,7 +151,8 @@ client-facing `/v1/models`.)
 
 The direct path ([../pi-local-model.md](../pi-local-model.md)) serves one model
 at a time on `:8001` through the sampler proxy, and is simplest for driving a
-single model. The routed path here serves many models through one provider on
-`:8080`, selected by model name. The sampler-proxy concern (repetition penalty
+single model. The routed path here serves many models through one provider on the
+policy-owned `swap_listen` address (`:8081` currently), selected by model name. The
+sampler-proxy concern (repetition penalty
 for low-bit MLX) is specific to the direct MLX path; routed MLX models would
 need the same treatment applied at the proxy edge.

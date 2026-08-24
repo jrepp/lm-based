@@ -35,6 +35,7 @@ class HotModelsConfigTests(unittest.TestCase):
     def test_hot_filter_restricts_to_enabled_slugs(self) -> None:
         cfg = build_config(models_dir=self.models, hot_slugs={"test-a"})
         self.assertEqual(set(cfg.models), {"test-a"})
+        self.assertIn("PORT=${PORT}", cfg.models["test-a"].cmd)
 
     def test_hot_filter_with_only_unknown_slugs_yields_empty(self) -> None:
         cfg = build_config(models_dir=self.models, hot_slugs={"does-not-exist"})

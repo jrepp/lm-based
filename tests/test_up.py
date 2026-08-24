@@ -73,6 +73,12 @@ class UpResolverTests(unittest.TestCase):
             ["model-qwen36-27b-mtp-ud-q5k-xl", "stats", "dashboard", "status"],
         )
 
+    def test_swap_uses_policy_internal_listen_address(self) -> None:
+        registry = self.up.build_registry()
+        plan = self.up.resolve_target("llama-swap", registry)
+
+        self.assertIn("--listen '127.0.0.1:8081'", plan.services[0].command)
+
     def test_default_core_service_set_excludes_model_worker(self) -> None:
         registry = self.up.build_registry()
         plan = self.up.resolve_target("core", registry)

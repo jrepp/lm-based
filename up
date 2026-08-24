@@ -20,6 +20,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from lm_launcher.service_endpoints import swap_listen
+
 try:
     from rich import box
     from rich.console import Console
@@ -146,6 +148,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def build_registry() -> dict[str, Service | tuple[str, ...]]:
+    swap_address = swap_listen()
     services: dict[str, Service | tuple[str, ...]] = {
         "stats-poll": Service(
             name="stats-poll",
@@ -183,7 +186,7 @@ def build_registry() -> dict[str, Service | tuple[str, ...]]:
                 "&& ./llama-swap-runner.py config --output .runtime/tmux/generated/llama-swap.yaml "
                 "&& ./llama-swap-runner.py start "
                 "--config .runtime/tmux/generated/llama-swap.yaml "
-                "--listen 127.0.0.1:8080 "
+                f"--listen {shell_quote(swap_address)} "
                 "--watch-config"
             ),
         ),

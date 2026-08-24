@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from lm_launcher.profiles import profile_defaults
+from lm_launcher.service_endpoints import swap_api_base
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -172,7 +173,7 @@ def service_state(session: str, services: frozenset[str]) -> ServiceState:
             raise BootstrapError("sampler proxy is running without exactly one owned model service")
         endpoint = "http://127.0.0.1:8002/v1"
     elif "llama-swap" in services:
-        endpoint = "http://127.0.0.1:8080/v1"
+        endpoint = swap_api_base()
     elif len(model_slugs) == 1:
         endpoint = "http://127.0.0.1:8001/v1"
     elif not services:
@@ -246,7 +247,8 @@ def resolve_sidecars(
 
 def model_supports_reasoning(sidecar: Sidecar) -> bool:
     evidence = " ".join((sidecar.name, *sidecar.notes)).lower()
-    return sidecar.profile == "mlx-bonsai" or "thinking" in evidence
+    reasoning_profiles = {"mlx-bonsai", "qwen3.6", "qwen3.6-mtp"}
+    return sidecar.profile in reasoning_profiles or "thinking" in evidence
 
 
 def pi_model(sidecar: Sidecar) -> dict[str, Any]:

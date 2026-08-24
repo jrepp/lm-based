@@ -33,8 +33,8 @@ Handles concurrent models via a solver, with zero custom config per model.
 
 # 3. Start the proxy
 ./llama-swap-runner.py start
-# → proxy available at http://127.0.0.1:8080
-# → UI at http://127.0.0.1:8080/ui
+# → proxy available at the serve-policy ingress.swap_listen address (:8081 currently)
+# → UI at http://127.0.0.1:8081/ui
 
 # Or via just:
 just swap-ensure
@@ -74,7 +74,9 @@ $EDITOR .env   # set MODEL_SLUG
 
 ## Connect a client
 
-**Any OpenAI-compatible client** — point it at `http://127.0.0.1:8080/v1` (llama-swap) or `http://127.0.0.1:8001/v1` (direct).
+**Any OpenAI-compatible client** — point it at the policy-owned llama-swap endpoint
+(`http://127.0.0.1:8081/v1` in the current `serve-policy.yaml`) or
+`http://127.0.0.1:8001/v1` for a direct backend.
 
 Bootstrap [Pi](https://github.com/earendil-works/pi) from the running local
 service and launch it against the verified model:
@@ -90,13 +92,26 @@ service and launch it against the verified model:
 `/v1/models`, and merges an `lm-based` provider into Pi's local configuration. It preserves
 unrelated providers and settings.
 
+Launch OpenCode with the live llama-swap hot-model set:
+
+```bash
+./up swap
+./opencode-local
+# one-shot OpenCode invocation
+./opencode-local run "Explain this repository"
+```
+
+`./opencode-local` queries the routed provider on every launch, rejects filesystem-path
+model IDs, and generates an ephemeral provider config without modifying the user's global
+OpenCode configuration. See [docs/opencode-local-models.md](docs/opencode-local-models.md).
+
 **open-webui** (Docker):
 
 ```bash
 docker run -d --name open-webui --restart always \
   -p 3000:8080 \
   --add-host=host.docker.internal:host-gateway \
-  -e OPENAI_API_BASE_URL=http://host.docker.internal:8080/v1 \
+  -e OPENAI_API_BASE_URL=http://host.docker.internal:8081/v1 \
   -e OPENAI_API_KEY=dummy \
   -v open-webui:/app/backend/data \
   ghcr.io/open-webui/open-webui:main
@@ -149,7 +164,7 @@ pip install pre-commit && pre-commit install
 # llama-swap (hot-swap proxy)
 ./llama-swap-runner.py ensure   # install binary
 ./llama-swap-runner.py config   # generate yaml from sidecars
-./llama-swap-runner.py start    # launch proxy on :8080
+./llama-swap-runner.py start    # launch on serve-policy ingress.swap_listen
 ./llama-swap-runner.py status   # show loaded models
 ./llama-swap-runner.py logs     # stream logs
 
@@ -160,6 +175,10 @@ MODEL_SLUG=<slug> ./run-server.py  # override model
 # Pi agent against the running local service
 ./pi-local                         # configure and launch Pi
 ./pi-local --configure-only        # update Pi configuration only
+
+# OpenCode against dynamically discovered hot models
+./opencode-local                   # discover, configure, and launch
+./opencode-local --dry-run         # inspect the generated provider
 
 # Routing / cloud config
 ./route-config.py             # regenerate clawrouter.json
@@ -185,6 +204,7 @@ Markdown lint guardrails are enforced through `.pre-commit-config.yaml` using `m
 | `llama_swap/` | Python package: llama-swap binary install, YAML config generation, wrapper |
 | `run-server.py` | Entry point for direct llama-server mode |
 | `pi-local` | Bootstrap Pi from verified local service state and launch it |
+| `opencode-local` | Discover llama-swap hot models and launch OpenCode |
 | `llama-swap-runner.py` | Entrypoint for llama-swap proxy mode |
 | `route-config.py` | Generate and inspect routing config |
 | `.env.example` | Template for all environment variables |
@@ -201,6 +221,7 @@ Markdown lint guardrails are enforced through `.pre-commit-config.yaml` using `m
 | [docs/credentials.md](docs/credentials.md) | Two-tier credential model: direct API keys vs x402 proxy |
 | [docs/clawrouter-operations.md](docs/clawrouter-operations.md) | ClawRouter CLI reference |
 | [docs/open-webui-local-server.md](docs/open-webui-local-server.md) | Connecting open-webui to the local server |
+| [docs/opencode-local-models.md](docs/opencode-local-models.md) | Dynamic hot-model discovery for OpenCode |
 | [docs/openai-api-explainer.md](docs/openai-api-explainer.md) | In-depth guide to OpenAI API shapes: responses, chat/completions, streaming, tools, embeddings |
 | [docs/embedding-model-research-brief.md](docs/embedding-model-research-brief.md) | Hugging Face research brief on local embedding model options and recommendation |
 | [docs/model-card-index.md](docs/model-card-index.md) | Model registry with upstream card links |

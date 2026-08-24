@@ -35,6 +35,11 @@ class PiBootstrapTests(unittest.TestCase):
         self.assertEqual(state.endpoint, "http://127.0.0.1:8002/v1")
         self.assertEqual(state.model_slugs, ("demo",))
 
+    def test_swap_service_selects_policy_internal_endpoint(self) -> None:
+        state = pi_bootstrap.service_state("lm-based", frozenset({"llama-swap"}))
+
+        self.assertEqual(state.endpoint, "http://127.0.0.1:8081/v1")
+
     def test_running_services_requires_owned_live_shim(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             service = Path(temporary) / "model:demo"
@@ -107,6 +112,11 @@ class PiBootstrapTests(unittest.TestCase):
             provider["models"][0]["compat"]["thinkingFormat"],
             "qwen-chat-template",
         )
+
+    def test_qwen36_profile_is_marked_as_reasoning(self) -> None:
+        sidecar = pi_bootstrap.load_sidecars()["qwen36-27b-q6k"]
+
+        self.assertTrue(pi_bootstrap.model_supports_reasoning(sidecar))
 
     def test_configuration_preserves_unrelated_pi_settings(self) -> None:
         sidecar = pi_bootstrap.load_sidecars()["ternary-bonsai-27b-mlx-2bit"]

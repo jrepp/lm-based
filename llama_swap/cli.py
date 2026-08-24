@@ -7,6 +7,7 @@ from pathlib import Path
 from llama_swap.bin import download_url, ensure_binary, find_binary, install_binary
 from llama_swap.config import build_config, config_to_yaml, write_config
 from llama_swap.wrapper import LlamaSwap
+from lm_launcher.service_endpoints import swap_listen
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -43,9 +44,8 @@ def cmd_config(argv: list[str]) -> int:
 def cmd_start(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="llama-swap start")
     parser.add_argument("--config", type=Path)
-    parser.add_argument("--listen", default="127.0.0.1:8080")
+    parser.add_argument("--listen", default=swap_listen())
     parser.add_argument("--watch-config", action="store_true")
-    parser.add_argument("--log-level", default="info")
     parser.add_argument("--timeout", type=float, default=30.0)
     args = parser.parse_args(argv)
 
@@ -59,7 +59,6 @@ def cmd_start(argv: list[str]) -> int:
         config_path=config_path,
         listen=args.listen,
         watch_config=args.watch_config,
-        log_level=args.log_level,
     )
     try:
         swap.start(wait_ready=True, timeout=args.timeout)
@@ -78,7 +77,7 @@ def cmd_start(argv: list[str]) -> int:
 
 def cmd_status(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="llama-swap status")
-    parser.add_argument("--listen", default="127.0.0.1:8080")
+    parser.add_argument("--listen", default=swap_listen())
     args = parser.parse_args(argv)
     swap = LlamaSwap(listen=args.listen)
     running = swap.running_models()
@@ -86,14 +85,14 @@ def cmd_status(argv: list[str]) -> int:
         print("No models currently loaded.")
     else:
         print(f"{len(running)} model(s) loaded:")
-        for m in running:
-            print(f"  {m.get('id', '?')}")
+        for model_id in running:
+            print(f"  {model_id}")
     return 0
 
 
 def cmd_logs(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="llama-swap logs")
-    parser.add_argument("--listen", default="127.0.0.1:8080")
+    parser.add_argument("--listen", default=swap_listen())
     parser.add_argument("--stream", action="store_true")
     parser.add_argument("--model")
     args = parser.parse_args(argv)

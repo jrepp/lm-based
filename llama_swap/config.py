@@ -9,7 +9,6 @@ import yaml
 
 PROJECT_ROOT = Path(__file__).parent.parent
 MODELS_DIR = PROJECT_ROOT / "models"
-DEFAULT_LISTEN = "127.0.0.1:8080"
 DEFAULT_PORT_START = 10001
 _HOT_DEFAULT = object()
 
@@ -72,12 +71,12 @@ def _shell_quote(value: str) -> str:
     return "'" + value.replace("'", """'"'"'""") + "'"
 
 
-def _build_run_server_cmd(slug: str, port: int) -> str:
+def _build_run_server_cmd(slug: str) -> str:
     worker_id = f"swap-{slug}"
     parts = [
         f"MODEL_SLUG={_shell_quote(slug)}",
         "HOST=127.0.0.1",
-        f"PORT={port}",
+        "PORT=${PORT}",
         "RUN_MODE=swap_worker",
         f"SUPERVISOR_WORKER_ID={_shell_quote(worker_id)}",
         "ENABLE_RUN_CAPTURE=0",
@@ -86,7 +85,7 @@ def _build_run_server_cmd(slug: str, port: int) -> str:
     return " ".join(parts)
 
 
-def _sidecar_to_model_config(sidecar_path: Path, port: int) -> ModelConfig | None:
+def _sidecar_to_model_config(sidecar_path: Path) -> ModelConfig | None:
     with sidecar_path.open(encoding="utf-8") as f:
         rec = json.load(f)
 
@@ -104,7 +103,7 @@ def _sidecar_to_model_config(sidecar_path: Path, port: int) -> ModelConfig | Non
     if fmt not in {"gguf", "safetensors"} and profile != "ouro":
         return None
 
-    cmd = _build_run_server_cmd(slug, port)
+    cmd = _build_run_server_cmd(slug)
 
     name = artifact.get("quantization") or ""
 
@@ -181,15 +180,13 @@ def build_config(
     else:
         hot = hot_slugs  # None -> every model; a set -> filter to those slugs
 
-    port = DEFAULT_PORT_START
     for sc in sidecars:
-        mc = _sidecar_to_model_config(sc, port)
+        mc = _sidecar_to_model_config(sc)
         if mc is None:
             continue
         if hot is not None and mc.model_id not in hot:
             continue
         cfg.models[mc.model_id] = mc
-        port += 1
 
     return cfg
 

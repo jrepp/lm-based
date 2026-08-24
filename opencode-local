@@ -1,0 +1,12 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.14"
+# ///
+
+"""Discover hot lm-based models and launch OpenCode against llama-swap."""
+
+from lm_launcher.opencode_bootstrap import main
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

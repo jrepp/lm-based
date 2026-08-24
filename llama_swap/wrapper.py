@@ -9,21 +9,36 @@ from pathlib import Path
 from typing import Optional
 
 from llama_swap.bin import ensure_binary, find_binary
+from lm_launcher.service_endpoints import swap_listen
+
+
+def _running_model_ids(payload: object) -> list[str]:
+    if isinstance(payload, dict):
+        items = payload.get("running", [])
+    else:
+        items = payload
+    if not isinstance(items, list):
+        return []
+    model_ids: list[str] = []
+    for item in items:
+        if isinstance(item, str) and item:
+            model_ids.append(item)
+        elif isinstance(item, dict) and isinstance(item.get("id"), str):
+            model_ids.append(item["id"])
+    return model_ids
 
 
 class LlamaSwap:
     def __init__(
         self,
         config_path: Path | None = None,
-        listen: str = "127.0.0.1:8080",
+        listen: str = swap_listen(),
         watch_config: bool = False,
-        log_level: str = "info",
         extra_args: list[str] | None = None,
     ):
         self._config_path = config_path or Path("llama-swap.yaml")
         self._listen = listen
         self._watch_config = watch_config
-        self._log_level = log_level
         self._extra_args = extra_args or []
         self._process: Optional[subprocess.Popen[str]] = None
         self._pid: Optional[int] = None
@@ -49,9 +64,6 @@ class LlamaSwap:
 
         if self._watch_config:
             args.append("--watch-config")
-
-        if self._log_level:
-            args.extend(["--log-level", self._log_level])
 
         args.extend(self._extra_args)
         return args
@@ -112,7 +124,7 @@ class LlamaSwap:
     def __exit__(self, *_: object) -> None:
         self.stop()
 
-    def running_models(self) -> list[dict[str, object]]:
+    def running_models(self) -> list[str]:
         import json, urllib.request
         host_port = self._listen.split(":")
         host = host_port[0]
@@ -121,7 +133,7 @@ class LlamaSwap:
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "llama-swap-python/0.1"})
             with urllib.request.urlopen(req, timeout=5.0) as r:
-                return json.loads(r.read())
+                return _running_model_ids(json.loads(r.read()))
         except Exception:
             return []
 
