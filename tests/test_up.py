@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,8 +50,14 @@ class UpResolverTests(unittest.TestCase):
         plan = self.up.resolve_target(slug, registry)
         self.assertEqual(
             [service.name for service in plan.services],
-            [f"model:{slug}", "sampler-proxy", "stats-poll", "dashboard"],
+            [f"model:{slug}", "sampler-proxy"],
         )
+
+    def test_non_gguf_slug_omits_llama_server_observability(self) -> None:
+        registry = self.up.build_registry()
+        slug = "qwen25-coder-7b-instruct"
+        plan = self.up.resolve_target(slug, registry)
+        self.assertEqual([service.name for service in plan.services], [f"model:{slug}"])
 
     def test_gguf_slug_omits_sampler_proxy(self) -> None:
         registry = self.up.build_registry()
@@ -78,6 +86,123 @@ class UpResolverTests(unittest.TestCase):
         with self.assertRaises(KeyError):
             self.up.resolve_target("missing-target", registry)
 
+    def test_new_session_starts_login_shell_without_send_keys(self) -> None:
+        with (
+            mock.patch.object(self.up, "session_exists", return_value=False),
+            mock.patch.object(self.up, "run_tmux") as run_tmux,
+            mock.patch.dict(self.up.os.environ, {"SHELL": "/bin/zsh"}),
+        ):
+            self.up.ensure_session("test-session")
+
+        self.assertEqual(
+            run_tmux.call_args_list,
+            [
+                mock.call(
+                    ["new-session", "-d", "-s", "test-session", "-n", "control", "/bin/zsh", "-l"]
+                )
+            ],
+        )
+
+    def test_running_service_is_kept_by_default(self) -> None:
+        service = self.up.Service(name="demo", command="sleep 10", description="demo")
+        state = self.up.WindowState(name="demo", dead=False, pid=123)
+        with (
+            mock.patch.object(self.up, "window_states", return_value={"demo": state}),
+            mock.patch.object(self.up, "run_tmux") as run_tmux,
+        ):
+            action = self.up.start_service("test-session", service, restart=False)
+
+        self.assertEqual(action, "kept")
+        run_tmux.assert_called_once_with(
+            ["set-window-option", "-t", "test-session:demo", "remain-on-exit", "on"]
+        )
+
+    def test_dead_service_is_respawned(self) -> None:
+        service = self.up.Service(name="demo", command="sleep 10", description="demo")
+        state = self.up.WindowState(name="demo", dead=True, pid=123)
+        with (
+            mock.patch.object(self.up, "window_states", return_value={"demo": state}),
+            mock.patch.object(self.up, "run_tmux") as run_tmux,
+        ):
+            action = self.up.start_service("test-session", service, restart=False)
+
+        self.assertEqual(action, "restarted")
+        self.assertEqual(run_tmux.call_count, 2)
+        args = run_tmux.call_args_list[1].args[0]
+        self.assertEqual(args[:4], ["respawn-window", "-k", "-t", "test-session:demo"])
+
+    def test_window_state_ignores_malformed_tmux_rows(self) -> None:
+        completed = subprocess.CompletedProcess(
+            [],
+            0,
+            stdout="demo|0|123\nmalformed\nbad-pid|0|not-a-pid\n",
+            stderr="",
+        )
+        with mock.patch.object(self.up.subprocess, "run", return_value=completed):
+            states = self.up.window_states("test-session")
+
+        self.assertEqual(states, {"demo": self.up.WindowState("demo", False, 123)})
+
+    def test_reconcile_removes_only_unplanned_windows(self) -> None:
+        plan = self.up.Plan(
+            target="demo",
+            services=(self.up.Service(name="demo", command="true", description="demo"),),
+        )
+        states = {
+            "control": self.up.WindowState("control", False, 1),
+            "demo": self.up.WindowState("demo", False, 2),
+            "stale": self.up.WindowState("stale", False, 3),
+        }
+        with (
+            mock.patch.object(self.up, "window_states", return_value=states),
+            mock.patch.object(self.up, "terminate_process_group") as terminate,
+            mock.patch.object(self.up, "run_tmux") as run_tmux,
+        ):
+            self.up.reconcile_windows("test-session", plan)
+
+        terminate.assert_called_once_with(3)
+        run_tmux.assert_called_once_with(["kill-window", "-t", "test-session:stale"])
+
+    def test_down_terminates_window_and_registered_process_groups(self) -> None:
+        states = {
+            "control": self.up.WindowState("control", False, 10),
+            "demo": self.up.WindowState("demo", False, 20),
+        }
+        with (
+            mock.patch.object(self.up, "window_states", return_value=states),
+            mock.patch.object(self.up, "registered_service_pids", return_value={"orphan": 30}),
+            mock.patch.object(self.up, "terminate_process_group") as terminate,
+            mock.patch.object(self.up, "session_exists", return_value=True),
+            mock.patch.object(self.up, "run_tmux") as run_tmux,
+            mock.patch("builtins.print"),
+        ):
+            result = self.up.stop_session("test-session")
+
+        self.assertEqual(result, 0)
+        self.assertEqual(terminate.call_args_list, [mock.call(20), mock.call(30)])
+        run_tmux.assert_called_once_with(["kill-session", "-t", "test-session"])
+
+    def test_process_group_termination_rejects_unmanaged_pid(self) -> None:
+        with (
+            mock.patch.object(self.up.os, "getpgid", return_value=42),
+            mock.patch.object(self.up, "is_managed_shim", return_value=False),
+            mock.patch.object(self.up.os, "killpg") as killpg,
+        ):
+            self.up.terminate_process_group(42)
+
+        killpg.assert_not_called()
+
+    def test_serving_plan_prints_pi_affordance(self) -> None:
+        registry = self.up.build_registry()
+        plan = self.up.resolve_target("ternary-bonsai-27b-mlx-2bit", registry)
+
+        self.assertEqual(self.up.plan_pi_hint(plan), "agent: ./pi-local")
+
+    def test_non_serving_plan_has_no_pi_affordance(self) -> None:
+        registry = self.up.build_registry()
+        plan = self.up.resolve_target("observability", registry)
+
+        self.assertIsNone(self.up.plan_pi_hint(plan))
 
 if __name__ == "__main__":
     unittest.main()

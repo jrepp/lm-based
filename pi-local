@@ -1,0 +1,12 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.14"
+# ///
+
+"""Configure and launch Pi against the running lm-based service."""
+
+from lm_launcher.pi_bootstrap import main
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

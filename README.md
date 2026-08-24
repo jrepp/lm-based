@@ -2,7 +2,7 @@
 
 Local LLM infrastructure: GGUF model registry, llama-server launcher, smart routing to local and cloud backends, and supporting tooling.
 
-```
+```text
 Tailscale / Telegram / open-webui
            │
       Claw / Hermes agents
@@ -76,6 +76,20 @@ $EDITOR .env   # set MODEL_SLUG
 
 **Any OpenAI-compatible client** — point it at `http://127.0.0.1:8080/v1` (llama-swap) or `http://127.0.0.1:8001/v1` (direct).
 
+Bootstrap [Pi](https://github.com/earendil-works/pi) from the running local
+service and launch it against the verified model:
+
+```bash
+./up ternary-bonsai-27b-mlx-2bit
+./pi-local
+# one-shot Pi invocation
+./pi-local -p "Explain this repository"
+```
+
+`./pi-local` derives the endpoint and model from the tmux-owned service state, verifies
+`/v1/models`, and merges an `lm-based` provider into Pi's local configuration. It preserves
+unrelated providers and settings.
+
 **open-webui** (Docker):
 
 ```bash
@@ -107,7 +121,7 @@ Then open `http://localhost:3000`. See [docs/open-webui-local-server.md](docs/op
 ## Available models
 
 | Slug | Family | Quant | Size |
-|------|--------|-------|------|
+| ------ | -------- | ------- | ------ |
 | `gemma4-e2b-uncensored-aggressive-q4kp` | Gemma 4 2B | Q4_K_P | 3.4 GB |
 | `mistral-7b-instruct-v03-q4km` | Mistral 7B Instruct v0.3 | Q4_K_M | 4.4 GB |
 | `qwen25-coder-7b-instruct` | Qwen2.5-Coder-7B-Instruct | BF16 | snapshot |
@@ -143,6 +157,10 @@ pip install pre-commit && pre-commit install
 ./run-server.py                    # start (reads .env)
 MODEL_SLUG=<slug> ./run-server.py  # override model
 
+# Pi agent against the running local service
+./pi-local                         # configure and launch Pi
+./pi-local --configure-only        # update Pi configuration only
+
 # Routing / cloud config
 ./route-config.py             # regenerate clawrouter.json
 ./route-config.py --status    # summarise current config
@@ -161,11 +179,12 @@ Markdown lint guardrails are enforced through `.pre-commit-config.yaml` using `m
 ## Repo layout
 
 | Path | Purpose |
-|------|---------|
+| ------ | --------- |
 | `models/*.json` | Sidecar metadata per GGUF or Transformers snapshot (schema_version 1) |
 | `lm_launcher/` | Python package: launcher, profiles, settings, run capture |
 | `llama_swap/` | Python package: llama-swap binary install, YAML config generation, wrapper |
 | `run-server.py` | Entry point for direct llama-server mode |
+| `pi-local` | Bootstrap Pi from verified local service state and launch it |
 | `llama-swap-runner.py` | Entrypoint for llama-swap proxy mode |
 | `route-config.py` | Generate and inspect routing config |
 | `.env.example` | Template for all environment variables |
@@ -178,7 +197,7 @@ Markdown lint guardrails are enforced through `.pre-commit-config.yaml` using `m
 ## Docs index
 
 | Doc | What it covers |
-|-----|---------------|
+| ----- | --------------- |
 | [docs/credentials.md](docs/credentials.md) | Two-tier credential model: direct API keys vs x402 proxy |
 | [docs/clawrouter-operations.md](docs/clawrouter-operations.md) | ClawRouter CLI reference |
 | [docs/open-webui-local-server.md](docs/open-webui-local-server.md) | Connecting open-webui to the local server |

@@ -10,10 +10,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import signal
 import shutil
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -22,19 +25,16 @@ try:
     from rich.console import Console
     from rich.panel import Panel
     from rich.table import Table
-    from rich.text import Text
 except ModuleNotFoundError:
     box = None
     Console = None
     Panel = None
     Table = None
-    Text = None
 
 
 SESSION = "lm-based"
 ROOT = Path(__file__).resolve().parent
 RUNTIME = ROOT / ".runtime" / "tmux"
-GENERATED = RUNTIME / "generated"
 SHIM = ROOT / "support" / "tmux-service-shim"
 console = Console() if Console is not None else None
 
@@ -59,9 +59,16 @@ class Plan:
     services: tuple[Service, ...]
 
 
+@dataclass(frozen=True)
+class WindowState:
+    name: str
+    dead: bool
+    pid: int
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Start lm-based service sets in a tmux session.",
+        description="Manage lm-based services in a tmux session.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Targets may be service sets, service names, or model slugs.\n"
@@ -71,6 +78,9 @@ def main(argv: list[str] | None = None) -> int:
             "  ./up direct\n"
             "  ./up swap\n"
             "  ./up qwen36-27b-mtp-ud-q5k-xl\n"
+            "  ./up qwen36-27b-mtp-ud-q5k-xl --restart\n"
+            "  ./up --status\n"
+            "  ./up --down\n"
             "  ./up dashboard --attach\n"
         ),
     )
@@ -78,9 +88,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--list", action="store_true", help="list known targets")
     parser.add_argument("--dry-run", action="store_true", help="print resolved services without starting tmux")
     parser.add_argument("--attach", action="store_true", help="attach to the tmux session after starting")
-    parser.add_argument("--no-restart", action="store_true", help="leave existing tmux windows running")
+    lifecycle = parser.add_mutually_exclusive_group()
+    lifecycle.add_argument("--down", action="store_true", help="stop the entire tmux service session")
+    lifecycle.add_argument("--status", action="store_true", help="show current tmux service state")
+    lifecycle.add_argument("--restart", action="store_true", help="restart target services that are already running")
+    lifecycle.add_argument("--no-restart", action="store_false", dest="restart", default=False, help=argparse.SUPPRESS)
+    parser.add_argument("--add", action="store_true", help="preserve service windows outside the selected target")
     parser.add_argument("--session", default=SESSION, help="tmux session name")
     args = parser.parse_args(argv)
+
+    if args.down:
+        return stop_session(args.session)
+    if args.status:
+        return print_status(args.session)
 
     registry = build_registry()
     if args.list:
@@ -108,10 +128,17 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     ensure_session(args.session)
+    if not args.add:
+        reconcile_windows(args.session, plan)
+    actions: dict[str, str] = {}
     for service in plan.services:
-        start_service(args.session, service, restart=not args.no_restart)
+        actions[service.name] = start_service(
+            args.session,
+            service,
+            restart=args.restart,
+        )
 
-    print_ensured(plan, args.session)
+    print_ensured(plan, args.session, actions)
 
     if args.attach:
         return subprocess.call(["tmux", "attach", "-t", args.session])
@@ -195,7 +222,8 @@ def build_registry() -> dict[str, Service | tuple[str, ...]]:
         members: list[str] = [f"model:{slug}"]
         if is_mlx_model(slug):
             members.append("sampler-proxy")
-        members += ["stats-poll", "dashboard"]
+        if supports_llama_server_observability(slug):
+            members += ["stats-poll", "dashboard"]
         services[slug] = tuple(members)
     return services
 
@@ -215,15 +243,23 @@ def model_slugs() -> list[str]:
 
 def is_mlx_model(slug: str) -> bool:
     """True if the sidecar for ``slug`` is an MLX artifact (needs the sampler proxy)."""
+    return model_artifact_format(slug) == "mlx"
+
+
+def supports_llama_server_observability(slug: str) -> bool:
+    """True when the model backend provides llama-server's /metrics and /slots APIs."""
+    return model_artifact_format(slug) == "gguf"
+
+
+def model_artifact_format(slug: str) -> str:
     for path in sorted((ROOT / "models").glob("*.json")):
         try:
             data = json.loads(path.read_text())
         except json.JSONDecodeError:
             continue
         if data.get("model", {}).get("slug") == slug:
-            fmt = (data.get("artifact", {}).get("format") or "").lower()
-            return fmt == "mlx"
-    return False
+            return (data.get("artifact", {}).get("format") or "").lower()
+    return ""
 
 
 def model_service(slug: str) -> Service:
@@ -313,7 +349,7 @@ def print_targets(registry: dict[str, Service | tuple[str, ...]]) -> None:
             assert isinstance(service, Service)
             table.add_row("service", name, service.description)
         for slug in slugs:
-            table.add_row("model", slug, "direct model worker with observability")
+            table.add_row("model", slug, model_target_description(slug))
         console.print(Panel(table, title="Available ./up Targets", border_style="cyan"))
         return
 
@@ -327,7 +363,7 @@ def print_targets(registry: dict[str, Service | tuple[str, ...]]) -> None:
         print(f"  {name:22s} {service.description}")
     print("\nmodel slugs:")
     for slug in slugs:
-        print(f"  {slug}")
+        print(f"  {slug:38s} {model_target_description(slug)}")
 
 
 def print_plan(plan: Plan, session: str) -> None:
@@ -362,7 +398,8 @@ def print_plan(plan: Plan, session: str) -> None:
         print(f"  {command}")
 
 
-def print_ensured(plan: Plan, session: str) -> None:
+def print_ensured(plan: Plan, session: str, actions: dict[str, str]) -> None:
+    pi_hint = plan_pi_hint(plan)
     if use_tui():
         assert console is not None and Table is not None and Panel is not None and box is not None
         table = Table(box=box.SIMPLE_HEAVY)
@@ -371,22 +408,32 @@ def print_ensured(plan: Plan, session: str) -> None:
         table.add_column("Service", style="bold")
         table.add_column("Description")
         for service in plan.services:
-            table.add_row("ensured", service.window_name, service.name, service.description)
+            table.add_row(actions[service.name], service.window_name, service.name, service.description)
         console.print(
             Panel(
                 table,
                 title=f"tmux session: {session}",
-                subtitle=f"attach: tmux attach -t {session}",
+                subtitle=pi_hint or f"attach: tmux attach -t {session}",
                 border_style="green",
             )
         )
+        if pi_hint:
+            console.print(f"attach: tmux attach -t {session}")
         return
 
     print(f"tmux session: {session}")
-    print("ensured windows:")
+    print("service windows:")
     for service in plan.services:
-        print(f"  {service.window_name:22s} {service.description}")
+        print(f"  {actions[service.name]:9s} {service.window_name:32s} {service.description}")
+    if pi_hint:
+        print(pi_hint)
     print(f"attach: tmux attach -t {session}")
+
+
+def plan_pi_hint(plan: Plan) -> str | None:
+    if any(service.name.startswith("model:") or service.name == "llama-swap" for service in plan.services):
+        return "agent: ./pi-local"
+    return None
 
 
 def print_error(message: str) -> None:
@@ -413,47 +460,177 @@ def service_set_description(name: str) -> str:
     }.get(name, "")
 
 
+def model_target_description(slug: str) -> str:
+    if is_mlx_model(slug):
+        return "direct MLX worker plus sampler proxy"
+    if supports_llama_server_observability(slug):
+        return "direct llama-server worker plus observability"
+    return "direct model worker"
+
+
 def use_tui() -> bool:
     return console is not None and sys.stdout.isatty()
 
 
 def ensure_session(session: str) -> None:
-    if tmux_ok(["has-session", "-t", session]):
-        return
-    run_tmux(["new-session", "-d", "-s", session, "-n", "control"])
-    run_tmux(["send-keys", "-t", f"{session}:control", "printf 'lm-based tmux control window\\n'; exec $SHELL", "C-m"])
+    if not session_exists(session):
+        shell = os.environ.get("SHELL") or "/bin/sh"
+        run_tmux(["new-session", "-d", "-s", session, "-n", "control", shell, "-l"])
 
 
-def start_service(session: str, service: Service, restart: bool) -> None:
+def reconcile_windows(session: str, plan: Plan) -> None:
+    desired = {"control", *(service.window_name for service in plan.services)}
+    for name, state in window_states(session).items():
+        if name not in desired:
+            terminate_process_group(state.pid)
+            run_tmux(["kill-window", "-t", f"{session}:{name}"])
+
+
+def start_service(session: str, service: Service, restart: bool) -> str:
     target = f"{session}:{service.window_name}"
-    if tmux_ok(["list-windows", "-t", session, "-F", "#{window_name}"], capture=True, match=service.window_name):
-        if not restart:
-            return
-        run_tmux(["kill-window", "-t", target])
+    state = window_states(session).get(service.window_name)
+    if state is not None and not state.dead and not restart:
+        run_tmux(["set-window-option", "-t", target, "remain-on-exit", "on"])
+        return "kept"
 
     env_prefix = " ".join(f"{key}={shell_quote(value)}" for key, value in service.env.items())
     command = f"{env_prefix} {service.command}".strip()
     shim_command = (
-        f"LM_BASED_ROOT={shell_quote(str(ROOT))} "
+        f"exec env LM_BASED_ROOT={shell_quote(str(ROOT))} "
+        f"LM_BASED_TMUX_SESSION={shell_quote(session)} "
         f"{shell_quote(str(SHIM))} {shell_quote(service.name)} -- "
         f"bash -lc {shell_quote(command)}"
     )
-    pane_script = (
-        f"{shim_command}; "
-        "service_status=$?; "
-        "printf '\\nservice exited with status %s; press Ctrl-D to close this pane\\n' \"$service_status\"; "
-        "exec \"${SHELL:-/bin/sh}\""
+    if state is not None:
+        run_tmux(["set-window-option", "-t", target, "remain-on-exit", "on"])
+        run_tmux(["respawn-window", "-k", "-t", target, shim_command])
+        return "restarted"
+    run_tmux(["new-window", "-d", "-t", session, "-n", service.window_name, shim_command])
+    run_tmux(["set-window-option", "-t", target, "remain-on-exit", "on"])
+    return "started"
+
+
+def stop_session(session: str) -> int:
+    states = window_states(session)
+    service_pids = {state.pid for name, state in states.items() if name != "control" and not state.dead}
+    service_pids.update(registered_service_pids(session).values())
+    for pid in sorted(service_pids):
+        terminate_process_group(pid)
+    if session_exists(session):
+        run_tmux(["kill-session", "-t", session])
+    print(f"tmux session {session}: stopped")
+    return 0
+
+
+def print_status(session: str) -> int:
+    states = window_states(session)
+    registered = registered_service_pids(session)
+    if not states:
+        if not registered:
+            print(f"tmux session {session}: stopped")
+            return 0
+        print(f"tmux session {session}: stopped (orphaned services detected)")
+        for service, pid in registered.items():
+            print(f"  orphaned {service:32s} pid={pid}")
+        return 1
+    print(f"tmux session {session}: running")
+    for state in states.values():
+        service_state = "exited" if state.dead else "running"
+        pid = "-" if state.dead else str(state.pid)
+        print(f"  {service_state:7s} {state.name:32s} pid={pid}")
+    active_pids = {state.pid for state in states.values() if not state.dead}
+    orphaned = {service: pid for service, pid in registered.items() if pid not in active_pids}
+    for service, pid in orphaned.items():
+        print(f"  orphaned {service:32s} pid={pid}")
+    return 1 if orphaned else 0
+
+
+def session_exists(session: str) -> bool:
+    return tmux_ok(["has-session", "-t", session])
+
+
+def window_states(session: str) -> dict[str, WindowState]:
+    result = subprocess.run(
+        ["tmux", "list-windows", "-t", session, "-F", "#{window_name}|#{pane_dead}|#{pane_pid}"],
+        text=True,
+        capture_output=True,
     )
-    run_tmux(["new-window", "-t", session, "-n", service.window_name, f"bash -lc {shell_quote(pane_script)}"])
-
-
-def tmux_ok(args: list[str], *, capture: bool = False, match: str | None = None) -> bool:
-    result = subprocess.run(["tmux", *args], text=True, capture_output=True)
     if result.returncode != 0:
-        return False
-    if match is not None:
-        return match in result.stdout.splitlines()
-    return True
+        return {}
+    states: dict[str, WindowState] = {}
+    for line in result.stdout.splitlines():
+        fields = line.split("|", 2)
+        if len(fields) != 3:
+            continue
+        name, dead, pid_value = fields
+        try:
+            pid = int(pid_value)
+        except ValueError:
+            continue
+        states[name] = WindowState(name=name, dead=dead == "1", pid=pid)
+    return states
+
+
+def registered_service_pids(session: str) -> dict[str, int]:
+    services_dir = RUNTIME / "services"
+    if not services_dir.is_dir():
+        return {}
+    registered: dict[str, int] = {}
+    for path in sorted(services_dir.glob("*/shim.pid")):
+        session_path = path.parent / "session"
+        try:
+            registered_session = session_path.read_text().strip()
+        except OSError:
+            registered_session = SESSION
+        if registered_session != session:
+            continue
+        try:
+            pid = int(path.read_text().strip())
+        except (OSError, ValueError):
+            continue
+        if is_managed_shim(pid):
+            registered[path.parent.name] = pid
+    return registered
+
+
+def is_managed_shim(pid: int) -> bool:
+    result = subprocess.run(
+        ["ps", "-p", str(pid), "-o", "command="],
+        text=True,
+        capture_output=True,
+    )
+    return result.returncode == 0 and str(SHIM) in result.stdout
+
+
+def terminate_process_group(pid: int, timeout: float = 5.0) -> None:
+    if pid <= 0:
+        return
+    try:
+        pgid = os.getpgid(pid)
+    except ProcessLookupError:
+        return
+    if pgid != pid or not is_managed_shim(pid):
+        return
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            os.killpg(pgid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.05)
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
+def tmux_ok(args: list[str]) -> bool:
+    result = subprocess.run(["tmux", *args], text=True, capture_output=True)
+    return result.returncode == 0
 
 
 def run_tmux(args: list[str]) -> None:

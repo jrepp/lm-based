@@ -23,8 +23,10 @@ log_path="${runtime_dir}/${service_name}.log"
 status_path="${runtime_dir}/status"
 pid_path="${runtime_dir}/shim.pid"
 exit_path="${runtime_dir}/last-exit"
+session_path="${runtime_dir}/session"
 
 mkdir -p "${runtime_dir}"
+rm -f "${runtime_dir}/command.pid"
 
 timestamp() {
   date -u "+%Y-%m-%dT%H:%M:%SZ"
@@ -41,12 +43,19 @@ cleanup() {
   write_status "exited status=${status}"
 }
 
+record_signal() {
+  write_status "signalled $1"
+  exit "$2"
+}
+
 trap cleanup EXIT
-trap 'write_status "signalled SIGINT"; exit 130' INT
-trap 'write_status "signalled SIGTERM"; exit 143' TERM
+trap 'record_signal SIGINT 130' INT
+trap 'record_signal SIGTERM 143' TERM
+trap 'record_signal SIGHUP 129' HUP
 
 cd "${repo_root}" || exit 1
 printf "%s\n" "$$" >"${pid_path}"
+printf "%s\n" "${LM_BASED_TMUX_SESSION:-lm-based}" >"${session_path}"
 write_status "running"
 
 {

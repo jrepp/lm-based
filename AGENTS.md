@@ -18,7 +18,7 @@ ClawRouter routing config, and documents the full local-LLM stack (see `docs/arc
 
 ## Adding a model (checklist)
 
-```
+```text
 1. Write  models/<Artifact-QUANT>.gguf.json   (schema below)
 2. Extend lm_launcher/profiles.py if a new serving profile is needed
 3. Append row to docs/model-card-index.md
@@ -90,6 +90,7 @@ The `llama_swap/` Python package wraps it:
 | `llama_swap/cli.py` | CLI entry point |
 
 Key commands:
+
 ```bash
 ./llama-swap-runner.py ensure   # download/install llama-swap binary
 ./llama-swap-runner.py config    # generate llama-swap.yaml from sidecars
@@ -99,6 +100,7 @@ Key commands:
 ```
 
 Or via `just`:
+
 ```bash
 just swap-ensure    # install binary
 just swap-config     # generate yaml
@@ -118,6 +120,7 @@ To add a cloud provider: add a `CloudProvider(...)` entry to `CLOUD_PROVIDERS`
 in `route-config.py`, then regenerate.
 
 Credential model (see `docs/credentials.md`):
+
 - Each provider has a `key_env` and `base_env` in `CLOUD_PROVIDERS`.
 - Key set + direct_base known → `routing=direct` in generated JSON.
 - Key absent → `routing=proxy` (x402).
@@ -172,7 +175,7 @@ Workflow:
 Python 3.9 and is broken (`TypeGuard` import), so always run it through uv:
 
 ```bash
-uv run --python 3.11 --with docuchango==1.17.1 docuchango validate
+uv run --no-project --python 3.11 --with docuchango==1.17.1 docuchango validate
 ```
 
 The pre-commit `markdownlint-cli2` hook covers `docs/`, `README.md`, `AGENTS.md`,

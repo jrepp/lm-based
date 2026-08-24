@@ -27,7 +27,7 @@ pi  ->  sampler-proxy (:8002)  ->  direct worker (:8001)
 
 ```bash
 ./up ternary-bonsai-27b-mlx-2bit
-# brings up: worker :8001 + sampler-proxy :8002 + stats + dashboard
+# brings up: worker :8001 + sampler-proxy :8002
 ```
 
 `./up` includes the sampler proxy automatically for MLX slugs (it is omitted for
@@ -35,45 +35,53 @@ GGUF models, which already get a repetition penalty from their serving profile).
 The proxy defaults to `REPETITION_PENALTY=1.15`; run `./support/sampler-proxy`
 directly with custom env to tune it.
 
-## pi provider config
+The llama-server stats poller and dashboard are omitted because `mlx_lm.server` does not
+provide llama.cpp's `/metrics` and `/slots` endpoints.
 
-`~/.pi/agent/models.json` (outside this repo — pi reads it directly; it reloads
-on `/model`):
+## Bootstrap Pi
 
-```json
-{
-  "providers": {
-    "local": {
-      "baseUrl": "http://127.0.0.1:8002/v1",
-      "api": "openai-completions",
-      "apiKey": "local",
-      "compat": {
-        "supportsDeveloperRole": false,
-        "supportsReasoningEffort": false,
-        "maxTokensField": "max_tokens"
-      },
-      "models": [
-        {
-          "id": "ternary-bonsai-27b-mlx-2bit",
-          "name": "Bonsai 27B ternary (MLX, thinking)",
-          "reasoning": true,
-          "input": ["text"],
-          "contextWindow": 262144,
-          "maxTokens": 8192,
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
-          "compat": { "thinkingFormat": "qwen-chat-template" }
-        }
-      ]
-    }
-  }
-}
+Run the repository bootstrap after starting the model:
+
+```bash
+./pi-local
+```
+
+The bootstrap refuses to guess from open ports alone. It:
+
+1. reads the live service registrations written by `support/tmux-service-shim`
+2. verifies that each shim PID belongs to a running pane in the selected tmux session
+3. chooses the sampler proxy, direct worker, or llama-swap endpoint from that service set
+4. checks the selected endpoint's `/v1/models` response against model sidecars
+5. merges an `lm-based` provider into `~/.pi/agent/models.json`
+6. sets that provider and model as Pi's default, then launches Pi pinned to both
+
+Other providers and settings are preserved. Before an existing Pi file changes, its previous
+contents are copied to a sibling `.lm-based.bak` file.
+
+Inspect the derived provider without changing Pi:
+
+```bash
+./pi-local --dry-run
+```
+
+Configure Pi without launching it:
+
+```bash
+./pi-local --configure-only
+```
+
+Unknown arguments are forwarded to Pi, so non-interactive use works through the same
+verified bootstrap path:
+
+```bash
+./pi-local -p "Summarize this repository"
 ```
 
 ### Why each setting
 
 | Setting | Reason |
 | --- | --- |
-| `baseUrl :8002` | pi goes through the sampler proxy, not the bare worker. |
+| `baseUrl :8002` | Pi goes through the sampler proxy when its owned shim is running. |
 | `apiKey: "local"` | Local servers ignore it, but pi hides a model from `/model` unless auth is present. Dummy value is fine. |
 | `supportsDeveloperRole: false` | `mlx_lm`/`llama-server` do not understand the `developer` role; pi sends `system` instead. |
 | `supportsReasoningEffort: false` | These servers do not accept `reasoning_effort`. |
@@ -84,9 +92,9 @@ on `/model`):
 ## Select the model
 
 ```bash
-pi --list-models | grep local      # confirm it loaded
-# in the TUI:
-/model bonsai                       # fuzzy-matches name/id
+pi --list-models lm-based
+# in the TUI, if switching back from another provider:
+/model bonsai
 ```
 
 The thinking toggle maps to the model's `enable_thinking`: on generates a
@@ -107,11 +115,11 @@ client that sends its own sampler params is never overridden.
 
 ## Restarts and worker adoption
 
-`support/model-service` (run inside the `./up` model window) adopts an
-already-healthy worker for the requested slug before launching a new one, so
-re-running `./up <slug>` does not double-bind the port. It matches the running
-server by slug **or** by the model directory path (mlx_lm and transformers
-report the directory as the model id, not the slug).
+`./up <slug>` keeps a healthy model window running by default, so repeated starts are
+inexpensive. If a matching server was started outside the tmux session,
+`support/model-service` adopts it instead of double-binding the port. It matches the
+running server by slug **or** by the model directory path (mlx_lm and transformers report
+the directory as the model id, not the slug).
 
 ## When to use this vs the routed path
 
