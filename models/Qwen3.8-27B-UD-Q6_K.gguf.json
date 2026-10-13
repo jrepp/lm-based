@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-10-10",
+  "artifact": {
+    "filename": "Qwen3.8-27B-UD-Q6_K.gguf",
+    "local_path": "Qwen3.8-27B-UD-Q6_K.gguf",
+    "format": "gguf",
+    "quantization": "UD-Q6_K",
+    "size_bytes": null,
+    "sha256": null
+  },
+  "model": {
+    "slug": "qwen38-27b-ud-q6k",
+    "family": "Qwen3.8",
+    "name": "Qwen3.8-27B",
+    "canonical_model_card": "https://huggingface.co/Qwen/Qwen3.8-27B"
+  },
+  "source": {
+    "gguf_model_card": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF",
+    "publisher": "unsloth",
+    "provenance_status": "planned_download"
+  },
+  "download": {
+    "provider": "huggingface",
+    "repo_id": "unsloth/Qwen3.8-27B-GGUF",
+    "filename": "Qwen3.8-27B-UD-Q6_K.gguf",
+    "revision": null
+  },
+  "launcher": {
+    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "profile": "qwen3.8",
+    "recommended_env": {
+      "MODEL_FILE": "Qwen3.8-27B-UD-Q6_K.gguf",
+      "PROFILE": "qwen3.8"
+    }
+  },
+  "notes": [
+    "Dense daily-driver upgrade over Qwen3.6-27B (research report 2026-10-10, rank 3): 6.77M downloads/month, native image+video input, most-popular 2026 dense release.",
+    "Unsloth publishes no plain Q6_K for this model; UD-Q6_K is the dynamic-quant equivalent (~22GB class).",
+    "Same architecture family as the validated qwen3.6 profile; ctx held at 131072 until Metal first-token coherence is confirmed.",
+    "Expected ~20-24 tok/s dense; roughly doubled by draft-MTP speculative decoding.",
+    "MTP-preserved quant available for draft-MTP (MTP/mtp-Qwen3.8-27B-Q4_0.gguf); add a dedicated MTP sidecar after validating the base artifact.",
+    "Vision requires an mmproj file (mmproj-BF16/mmproj-F16 in the repo); launcher mmproj wiring is pending.",
+    "Verify size and sha256 locally before flipping provenance_status to verified."
+  ]
+}

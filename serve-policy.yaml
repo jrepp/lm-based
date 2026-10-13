@@ -17,7 +17,12 @@
   "models": {
     "enabled": [
       "qwen36-27b-q6k",
-      "qwen25-coder-7b-instruct"
+      "qwen25-coder-7b-instruct",
+      "qwen3-coder-next-q6k",
+      "qwen35-122b-ud-q4k-xl",
+      "qwen38-27b-ud-q6k",
+      "qwen38-27b-mtp-q4_0",
+      "kev-4b-mlx-8bit"
     ],
     "disabled": [],
     "warm": [

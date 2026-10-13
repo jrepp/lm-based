@@ -23,6 +23,14 @@ runs/
 /Qwen2.5-Coder-7B-Instruct/
 /Qwen3.6-27B/
 /Ternary-Bonsai-27B-MLX-2bit/
+/kev-4b-mlx-8bit/
+/MTP/
+/Q6_K/
+/UD-Q4_K_XL/
+/Qwen3.5-122B-A10B-UD-Q4_K_XL*
+
+# kev runtime checkout (cloned by lm_launcher/mlx_server.py)
+/support/kev/
 
 # Local artifact tracking (machine-specific provenance state, never committed)
 artifacts/STATUS.md
