@@ -1,247 +1,118 @@
 # lm-based
 
-Local LLM infrastructure: GGUF model registry, llama-server launcher, smart routing to local and cloud backends, and supporting tooling.
+Local LLM infrastructure for an Apple Silicon Mac: a model registry, on-demand
+serving behind a hot-swap proxy, agent harnesses, and cloud routing — so local
+and remote models are reachable through one OpenAI-compatible endpoint.
 
 ```text
 Tailscale / Telegram / open-webui
            │
       Claw / Hermes agents
            │
-         llama-swap          ← hot-swap reverse proxy for any OpenAI-compatible server
+         llama-swap          ← hot-swap reverse proxy (parallel model groups)
         /          \
  llama-server    Cloud APIs
- (local GGUF)    (direct or x402 proxy)
-
+ (GGUF / MLX)    (direct or x402 proxy)
 ```
 
-See [`docs/architecture.html`](docs/architecture.html) for the interactive diagram.
+The interactive version of this diagram lives in
+[docs/architecture.html](docs/architecture.html); the design docs are indexed
+in [docs/README.md](docs/README.md).
 
 ---
 
-## Two ways to serve local models
+## How the repo operates
 
-### llama-swap (recommended)
+Everything is driven from a small set of artifacts. You rarely edit serving
+logic — you edit declarations, and the generators produce the runtime config.
 
-Hot-swap proxy that automatically loads the right `llama-server` on demand.
-Handles concurrent models via a solver, with zero custom config per model.
+1. **Register a model** — add a sidecar JSON under `models/` describing the
+   artifact, its upstream card, and the launcher profile. The checklist and
+   sidecar schema are in [AGENTS.md](AGENTS.md); the registry of recorded
+   models is [docs/model-card-index.md](docs/model-card-index.md).
+2. **Fetch the artifact** — `./download_model.py` reads the sidecar's download
+   block (single files, shard sets, or whole snapshots).
+3. **Serve** — `./up swap` starts llama-swap. Its YAML is *generated* from the
+   sidecars plus [serve-policy.yaml](serve-policy.yaml) (ingress, enabled
+   models, parallel-model groups), so it is never hand-edited. Per-model
+   launch flags come from serving profiles in
+   [lm_launcher/profiles.py](lm_launcher/profiles.py).
+4. **Consume** — point any OpenAI-compatible client at the policy-owned
+   endpoint, or use the built-in harnesses below.
+
+A single model can also be served directly without the proxy:
+`MODEL_SLUG=<slug> ./run-server.py` (settings resolve through the sidecar;
+see `.env.example`).
+
+---
+
+## Day-to-day commands
+
+All commands exist as `just` recipes — run `just --list` for the full set.
 
 ```bash
+just swap-start        # llama-swap on the serve-policy ingress (UI at /ui)
+just swap-status       # which models are loaded right now
+just swap-logs         # stream proxy and upstream logs
 
-# 1. Install the llama-swap binary
-./llama-swap-runner.py ensure
+./download_model.py --list          # registered models
+./download_model.py --model <slug>  # fetch one
 
-# 2. Generate config from your existing model sidecars
-./llama-swap-runner.py config
+./route-config.py --doctor          # routing + credential health check
 
-# 3. Start the proxy
-./llama-swap-runner.py start
-# → proxy available at the serve-policy ingress.swap_listen address (:8081 currently)
-# → UI at http://127.0.0.1:8081/ui
-
-# Or via just:
-just swap-ensure
-just swap-config
-just swap-start
-
+./up swap                           # tmux-owned service set (swap + proxies)
 ```
 
-Switch models by passing the model slug in any OpenAI API request — llama-swap
-loads the right server automatically.
-
-### Direct llama-server (one model at a time)
-
-```bash
-
-cp .env.example .env
-$EDITOR .env   # set MODEL_SLUG
-./run-server.py
-# → available at http://127.0.0.1:8001/v1
-
-```
+Model switching is done by clients: pass the model slug in the API request and
+llama-swap cold-loads or hot-swaps the right server. Parallel models are
+declared as groups in `serve-policy.yaml` (a small always-warm tier runs
+alongside whichever large model is loaded).
 
 ---
 
-## Prerequisites
+## Client harnesses
 
-- [`llama-server`](https://github.com/ggml-org/llama.cpp) on your PATH (or set `LLAMA_SERVER_BIN` in `.env`)
-- A HuggingFace account (free) if downloading gated models
-
----
-
-## Download a model
-
-```bash
-
-./download_model.py --list
-./download_model.py --model gemma4-e2b-uncensored-aggressive-q4kp
-
-```
+| Harness | What it does |
+| --- | --- |
+| `./pi-local` | Bootstraps the repo-pinned Pi agent against the running service; verifies `/v1/models`, merges an `lm-based` provider. Loads repo extensions (llama-swap status, `pdf_extract` via the local OCR model) |
+| `./opencode-local` | Discovers the live llama-swap model set and launches OpenCode with an ephemeral provider |
+| `./serve-manager` | Go control plane for staging generations (`plan` / `doctor` / `apply` / `status`) |
+| Any OpenAI client | The swap endpoint (`ingress.swap_listen` in `serve-policy.yaml`); see [docs/open-webui-local-server.md](docs/open-webui-local-server.md) for the open-webui recipe |
 
 ---
 
-## Connect a client
+## Where things live
 
-**Any OpenAI-compatible client** — point it at the policy-owned llama-swap endpoint
-(`http://127.0.0.1:8081/v1` in the current `serve-policy.yaml`) or
-`http://127.0.0.1:8001/v1` for a direct backend.
-
-Bootstrap [Pi](https://github.com/earendil-works/pi) from the running local
-service and launch it against the verified model:
-
-```bash
-./up ternary-bonsai-27b-mlx-2bit
-./pi-local
-# one-shot Pi invocation
-./pi-local -p "Explain this repository"
-```
-
-`./pi-local` derives the endpoint and model from the tmux-owned service state, verifies
-`/v1/models`, and merges an `lm-based` provider into Pi's local configuration. It preserves
-unrelated providers and settings.
-
-Launch OpenCode with the live llama-swap hot-model set:
-
-```bash
-./up swap
-./opencode-local
-# one-shot OpenCode invocation
-./opencode-local run "Explain this repository"
-```
-
-`./opencode-local` queries the routed provider on every launch, rejects filesystem-path
-model IDs, and generates an ephemeral provider config without modifying the user's global
-OpenCode configuration. See [docs/opencode-local-models.md](docs/opencode-local-models.md).
-
-**open-webui** (Docker):
-
-```bash
-
-docker run -d --name open-webui --restart always \
-  -p 3000:8080 \
-  --add-host=host.docker.internal:host-gateway \
-  -e OPENAI_API_BASE_URL=http://host.docker.internal:8081/v1 \
-  -e OPENAI_API_KEY=dummy \
-  -v open-webui:/app/backend/data \
-  ghcr.io/open-webui/open-webui:main
-
-```
-
-Then open `<http://localhost:3000`.> See [docs/open-webui-local-server.md](docs/open-webui-local-server.md) for more.
+| Path | Role |
+| --- | --- |
+| `models/*.json` | Sidecar registry: artifacts, upstream cards, launcher profiles |
+| `serve-policy.yaml` | Operator policy: ingress, ports, enabled models, model groups |
+| `host-capabilities.yaml` | Host class and backend capabilities |
+| `lm_launcher/` | Launcher package: backends, profiles, settings, run capture |
+| `llama_swap/` | llama-swap binary install, YAML generation, process wrapper |
+| `clawrouter.json` | Generated cloud routing config — edit `route-config.py`, never the JSON |
+| `justfile` | Every operational command as a recipe |
+| `docs/` | Reference docs, indexed in [docs/README.md](docs/README.md) |
+| `reports/`, `research_notes/` | Model-selection research passes and their sources |
+| `runs/`, `artifacts/` | Runtime output and downloaded artifacts (gitignored) |
 
 ---
 
-## Routing config (ClawRouter / cloud providers)
+## Guardrails
 
-```bash
-
-./route-config.py             # regenerate clawrouter.json
-./route-config.py --status    # summarise current config
-./route-config.py --providers # credential status per cloud provider
-./route-config.py --doctor    # full health check
-./route-config.py --validate  # lint sidecars only
-
-```
+- `clawrouter.json` and `llama-swap.yaml` are generated — change the inputs
+  (`route-config.py`, sidecars, `serve-policy.yaml`), then regenerate.
+- `runs/` is append-only observability data; never modify recorded runs.
+- Markdown lint runs via pre-commit (`pre-commit run --all-files`).
+- Agent-specific rules and the model-adding checklist: [AGENTS.md](AGENTS.md).
 
 ---
 
-## Available models
+## Learning more
 
-| Slug | Family | Quant | Size |
-| ------ | -------- | ------- | ------ |
-| `gemma4-e2b-uncensored-aggressive-q4kp` | Gemma 4 2B | Q4_K_P | 3.4 GB |
-| `mistral-7b-instruct-v03-q4km` | Mistral 7B Instruct v0.3 | Q4_K_M | 4.4 GB |
-| `qwen25-coder-7b-instruct` | Qwen2.5-Coder-7B-Instruct | BF16 | snapshot |
-| `qwen3-coder-480b-a35b-mlx-4bit` | Qwen3-Coder-480B-A35B-Instruct | MLX 4-bit | 252 GB |
-| `qwen3-coder-480b-a35b-ud-q4kxl` | Qwen3-Coder-480B-A35B-Instruct | UD-Q4_K_XL | planned |
-| `qwen3-coder-next-iq4xs` | Qwen3-Coder-Next | IQ4_XS | — |
-| `qwen35-35b-a3b-q4km` | Qwen3.5 35B A3B | Q4_K_M | 22 GB |
-| `qwen36-27b-q6k` | Qwen3.6-27B | Q6_K | 22.5 GB |
-| `qwen36-27b-mtp-ud-q5k-xl` | Qwen3.6-27B-MTP | UD-Q5_K_XL | 20.4 GB |
-
-Full metadata: [`docs/model-card-index.md`](docs/model-card-index.md)
-
----
-
-## Key commands
-
-```bash
-
-# Guardrails
-pip install pre-commit && pre-commit install
-
-# Model management
-./download_model.py --list
-./download_model.py --model <slug>
-./build_gguf.py --model <slug> --outtype bf16
-./build_gguf.py --model <slug> --outtype bf16 --quantize Q6_K
-
-# llama-swap (hot-swap proxy)
-./llama-swap-runner.py ensure   # install binary
-./llama-swap-runner.py config   # generate yaml from sidecars
-./llama-swap-runner.py start    # launch on serve-policy ingress.swap_listen
-./llama-swap-runner.py status   # show loaded models
-./llama-swap-runner.py logs     # stream logs
-
-# Direct llama-server (one model at a time)
-./run-server.py                    # start (reads .env)
-MODEL_SLUG=<slug> ./run-server.py  # override model
-
-# Pi agent against the running local service
-./pi-local                         # configure and launch Pi
-./pi-local --configure-only        # update Pi configuration only
-
-# OpenCode against dynamically discovered hot models
-./opencode-local                   # discover, configure, and launch
-./opencode-local --dry-run         # inspect the generated provider
-
-# Routing / cloud config
-./route-config.py             # regenerate clawrouter.json
-./route-config.py --status    # summarise current config
-./route-config.py --providers # credential status per cloud provider
-./route-config.py --doctor    # full health check
-./route-config.py --validate  # lint sidecars only
-
-# Run analysis
-./summarize_run.py --run <run-dir>
-
-```
-
-Markdown lint guardrails are enforced through `.pre-commit-config.yaml` using `markdownlint-cli2` over `README.md`, `AGENTS.md`, `CLAUDE.md`, and `docs/*.md`.
-
----
-
-## Repo layout
-
-| Path | Purpose |
-| ------ | --------- |
-| `models/*.json` | Sidecar metadata per GGUF or Transformers snapshot (schema_version 1) |
-| `lm_launcher/` | Python package: launcher, profiles, settings, run capture |
-| `llama_swap/` | Python package: llama-swap binary install, YAML config generation, wrapper |
-| `run-server.py` | Entry point for direct llama-server mode |
-| `pi-local` | Bootstrap Pi from verified local service state and launch it |
-| `opencode-local` | Discover llama-swap hot models and launch OpenCode |
-| `llama-swap-runner.py` | Entrypoint for llama-swap proxy mode |
-| `route-config.py` | Generate and inspect routing config |
-| `.env.example` | Template for all environment variables |
-| `docs/` | Architecture, credentials, operations, model index |
-| `artifacts/` | Downloaded GGUF binaries (gitignored); `artifacts/STATUS.md` tracks local provenance |
-| `runs/` | Per-run logs, PIDs, monitor CSVs (gitignored) |
-
----
-
-## Docs index
-
-| Doc | What it covers |
-| ----- | --------------- |
-| [docs/credentials.md](docs/credentials.md) | Two-tier credential model: direct API keys vs x402 proxy |
-| [docs/clawrouter-operations.md](docs/clawrouter-operations.md) | ClawRouter CLI reference |
-| [docs/open-webui-local-server.md](docs/open-webui-local-server.md) | Connecting open-webui to the local server |
-| [docs/opencode-local-models.md](docs/opencode-local-models.md) | Dynamic hot-model discovery for OpenCode |
-| [docs/openai-api-explainer.md](docs/openai-api-explainer.md) | In-depth guide to OpenAI API shapes: responses, chat/completions, streaming, tools, embeddings |
-| [docs/embedding-model-research-brief.md](docs/embedding-model-research-brief.md) | Hugging Face research brief on local embedding model options and recommendation |
-| [docs/model-card-index.md](docs/model-card-index.md) | Model registry with upstream card links |
-| [docs/llama-server-stats-faq.md](docs/llama-server-stats-faq.md) | Understanding llama-server logs and memory numbers |
-| [docs/llama-server-cache-architecture-explainer.md](docs/llama-server-cache-architecture-explainer.md) | Deep dive: slots, KV cache, checkpoints, long-context |
-| [docs/architecture.html](docs/architecture.html) | Interactive stack diagram |
-| [CLAUDE.md](CLAUDE.md) | Instructions for Claude Code |
-| [AGENTS.md](AGENTS.md) | Instructions for AI agents |
+- [docs/README.md](docs/README.md) — full documentation index (serving design,
+  credentials, llama-server internals, embeddings course)
+- [docs-cms/](docs-cms/README.md) — decision records (ADRs) for architecture
+  choices
+- [reports/](reports/) — capability research (model selection per hardware
+  class, benchmark guides)
