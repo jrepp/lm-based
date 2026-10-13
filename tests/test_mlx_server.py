@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 try:
-    from lm_launcher.mlx_server import build_args
+    from lm_launcher.mlx_server import build_args, default_kev_repo_dir
 except ModuleNotFoundError as exc:
     if exc.name in {"pydantic", "pydantic_settings"}:
         build_args = None
@@ -66,6 +66,65 @@ class MlxServerArgsTests(unittest.TestCase):
         self.assertNotIn("--temp", args)
         self.assertNotIn("--top-p", args)
         self.assertNotIn("--top-k", args)
+
+
+@unittest.skipIf(build_args is None, "pydantic launcher dependencies are not installed")
+class MlxKevArgsTests(unittest.TestCase):
+    def _settings(self, **overrides: object) -> object:
+        base: dict[str, object] = {
+            "model_path": Path("/models/kev-4b-mlx-8bit/config.json"),
+            "profile": "mlx-kev",
+            "kev_repo_dir": None,
+            "kev_python": "3.13",
+            "host": "127.0.0.1",
+            "port": 8008,
+            "ctx_size": 65536,
+            "alias": "kev-4b-mlx-8bit",
+            "temperature": None,
+            "top_p": None,
+            "top_k": None,
+        }
+        base.update(overrides)
+        return types.SimpleNamespace(**base)
+
+    def test_builds_kev_serve_command_against_weights_directory(self) -> None:
+        import tempfile
+        from pathlib import Path as _Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = _Path(tmp) / "kev"
+            repo.mkdir()
+            (repo / "pyproject.toml").write_text("[project]\nname = 'kev'\n")
+            args = build_args(self._settings(kev_repo_dir=repo))  # type: ignore[arg-type]
+
+        self.assertEqual(args[:2], ["uv", "run"])
+        self.assertEqual(args[args.index("--directory") + 1], str(repo))
+        self.assertEqual(args[args.index("--extra") + 1], "serve")
+        self.assertTrue(args[args.index("python") + 1].endswith("kev_serve_local.py"))
+        # The shim gets the merged weights directory (config.json's parent).
+        self.assertEqual(
+            args[args.index("--weights") + 1], "/models/kev-4b-mlx-8bit"
+        )
+        self.assertEqual(args[args.index("--kev-repo") + 1], str(repo))
+        self.assertEqual(args[args.index("--host") + 1], "127.0.0.1")
+        self.assertEqual(args[args.index("--port") + 1], "8008")
+
+    def test_kev_python_pin_propagates_to_uv(self) -> None:
+        import tempfile
+        from pathlib import Path as _Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = _Path(tmp) / "kev"
+            repo.mkdir()
+            (repo / "pyproject.toml").write_text("[project]\nname = 'kev'\n")
+            args = build_args(
+                self._settings(kev_repo_dir=repo, kev_python="3.12")  # type: ignore[arg-type]
+            )
+
+        self.assertEqual(args[args.index("--python") + 1], "3.12")
+
+    def test_default_kev_repo_dir_is_support_kev(self) -> None:
+        self.assertEqual(default_kev_repo_dir().name, "kev")
 
 
 if __name__ == "__main__":

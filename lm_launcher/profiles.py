@@ -14,6 +14,8 @@ def infer_profile(model_name: str, requested: str) -> str:
     lowered = model_name.lower()
     if "qwen3-coder-next" in lowered:
         return "qwen3-coder-next"
+    if "kev" in lowered:
+        return "mlx-kev"
     if "qwen3-coder-480b" in lowered:
         return "qwen3-coder-480b"
     if "qwen2.5-coder" in lowered:
@@ -22,6 +24,12 @@ def infer_profile(model_name: str, requested: str) -> str:
         return "qwen3.6-mtp"
     if "qwen3.6" in lowered:
         return "qwen3.6"
+    if "qwen3.8" in lowered and "mtp" in lowered:
+        return "qwen3.8-mtp"
+    if "qwen3.8" in lowered:
+        return "qwen3.8"
+    if "122b" in lowered:
+        return "qwen3.5-122b"
     if "qwen3.5" in lowered:
         return "qwen3.5"
     if "gemma" in lowered:
@@ -90,6 +98,63 @@ def profile_defaults(profile: str, model_name: str) -> dict[str, object]:
                 "min_p": 0.0,
                 "cache_type_k": "q4_0",
                 "cache_type_v": "q4_0",
+            }
+        )
+
+    if profile == "qwen3.5-122b":
+        # 122B-A10B MoE: unsloth dynamic 4-bit is the 128GB fit. Standard
+        # attention KV gets expensive at long context, so use near-lossless
+        # q8_0 KV cache and hold 131072 ctx (262144 native ceiling) until
+        # measured on the 128GB budget.
+        defaults.update(
+            {
+                "ctx_size": 131072,
+                "cache_type_k": "q8_0",
+                "cache_type_v": "q8_0",
+                "batch_size": 1024,
+                "ubatch_size": 256,
+            }
+        )
+
+    if profile == "qwen3.8":
+        # Dense 27B successor to qwen3.6; keep ctx conservative until the
+        # architecture is validated on llama.cpp/Metal.
+        defaults.update(
+            {
+                "ctx_size": 131072,
+                "batch_size": 1024,
+                "ubatch_size": 256,
+            }
+        )
+
+    if profile == "mlx-kev":
+        # kev decision models (kev.serve): prefill-only, served through the
+        # /v1/systemone API. No sampler flags — each checkpoint ships its own
+        # fitted calibration temperature. ctx_size records the kev serving
+        # ceiling (65536-token states); the validated context of kev-4b is
+        # 8192 tokens.
+        defaults.update(
+            {
+                "ctx_size": 65536,
+            }
+        )
+
+    if profile == "qwen3.8-mtp":
+        # MTP-preserved quant for native draft-mtp speculative decoding,
+        # mirroring the validated qwen3.6-mtp profile. Requires a llama-server
+        # build with draft-mtp support (the sidecar pins LLAMA_SERVER_BIN).
+        defaults.update(
+            {
+                "ctx_size": 262144,
+                "alias": "qwen38-27b-mtp",
+                "cache_type_k": "q4_0",
+                "cache_type_v": "q4_0",
+                "batch_size": 1024,
+                "ubatch_size": 256,
+                "parallel": 1,
+                "flash_attn": "on",
+                "spec_type": "draft-mtp",
+                "spec_draft_n_max": 4,
             }
         )
 
