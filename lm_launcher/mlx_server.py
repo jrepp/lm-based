@@ -17,13 +17,93 @@ from lm_launcher.run_capture import (
 )
 from lm_launcher.settings import ServerSettings
 
+KEV_REPO_URL = "https://github.com/jaredpalmer/kev.git"
+KEV_PYTHON = "3.13"  # kev requires 3.12/3.13 (torch wheels); the repo pins 3.13
+
 
 def fail(message: str) -> None:
     print(message, file=sys.stderr)
     raise SystemExit(1)
 
 
+def is_kev_profile(settings: ServerSettings) -> bool:
+    # kev decision models are served through the kev runtime (kev.serve),
+    # not mlx_lm.server. See ADR-005.
+    return getattr(settings, "profile", "") == "mlx-kev"
+
+
+def default_kev_repo_dir() -> Path:
+    return Path(__file__).resolve().parent.parent / "support" / "kev"
+
+
+def ensure_kev_repo(settings: ServerSettings) -> Path:
+    """Locate (or clone) the kev runtime checkout.
+
+    kev is not published to PyPI (the `kev` name is taken by an unrelated ORM),
+    so the runtime is used from a shallow clone under support/kev, mirroring the
+    upstream quick start (`uv run --extra serve python -m kev.serve`).
+    """
+    repo_dir = getattr(settings, "kev_repo_dir", None) or default_kev_repo_dir()
+    if (repo_dir / "pyproject.toml").is_file():
+        return repo_dir
+    if repo_dir.exists() and any(repo_dir.iterdir()):
+        fail(
+            f"kev runtime directory {repo_dir} exists but is not a kev checkout "
+            f"(missing pyproject.toml). Remove it or set KEV_REPO_DIR."
+        )
+    print(f"Cloning kev runtime into {repo_dir} ...")
+    repo_dir.mkdir(parents=True, exist_ok=True)
+    for attempt in range(1, 4):
+        result = subprocess.run(
+            ["git", "clone", "--depth", "1", KEV_REPO_URL, str(repo_dir)],
+        )
+        if result.returncode == 0 and (repo_dir / "pyproject.toml").is_file():
+            break
+        print(f"kev runtime clone attempt {attempt}/3 failed", file=sys.stderr)
+        import time
+
+        time.sleep(5 * attempt)
+        subprocess.run(["rm", "-rf", str(repo_dir)], check=True)
+        repo_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        fail(f"Failed to clone kev runtime from {KEV_REPO_URL} into {repo_dir}")
+    return repo_dir
+
+
+def build_kev_args(settings: ServerSettings, kev_repo_dir: Path) -> list[str]:
+    # Merged MLX packs (backbone weights + adapter-mode head.pt) are rejected
+    # by kev.serve --run (Checkpoint.full() requires the head.pt weights-mode
+    # to match the directory layout), so serve through the local shim, which
+    # follows the artifact card's loading path and reuses kev.serve's
+    # Server/app. The shim imports the kev package from the runtime checkout.
+    shim = Path(__file__).resolve().parent / "kev_serve_local.py"
+    model_dir = str(settings.model_path.parent)
+    args = [
+        "uv",
+        "run",
+        "--directory",
+        str(kev_repo_dir),
+        "--python",
+        getattr(settings, "kev_python", KEV_PYTHON),
+        "--extra",
+        "serve",
+        "python",
+        str(shim),
+        "--weights",
+        model_dir,
+        "--kev-repo",
+        str(kev_repo_dir),
+        "--host",
+        settings.host,
+        "--port",
+        str(settings.port),
+    ]
+    return args
+
+
 def build_args(settings: ServerSettings) -> list[str]:
+    if is_kev_profile(settings):
+        return build_kev_args(settings, ensure_kev_repo(settings))
     # config.json is the directory anchor (see the sidecar); mlx_lm loads the
     # whole directory. Use the non-deprecated `mlx_lm.server` console script.
     model_dir = str(settings.model_path.parent)
@@ -52,6 +132,9 @@ def build_args(settings: ServerSettings) -> list[str]:
 
 
 def print_startup(settings: ServerSettings, run_dir: Path | None = None) -> None:
+    if is_kev_profile(settings):
+        print_startup_kev(settings, run_dir=run_dir)
+        return
     print("Starting mlx_lm.server")
     print(f"  model: {settings.model_path.parent}")
     print(f"  profile:{settings.profile}")
@@ -70,9 +153,31 @@ def print_startup(settings: ServerSettings, run_dir: Path | None = None) -> None
         print(f"  run:   {run_dir}")
 
 
+def print_startup_kev(settings: ServerSettings, run_dir: Path | None = None) -> None:
+    print("Starting kev.serve (decision model, /v1/systemone)")
+    print(f"  run:   {settings.model_path.parent}")
+    print(f"  repo:  {getattr(settings, 'kev_repo_dir', None) or default_kev_repo_dir()}")
+    print(f"  py:    {getattr(settings, 'kev_python', KEV_PYTHON)}")
+    print(f"  alias: {settings.alias}")
+    print(f"  bind:  http://{settings.host}:{settings.port}")
+    print(f"  ctx:   {settings.ctx_size} (max state tokens; kev-4b validated to 8192)")
+    print("  samp:  none (checkpoint ships its own calibrated temperature)")
+    print("  api:   POST /v1/systemone, GET /v1/models")
+    if run_dir is not None:
+        print(f"  run:   {run_dir}")
+
+
 def validate_runtime(settings: ServerSettings) -> None:
     if not settings.model_path or not settings.model_path.is_file():
         fail(f"MLX model anchor (config.json) not found: {settings.model_path}")
+    if is_kev_profile(settings):
+        head = settings.model_path.parent / "head.pt"
+        if not head.is_file():
+            fail(
+                f"kev checkpoint requires head.pt in {settings.model_path.parent} "
+                "(kev.serve --run only accepts directories containing head.pt)"
+            )
+        ensure_kev_repo(settings)
 
 
 def prepare_run_context(settings: ServerSettings) -> tuple[ServerSettings, RunContext]:

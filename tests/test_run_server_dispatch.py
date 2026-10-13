@@ -46,6 +46,15 @@ class RunServerDispatchTests(unittest.TestCase):
     def test_mlx_profile_selects_mlx_backend(self) -> None:
         self.assertEqual(self._select(PROFILE="mlx-bonsai"), "mlx")
 
+    def test_kev_profile_selects_mlx_backend(self) -> None:
+        self.assertEqual(self._select(PROFILE="mlx-kev"), "mlx")
+
+    def test_kev_slug_selects_mlx_backend(self) -> None:
+        self.assertEqual(
+            self._select(PROFILE="auto", MODEL_SLUG="kev-4b-mlx-8bit"),
+            "mlx",
+        )
+
     def test_mlx_slug_selects_mlx_backend(self) -> None:
         self.assertEqual(
             self._select(PROFILE="auto", MODEL_SLUG="ternary-bonsai-27b-mlx-2bit"),

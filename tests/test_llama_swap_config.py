@@ -8,11 +8,11 @@ from pathlib import Path
 from llama_swap.config import _read_enabled_slugs, build_config
 
 
-def _write_sidecar(dir_path: Path, slug: str, name: str) -> None:
+def _write_sidecar(dir_path: Path, slug: str, name: str, fmt: str = "gguf", profile: str = "generic") -> None:
     record = {
         "model": {"slug": slug},
-        "artifact": {"format": "gguf", "quantization": "Q4_K_M"},
-        "launcher": {"profile": "generic"},
+        "artifact": {"format": fmt, "quantization": "Q4_K_M"},
+        "launcher": {"profile": profile},
     }
     (dir_path / name).write_text(json.dumps(record))
 
@@ -36,6 +36,9 @@ class HotModelsConfigTests(unittest.TestCase):
         cfg = build_config(models_dir=self.models, hot_slugs={"test-a"})
         self.assertEqual(set(cfg.models), {"test-a"})
         self.assertIn("PORT=${PORT}", cfg.models["test-a"].cmd)
+        # llama-swap execs cmd directly: the env-prefixed script must be
+        # wrapped in a shell invocation.
+        self.assertTrue(cfg.models["test-a"].cmd.startswith("sh -c "))
 
     def test_hot_filter_with_only_unknown_slugs_yields_empty(self) -> None:
         cfg = build_config(models_dir=self.models, hot_slugs={"does-not-exist"})
@@ -49,6 +52,28 @@ class HotModelsConfigTests(unittest.TestCase):
     def test_read_enabled_slugs_no_policy_returns_none(self) -> None:
         # None means "no hot filter" -> include all models.
         self.assertIsNone(_read_enabled_slugs(Path(self._tmp.name) / "absent.json"))
+
+
+class MlxSidecarConfigTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.models = Path(self._tmp.name) / "models"
+        self.models.mkdir()
+        _write_sidecar(self.models, "bonsai-mlx", "bonsai.json", fmt="mlx", profile="mlx-bonsai")
+        _write_sidecar(self.models, "kev-4b-mlx-8bit", "kev.json", fmt="mlx", profile="mlx-kev")
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def test_mlx_format_sidecars_are_included(self) -> None:
+        cfg = build_config(models_dir=self.models, hot_slugs=None)
+        self.assertEqual(set(cfg.models), {"bonsai-mlx", "kev-4b-mlx-8bit"})
+
+    def test_kev_profile_uses_v1_models_health_check(self) -> None:
+        # kev.serve has no /health; mlx_lm.server keeps the default.
+        cfg = build_config(models_dir=self.models, hot_slugs=None)
+        self.assertEqual(cfg.models["kev-4b-mlx-8bit"].check_endpoint, "/v1/models")
+        self.assertEqual(cfg.models["bonsai-mlx"].check_endpoint, "/health")
 
 
 if __name__ == "__main__":

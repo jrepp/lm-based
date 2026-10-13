@@ -73,16 +73,20 @@ def _shell_quote(value: str) -> str:
 
 def _build_run_server_cmd(slug: str) -> str:
     worker_id = f"swap-{slug}"
-    parts = [
-        f"MODEL_SLUG={_shell_quote(slug)}",
-        "HOST=127.0.0.1",
-        "PORT=${PORT}",
-        "RUN_MODE=swap_worker",
-        f"SUPERVISOR_WORKER_ID={_shell_quote(worker_id)}",
-        "ENABLE_RUN_CAPTURE=0",
-        "./run-server.py",
-    ]
-    return " ".join(parts)
+    inner = " ".join(
+        [
+            f"MODEL_SLUG={_shell_quote(slug)}",
+            "HOST=127.0.0.1",
+            "PORT=${PORT}",
+            "RUN_MODE=swap_worker",
+            f"SUPERVISOR_WORKER_ID={_shell_quote(worker_id)}",
+            "ENABLE_RUN_CAPTURE=0",
+            "./run-server.py",
+        ]
+    )
+    # llama-swap execs cmd directly (no shell), so the env-prefix form must
+    # be wrapped; ${PORT} is provided by llama-swap in the child's env.
+    return f"sh -c {_shell_quote(inner)}"
 
 
 def _sidecar_to_model_config(sidecar_path: Path) -> ModelConfig | None:
@@ -100,18 +104,22 @@ def _sidecar_to_model_config(sidecar_path: Path) -> ModelConfig | None:
 
     profile = recommended_env.get("PROFILE") or launcher.get("profile", "auto")
     fmt = artifact.get("format", "gguf")
-    if fmt not in {"gguf", "safetensors"} and profile != "ouro":
+    if fmt not in {"gguf", "safetensors", "mlx"} and profile != "ouro":
         return None
 
     cmd = _build_run_server_cmd(slug)
 
     name = artifact.get("quantization") or ""
 
+    # kev.serve (decision models) has no /health route; /v1/models is its
+    # liveness endpoint. mlx_lm.server keeps the default /health.
+    check_endpoint = "/v1/models" if profile == "mlx-kev" else "/health"
+
     return ModelConfig(
         model_id=slug,
         cmd=cmd,
         name=name,
-        check_endpoint="/health",
+        check_endpoint=check_endpoint,
         send_loading_state=True,
     )
 

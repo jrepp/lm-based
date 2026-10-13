@@ -69,6 +69,8 @@ class ServerSettings(BaseSettings):
 
     llama_server_bin: str = "llama-server"
     backend_python: str = _read_project_python()
+    kev_repo_dir: Path | None = None
+    kev_python: str = "3.13"
     model_dir: Path = _PROJECT_ROOT / "artifacts"
     models_index_dir: Path = _PROJECT_ROOT / "models"
     model_slug: str | None = None
