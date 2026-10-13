@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-10-10",
+  "artifact": {
+    "filename": "Qwen3.5-122B-A10B-UD-Q4_K_XL-00001-of-00003.gguf",
+    "local_path": "UD-Q4_K_XL/Qwen3.5-122B-A10B-UD-Q4_K_XL-00001-of-00003.gguf",
+    "format": "gguf",
+    "quantization": "UD-Q4_K_XL",
+    "size_bytes": null,
+    "sha256": null
+  },
+  "model": {
+    "slug": "qwen35-122b-ud-q4k-xl",
+    "family": "Qwen3.5",
+    "name": "Qwen3.5-122B-A10B",
+    "canonical_model_card": "https://huggingface.co/Qwen/Qwen3.5-122B-A10B"
+  },
+  "source": {
+    "gguf_model_card": "https://huggingface.co/unsloth/Qwen3.5-122B-A10B-GGUF",
+    "publisher": "unsloth",
+    "provenance_status": "planned_download"
+  },
+  "download": {
+    "provider": "huggingface",
+    "repo_id": "unsloth/Qwen3.5-122B-A10B-GGUF",
+    "filenames": [
+      "UD-Q4_K_XL/Qwen3.5-122B-A10B-UD-Q4_K_XL-00001-of-00003.gguf",
+      "UD-Q4_K_XL/Qwen3.5-122B-A10B-UD-Q4_K_XL-00002-of-00003.gguf",
+      "UD-Q4_K_XL/Qwen3.5-122B-A10B-UD-Q4_K_XL-00003-of-00003.gguf"
+    ],
+    "revision": null
+  },
+  "launcher": {
+    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "profile": "qwen3.5-122b",
+    "recommended_env": {
+      "MODEL_FILE": "UD-Q4_K_XL/Qwen3.5-122B-A10B-UD-Q4_K_XL-00001-of-00003.gguf",
+      "PROFILE": "qwen3.5-122b"
+    }
+  },
+  "notes": [
+    "General-use flagship for the 128GB Mac (research report 2026-10-10, rank 2): Apache-2.0, MoE 122B total / 10B active, 262144-token native context, native vision.",
+    "Most-capable general model that genuinely fits 128GB at >=4-bit; needs the raised GPU wired limit (~114-120GB via iogpu.wired_limit_mb) when served alone.",
+    "Capability evidence is vendor-reported only; no independent benchmark entries as of 2026-10.",
+    "All three shards are required locally; unsloth dynamic quants are the standard for 100B+ MoE at 4-bit.",
+    "Serve at 131072 ctx with q8_0 KV cache (profile qwen3.5-122b); long-context KV on standard attention costs ~10-30GB, so do not extend to 1M without measuring.",
+    "Vision requires an mmproj file (mmproj-F16.gguf in the repo); llama_launcher has no mmproj wiring yet, so image input is pending.",
+    "Unsloth also publishes UD-Q4_K_XL-class MTP variants for speculative decoding; revisit after the base path validates."
+  ]
+}

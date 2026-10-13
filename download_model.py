@@ -79,9 +79,22 @@ def download_record(record: dict, output_dir: Path | None, token: str | None) ->
     else:
         requested_files = [download["filename"]] if download.get("filename") else []
     revision = download.get("revision")
-    local_dir = output_dir or Path(
-        download.get("local_dir") or artifact["local_path"]
-    ).resolve().parent
+    artifact = record.get("artifact", {})
+    explicit_local_dir = download.get("local_dir")
+    local_path = Path(artifact["local_path"])
+    if output_dir is not None or explicit_local_dir:
+        # An explicit per-record destination (download.local_dir) is honored
+        # verbatim; hf_hub_download/snapshot_download recreate the repo-relative
+        # subpath underneath it.
+        local_dir = Path(explicit_local_dir or output_dir)
+    elif local_path.is_absolute():
+        local_dir = local_path.parent
+    else:
+        # local_path is project-root-relative. hf_hub_download/snapshot_download
+        # recreate the repo-relative filename (including subfolders such as
+        # Q6_K/ or MTP/) underneath local_dir, so the destination must be the
+        # project root for the artifact to land at local_path.
+        local_dir = ROOT
 
     if download.get("snapshot") or download.get("type") == "snapshot":
         allow_patterns = download.get("allow_patterns")
