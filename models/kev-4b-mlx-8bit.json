@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-10-10",
+  "artifact": {
+    "filename": "config.json",
+    "local_path": "kev-4b-mlx-8bit/config.json",
+    "format": "mlx",
+    "quantization": "MLX 8-bit (group 64)",
+    "size_bytes": null,
+    "sha256": null
+  },
+  "model": {
+    "slug": "kev-4b-mlx-8bit",
+    "family": "Kev",
+    "name": "Kev-4B MLX 8-bit",
+    "canonical_model_card": "https://huggingface.co/jaredpalmer/kev-4b"
+  },
+  "source": {
+    "gguf_model_card": "https://huggingface.co/RoderickQiu/kev-4b-mlx-8bit",
+    "publisher": "RoderickQiu",
+    "provenance_status": "verified"
+  },
+  "download": {
+    "provider": "huggingface",
+    "repo_id": "RoderickQiu/kev-4b-mlx-8bit",
+    "repo_type": "model",
+    "snapshot": true,
+    "allow_patterns": [
+      "README.md",
+      "LICENSE",
+      "provenance.json",
+      "config.json",
+      "model.safetensors",
+      "head.pt",
+      "tokenizer.json",
+      "tokenizer_config.json",
+      "vocab.json",
+      "merges.txt",
+      "added_tokens.json",
+      "special_tokens_map.json"
+    ],
+    "revision": null
+  },
+  "launcher": {
+    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "profile": "mlx-kev",
+    "recommended_env": {
+      "MODEL_FILE": "kev-4b-mlx-8bit/config.json",
+      "PROFILE": "mlx-kev"
+    }
+  },
+  "notes": [
+    "Decision model, not a chat model: prefill-only pointer head over Qwen3.5-4B-Base; serves POST /v1/systemone (TypeSafe System One API) with calibrated choice/score/noul answers.",
+    "Served by the kev runtime via lm_launcher/kev_serve_local.py: kev.serve --run rejects this pack (merged backbone weights + adapter-mode head.pt fail Checkpoint.full()), so the shim loads per the artifact card's documented path and hands the model to kev.serve's Server/app unchanged. The runtime is not on PyPI, so mlx_server clones it into support/kev (KEV_REPO_DIR overrides).",
+    "This artifact is a community (non-official) merged+quantized conversion of jaredpalmer/kev-4b revision 139fdd94; head.pt (temperature 2.406) is copied unchanged from the canonical checkpoint.",
+    "Verified locally 2026-10-10: model.safetensors is 4,469,640,165 bytes, sha256 83adf34ef8f2433166225960d0f074def35d3de52449fa8861bc356398312d31 — matches upstream provenance.json exactly; head.pt sha256 dd633435998ecc751ac538717a3742e32149500fabf7d7276287dbf0693f347c matches the kev-4b model card.",
+    "Accuracy parity with bf16 is reported on-Mac across five dev suites (decision-v7 0.873 acc / ECE 0.010); process footprint ~6.6GB while scoring.",
+    "kev-4b validated context is 8192 tokens (accuracy degrades beyond); the server accepts states up to 65536 tokens and refuses longer with 422.",
+    "Unofficial conversion caveat: built for the Qualm app; the canonical bf16 path is 'kev.serve --run jaredpalmer/kev-4b' if parity issues appear.",
+    "Design rationale: docs-cms/adr/adr-005-mlx-decision-model-serving-kev.md"
+  ]
+}
