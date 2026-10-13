@@ -32,7 +32,34 @@
   },
   "swap": {
     "global_ttl_seconds": 0,
-    "send_loading_state": true
+    "send_loading_state": true,
+    "routing": {
+      "router": {
+        "use": "group",
+        "settings": {
+          "groups": {
+            "small": {
+              "swap": false,
+              "exclusive": false,
+              "persistent": false,
+              "members": ["glm-ocr-q8_0", "kev-4b-mlx-8bit"]
+            },
+            "main": {
+              "swap": true,
+              "exclusive": false,
+              "members": [
+                "qwen25-coder-7b-instruct",
+                "qwen3-coder-next-q6k",
+                "qwen35-122b-ud-q4k-xl",
+                "qwen36-27b-q6k",
+                "qwen38-27b-ud-q6k",
+                "qwen38-27b-mtp-q4_0"
+              ]
+            }
+          }
+        }
+      }
+    }
   },
   "observability": {
     "metrics_listen": "127.0.0.1:9091",

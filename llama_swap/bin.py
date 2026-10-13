@@ -4,10 +4,12 @@ import os
 import platform
 import shutil
 import stat
+import tarfile
+import tempfile
 import urllib.request
 from pathlib import Path
 
-RELEASE_URL = "https://github.com/mostlygeek/llama-swap/releases/download/{version}/llama-swap-{platform}-{arch}"
+RELEASE_URL = "https://github.com/mostlygeek/llama-swap/releases/download/{version}/{asset}"
 
 PLATFORM_MAP = {
     "darwin": "darwin",
@@ -21,7 +23,7 @@ ARCH_MAP = {
     "aarch64": "arm64",
 }
 
-DEFAULT_VERSION = "v203"
+DEFAULT_VERSION = "v264"
 
 
 def _system_platform() -> str:
@@ -40,13 +42,63 @@ def find_binary() -> Path | None:
     return None
 
 
-def download_url(version: str = DEFAULT_VERSION) -> str:
+def _version_number(version: str) -> str:
+    return version[1:] if version.startswith("v") else version
+
+
+def download_urls(version: str = DEFAULT_VERSION) -> tuple[str, str]:
+    """Candidate asset URLs, newest scheme first.
+
+    v224+ ship versioned tarballs (llama-swap_<ver>_<plat>_<arch>.tar.gz under
+    tag v<ver>); older releases exposed raw binaries named without the version.
+    """
     plat = _system_platform()
     arch = _system_arch()
-    name = f"llama-swap-{plat}-{arch}"
-    if plat == "windows":
-        name += ".exe"
-    return RELEASE_URL.format(version=version, platform=plat, arch=arch)
+    ver = _version_number(version)
+    exe = ".exe" if plat == "windows" else ""
+    new = RELEASE_URL.format(version=version, asset=f"llama-swap_{ver}_{plat}_{arch}.tar.gz")
+    old = RELEASE_URL.format(version=version, asset=f"llama-swap-{plat}-{arch}{exe}")
+    return new, old
+
+
+def download_url(version: str = DEFAULT_VERSION) -> str:
+    return download_urls(version)[0]
+
+
+def _extract_tarball(tar_path: Path, dest: Path) -> None:
+    wanted = "llama-swap.exe" if dest.suffix == ".exe" else "llama-swap"
+    with tarfile.open(tar_path, "r:gz") as tar:
+        for member in tar.getmembers():
+            if member.name.split("/")[-1] == wanted and member.isfile():
+                src = tar.extractfile(member)
+                if src is None:
+                    break
+                with dest.open("wb") as fh:
+                    shutil.copyfileobj(src, fh)
+                return
+    raise ValueError(f"no {wanted} inside {tar_path.name}")
+
+
+def _fetch(url: str, dest: Path) -> bool:
+    try:
+        with urllib.request.urlopen(url, timeout=60) as resp:
+            if url.endswith(".tar.gz"):
+                with tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False) as tmp:
+                    shutil.copyfileobj(resp, tmp)
+                    tmp_name = tmp.name
+            else:
+                with dest.open("wb") as fh:
+                    shutil.copyfileobj(resp, fh)
+                return True
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return False
+        raise
+    try:
+        _extract_tarball(Path(tmp_name), dest)
+        return True
+    finally:
+        os.unlink(tmp_name)
 
 
 def install_binary(
@@ -54,7 +106,6 @@ def install_binary(
     version: str = DEFAULT_VERSION,
     overwrite: bool = False,
 ) -> Path:
-    url = download_url(version)
     if dest is None:
         dest = Path(shutil.getprefix()) / "bin" / f"llama-swap.exe" if platform.system().lower() == "windows" else Path("/usr/local/bin/llama-swap")
 
@@ -63,12 +114,9 @@ def install_binary(
         return dest
 
     dest.parent.mkdir(parents=True, exist_ok=True)
-    with urllib.request.urlopen(url, timeout=60) as resp, dest.open("wb") as fh:
-        while True:
-            chunk = resp.read(65536)
-            if not chunk:
-                break
-            fh.write(chunk)
+    new_url, old_url = download_urls(version)
+    if not _fetch(new_url, dest):
+        _fetch(old_url, dest)
 
     dest.chmod(dest.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     return dest
