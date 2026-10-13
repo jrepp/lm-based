@@ -141,8 +141,8 @@ It also avoids pushing observability responsibilities into the supervisor or req
 ## Sources
 
 - Vector monitoring and internal telemetry:
-  https://vector.dev/docs/administration/monitoring/
+  <https://vector.dev/docs/administration/monitoring/>
 - Vector Prometheus exporter sink:
-  https://vector.dev/docs/reference/configuration/sinks/prometheus_exporter/
+  <https://vector.dev/docs/reference/configuration/sinks/prometheus_exporter/>
 - Prometheus configuration and scrape model:
-  https://prometheus.io/docs/prometheus/latest/configuration/configuration/
+  <https://prometheus.io/docs/prometheus/latest/configuration/configuration/>

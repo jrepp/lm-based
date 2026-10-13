@@ -30,6 +30,7 @@ Recorded: 2026-04-13
 ## Raw Log Snippet
 
 ```text
+
 196.00.663.764 I slot update_slots: id  0 | task 9871 | n_tokens = 88390, memory_seq_rm [88390, end)
 196.00.672.532 I reasoning-budget: activated, budget=2147483647 tokens
 196.00.672.550 I reasoning-budget: deactivated (natural end)
@@ -44,4 +45,5 @@ prompt eval time =    5633.83 ms /   999 tokens (    5.64 ms per token,   177.32
       total time =   76167.86 ms /  2318 tokens
 197.14.120.302 I slot      release: id  0 | task 9871 | stop processing: n_tokens = 89712, truncated = 0
 197.14.120.336 I srv  update_slots: all slots are idle
+
 ```

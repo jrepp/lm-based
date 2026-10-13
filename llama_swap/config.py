@@ -100,7 +100,7 @@ def _sidecar_to_model_config(sidecar_path: Path) -> ModelConfig | None:
 
     profile = recommended_env.get("PROFILE") or launcher.get("profile", "auto")
     fmt = artifact.get("format", "gguf")
-    if fmt not in {"gguf", "safetensors"} and profile != "ouro":
+    if fmt not in {"gguf", "safetensors", "mlx"} and profile not in {"ouro"} and not profile.endswith("-mlx"):
         return None
 
     cmd = _build_run_server_cmd(slug)

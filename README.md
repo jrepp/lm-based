@@ -11,6 +11,7 @@ Tailscale / Telegram / open-webui
         /          \
  llama-server    Cloud APIs
  (local GGUF)    (direct or x402 proxy)
+
 ```
 
 See [`docs/architecture.html`](docs/architecture.html) for the interactive diagram.
@@ -25,6 +26,7 @@ Hot-swap proxy that automatically loads the right `llama-server` on demand.
 Handles concurrent models via a solver, with zero custom config per model.
 
 ```bash
+
 # 1. Install the llama-swap binary
 ./llama-swap-runner.py ensure
 
@@ -40,6 +42,7 @@ Handles concurrent models via a solver, with zero custom config per model.
 just swap-ensure
 just swap-config
 just swap-start
+
 ```
 
 Switch models by passing the model slug in any OpenAI API request — llama-swap
@@ -48,10 +51,12 @@ loads the right server automatically.
 ### Direct llama-server (one model at a time)
 
 ```bash
+
 cp .env.example .env
 $EDITOR .env   # set MODEL_SLUG
 ./run-server.py
 # → available at http://127.0.0.1:8001/v1
+
 ```
 
 ---
@@ -66,8 +71,10 @@ $EDITOR .env   # set MODEL_SLUG
 ## Download a model
 
 ```bash
+
 ./download_model.py --list
 ./download_model.py --model gemma4-e2b-uncensored-aggressive-q4kp
+
 ```
 
 ---
@@ -108,6 +115,7 @@ OpenCode configuration. See [docs/opencode-local-models.md](docs/opencode-local-
 **open-webui** (Docker):
 
 ```bash
+
 docker run -d --name open-webui --restart always \
   -p 3000:8080 \
   --add-host=host.docker.internal:host-gateway \
@@ -115,20 +123,23 @@ docker run -d --name open-webui --restart always \
   -e OPENAI_API_KEY=dummy \
   -v open-webui:/app/backend/data \
   ghcr.io/open-webui/open-webui:main
+
 ```
 
-Then open `http://localhost:3000`. See [docs/open-webui-local-server.md](docs/open-webui-local-server.md) for more.
+Then open `<http://localhost:3000`.> See [docs/open-webui-local-server.md](docs/open-webui-local-server.md) for more.
 
 ---
 
 ## Routing config (ClawRouter / cloud providers)
 
 ```bash
+
 ./route-config.py             # regenerate clawrouter.json
 ./route-config.py --status    # summarise current config
 ./route-config.py --providers # credential status per cloud provider
 ./route-config.py --doctor    # full health check
 ./route-config.py --validate  # lint sidecars only
+
 ```
 
 ---
@@ -140,6 +151,8 @@ Then open `http://localhost:3000`. See [docs/open-webui-local-server.md](docs/op
 | `gemma4-e2b-uncensored-aggressive-q4kp` | Gemma 4 2B | Q4_K_P | 3.4 GB |
 | `mistral-7b-instruct-v03-q4km` | Mistral 7B Instruct v0.3 | Q4_K_M | 4.4 GB |
 | `qwen25-coder-7b-instruct` | Qwen2.5-Coder-7B-Instruct | BF16 | snapshot |
+| `qwen3-coder-480b-a35b-mlx-4bit` | Qwen3-Coder-480B-A35B-Instruct | MLX 4-bit | 252 GB |
+| `qwen3-coder-480b-a35b-ud-q4kxl` | Qwen3-Coder-480B-A35B-Instruct | UD-Q4_K_XL | planned |
 | `qwen3-coder-next-iq4xs` | Qwen3-Coder-Next | IQ4_XS | — |
 | `qwen35-35b-a3b-q4km` | Qwen3.5 35B A3B | Q4_K_M | 22 GB |
 | `qwen36-27b-q6k` | Qwen3.6-27B | Q6_K | 22.5 GB |
@@ -152,6 +165,7 @@ Full metadata: [`docs/model-card-index.md`](docs/model-card-index.md)
 ## Key commands
 
 ```bash
+
 # Guardrails
 pip install pre-commit && pre-commit install
 
@@ -189,6 +203,7 @@ MODEL_SLUG=<slug> ./run-server.py  # override model
 
 # Run analysis
 ./summarize_run.py --run <run-dir>
+
 ```
 
 Markdown lint guardrails are enforced through `.pre-commit-config.yaml` using `markdownlint-cli2` over `README.md`, `AGENTS.md`, `CLAUDE.md`, and `docs/*.md`.
