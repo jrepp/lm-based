@@ -76,5 +76,39 @@ class MlxSidecarConfigTests(unittest.TestCase):
         self.assertEqual(cfg.models["bonsai-mlx"].check_endpoint, "/health")
 
 
+class RoutingPolicyTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.models = Path(self._tmp.name) / "models"
+        self.models.mkdir()
+        _write_sidecar(self.models, "test-a", "test-a.gguf.json")
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def test_routing_passed_through_from_policy(self) -> None:
+        import os
+
+        from llama_swap import config as swap_config
+
+        policy = Path(self._tmp.name) / "serve-policy.yaml"
+        routing = {"router": {"use": "group", "settings": {"groups": {"small": {"swap": False}}}}}
+        policy.write_text(json.dumps({"models": {"enabled": ["test-a"]}, "routing": routing}))
+
+        original = swap_config.PROJECT_ROOT
+        try:
+            swap_config.PROJECT_ROOT = Path(self._tmp.name)
+            cfg = swap_config.build_config(models_dir=self.models)
+        finally:
+            swap_config.PROJECT_ROOT = original
+        self.assertEqual(cfg.routing, routing)
+        self.assertEqual(cfg.to_dict()["routing"], routing)
+
+    def test_no_routing_yields_default(self) -> None:
+        from llama_swap.config import _read_policy_routing
+
+        self.assertEqual(_read_policy_routing(Path(self._tmp.name) / "absent.json"), {})
+
+
 if __name__ == "__main__":
     unittest.main()

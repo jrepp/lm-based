@@ -141,6 +141,7 @@ class LlamaSwapConfig:
     api_keys: list[str] = field(default_factory=list)
     models: dict[str, ModelConfig] = field(default_factory=dict)
     matrix: dict[str, Any] = field(default_factory=dict)
+    routing: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -158,6 +159,8 @@ class LlamaSwapConfig:
             d["apiKeys"] = self.api_keys
         if self.matrix:
             d["matrix"] = self.matrix
+        if self.routing:
+            d["routing"] = self.routing
         d["models"] = {k: v.to_dict() for k, v in self.models.items()}
         return d
 
@@ -180,12 +183,29 @@ def _read_enabled_slugs(policy_path: Path | None = None) -> set[str] | None:
     return {str(slug) for slug in enabled}
 
 
+def _read_policy_routing(policy_path: Path | None = None) -> dict[str, Any]:
+    """Operator-declared llama-swap routing (groups/matrix) from serve-policy.yaml.
+
+    Passed through verbatim; an empty dict means llama-swap's default
+    (one model at a time instance-wide).
+    """
+    if policy_path is None:
+        policy_path = PROJECT_ROOT / "serve-policy.yaml"
+    try:
+        policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    routing = policy.get("routing") or policy.get("swap", {}).get("routing")
+    return routing if isinstance(routing, dict) else {}
+
+
 def build_config(
     models_dir: Path = MODELS_DIR,
     hot_slugs: set[str] | None | object = _HOT_DEFAULT,
 ) -> LlamaSwapConfig:
     cfg = LlamaSwapConfig()
     sidecars = sorted(models_dir.glob("*.json"))
+    cfg.routing = _read_policy_routing()
 
     if hot_slugs is _HOT_DEFAULT:
         hot: set[str] | None = _read_enabled_slugs()
