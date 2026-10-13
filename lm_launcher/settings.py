@@ -71,6 +71,7 @@ class ServerSettings(BaseSettings):
     backend_python: str = _read_project_python()
     kev_repo_dir: Path | None = None
     kev_python: str = "3.13"
+    mmproj: Path | None = None
     model_dir: Path = _PROJECT_ROOT / "artifacts"
     models_index_dir: Path = _PROJECT_ROOT / "models"
     model_slug: str | None = None
@@ -200,6 +201,13 @@ class ServerSettings(BaseSettings):
                 mlx_model_env = recommended_env.get("MLX_MODEL")
                 if mlx_model_env:
                     self.mlx_model = mlx_model_env
+            if "mmproj" not in self.model_fields_set:
+                mmproj_env = recommended_env.get("MMPROJ")
+                if mmproj_env:
+                    mmproj_path = Path(mmproj_env)
+                    self.mmproj = (
+                        mmproj_path if mmproj_path.is_absolute() else _PROJECT_ROOT / mmproj_path
+                    )
 
         return self
 

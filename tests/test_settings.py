@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 try:
     from lm_launcher.settings import ServerSettings
@@ -34,6 +35,20 @@ class ServerSettingsModelIndexTests(unittest.TestCase):
         )
 
         self.assertEqual(settings.llama_server_bin, "/tmp/custom-llama-server")
+
+    def test_model_slug_applies_recommended_mmproj(self) -> None:
+        settings = ServerSettings(
+            model_slug="glm-ocr-q8_0",
+            enable_run_capture=False,
+        )
+
+        # Relative MMPROJ env values resolve against the project root.
+        self.assertEqual(
+            settings.mmproj,
+            Path(__file__).resolve().parents[1] / "mmproj-GLM-OCR-Q8_0.gguf",
+        )
+        self.assertEqual(settings.profile, "glm-ocr")
+        self.assertEqual(settings.temperature, 0.0)
 
     def test_mlx_slug_resolves_mlx_bonsai_profile_and_anchor(self) -> None:
         settings = ServerSettings(
