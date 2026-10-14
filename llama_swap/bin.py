@@ -24,6 +24,9 @@ ARCH_MAP = {
 }
 
 DEFAULT_VERSION = "v264"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# `./llama-swap-runner.py ensure` installs here, so no sudo or Homebrew is needed.
+LOCAL_BIN = PROJECT_ROOT / ".runtime" / "bin" / "llama-swap"
 
 
 def _system_platform() -> str:
@@ -35,11 +38,15 @@ def _system_arch() -> str:
 
 
 def find_binary() -> Path | None:
+    """$LLAMA_SWAP_BIN, then PATH, then the repo-local install."""
+    override = os.environ.get("LLAMA_SWAP_BIN")
+    if override and Path(override).exists():
+        return Path(override)
     for name in ("llama-swap", "llama-swap.exe"):
         path = shutil.which(name)
         if path:
             return Path(path)
-    return None
+    return LOCAL_BIN if LOCAL_BIN.exists() else None
 
 
 def _version_number(version: str) -> str:
@@ -107,7 +114,7 @@ def install_binary(
     overwrite: bool = False,
 ) -> Path:
     if dest is None:
-        dest = Path(shutil.getprefix()) / "bin" / f"llama-swap.exe" if platform.system().lower() == "windows" else Path("/usr/local/bin/llama-swap")
+        dest = LOCAL_BIN
 
     if dest.exists() and not overwrite:
         dest.chmod(dest.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)

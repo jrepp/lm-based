@@ -424,7 +424,9 @@ def show_status() -> int:
     print(f"\n  local ({len(local_backends)}):")
     for b in local_backends:
         local_path = b.get("local_path")
-        present = Path(local_path).exists() if local_path else False
+        present = bool(local_path) and any(
+            (base / local_path).exists() for base in (PROJECT_ROOT, PROJECT_ROOT / "artifacts")
+        )
         mark = "✓" if present else "✗"
         print(f"    {mark} {b.get('slug'):<44} ({b.get('profile')})  →  {b.get('openai_base')}")
 

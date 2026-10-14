@@ -30,14 +30,12 @@ class UpResolverTests(unittest.TestCase):
         plan = self.up.resolve_target("dashboard", registry)
         self.assertEqual([service.name for service in plan.services], ["stats-poll", "dashboard"])
 
-    def test_model_slug_expands_to_model_observability(self) -> None:
+    def test_model_slug_runs_only_the_worker(self) -> None:
+        # Observability needs Go; it is opt-in with `./up observability --add`.
         registry = self.up.build_registry()
         slug = "qwen36-27b-mtp-ud-q5k-xl"
         plan = self.up.resolve_target(slug, registry)
-        self.assertEqual(
-            [service.name for service in plan.services],
-            [f"model:{slug}", "stats-poll", "dashboard"],
-        )
+        self.assertEqual([service.name for service in plan.services], [f"model:{slug}"])
         self.assertEqual(plan.services[0].env["MODEL_SLUG"], slug)
         # The binary is machine config (.env), not something ./up pins per model.
         self.assertNotIn("LLAMA_SERVER_BIN", plan.services[0].env)
@@ -51,25 +49,17 @@ class UpResolverTests(unittest.TestCase):
             [f"model:{slug}", "sampler-proxy"],
         )
 
-    def test_non_gguf_slug_omits_llama_server_observability(self) -> None:
-        registry = self.up.build_registry()
-        slug = "qwen25-coder-7b-instruct"
-        plan = self.up.resolve_target(slug, registry)
-        self.assertEqual([service.name for service in plan.services], [f"model:{slug}"])
-
     def test_gguf_slug_omits_sampler_proxy(self) -> None:
         registry = self.up.build_registry()
         slug = "qwen36-27b-mtp-ud-q5k-xl"
         plan = self.up.resolve_target(slug, registry)
         self.assertNotIn("sampler-proxy", [service.name for service in plan.services])
 
-    def test_direct_service_set_includes_status_window(self) -> None:
-        registry = self.up.build_registry()
+    def test_direct_runs_model_slug_from_environment(self) -> None:
+        with mock.patch.dict(self.up.os.environ, {"MODEL_SLUG": "mistral-7b-instruct-v03-q4km"}):
+            registry = self.up.build_registry()
         plan = self.up.resolve_target("direct", registry)
-        self.assertEqual(
-            [service.window_name for service in plan.services],
-            ["model-qwen36-27b-mtp-ud-q5k-xl", "stats", "dashboard", "status"],
-        )
+        self.assertEqual([service.name for service in plan.services], ["model:mistral-7b-instruct-v03-q4km"])
 
     def test_swap_uses_policy_internal_listen_address(self) -> None:
         registry = self.up.build_registry()
@@ -77,13 +67,33 @@ class UpResolverTests(unittest.TestCase):
 
         self.assertIn("--listen '127.0.0.1:8081'", plan.services[0].command)
 
-    def test_default_core_service_set_excludes_model_worker(self) -> None:
+    def test_swap_set_needs_no_go_services(self) -> None:
         registry = self.up.build_registry()
-        plan = self.up.resolve_target("core", registry)
-        self.assertEqual(
-            [service.window_name for service in plan.services],
-            ["stats", "dashboard", "status"],
-        )
+        plan = self.up.resolve_target("swap", registry)
+        self.assertEqual([service.name for service in plan.services], ["llama-swap"])
+
+    def test_default_target_is_swap(self) -> None:
+        with mock.patch.object(self.up, "resolve_target", side_effect=KeyError("stop")) as resolve:
+            self.up.main([])
+        self.assertEqual(resolve.call_args.args[0], "swap")
+
+    def test_foreground_execs_main_service_without_tmux(self) -> None:
+        registry = self.up.build_registry()
+        plan = self.up.resolve_target("ternary-bonsai-27b-mlx-2bit", registry)
+        with mock.patch.object(self.up.os, "execvpe") as execvpe, mock.patch.object(self.up.os, "chdir"):
+            self.up.run_foreground(plan)
+        program, argv, env = execvpe.call_args.args
+        self.assertEqual(program, "bash")
+        self.assertIn("support/model-service", argv[-1])
+        self.assertEqual(env["MODEL_SLUG"], "ternary-bonsai-27b-mlx-2bit")
+
+    def test_setup_commands_dispatch_to_onboard(self) -> None:
+        for command in ("init", "doctor", "pull"):
+            with self.subTest(command=command):
+                target = "init" if command == "init" else command
+                with mock.patch.object(self.up.onboard, target, return_value=0) as handler:
+                    self.assertEqual(self.up.main([command]), 0)
+                handler.assert_called_once()
 
     def test_unknown_target_fails(self) -> None:
         registry = self.up.build_registry()

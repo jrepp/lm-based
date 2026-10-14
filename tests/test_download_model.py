@@ -28,7 +28,7 @@ class DownloadDestinationTests(unittest.TestCase):
                 for record in records:
                     with self.subTest(slug=record["model"]["slug"]):
                         download_model.download_record(record, None, None)
-                        expected = (root / record["artifact"]["local_path"]).parent
+                        expected = (root / "artifacts" / record["artifact"]["local_path"]).parent
                         self.assertEqual(Path(fetch.call_args.kwargs["local_dir"]), expected)
                         self.assertEqual((root / "README.md").read_text(), "project readme")
 
@@ -39,11 +39,32 @@ class DownloadDestinationTests(unittest.TestCase):
             download_model.download_record(record, Path("/tmp/chosen"), None)
         self.assertEqual(fetch.call_args.kwargs["local_dir"], "/tmp/chosen")
 
-    def test_sharded_gguf_keeps_hub_subdirectory_under_project_root(self):
+    def test_sharded_gguf_keeps_hub_subdirectory_under_artifacts(self):
         record = json.loads((download_model.INDEX_DIR / "Qwen3-Coder-Next-Q6_K.gguf.json").read_text())
         with patch.object(download_model, "hf_hub_download", return_value="/tmp/mock") as fetch:
             download_model.download_record(record, None, None)
         self.assertGreater(fetch.call_count, 1)
         for call in fetch.call_args_list:
-            self.assertEqual(call.kwargs["local_dir"], str(download_model.ROOT))
+            self.assertEqual(call.kwargs["local_dir"], str(download_model.ROOT / "artifacts"))
             self.assertTrue(call.kwargs["filename"].startswith("Q6_K/"))
+
+
+class DownloadEnabledTests(unittest.TestCase):
+    def test_fetches_only_missing_enabled_models(self):
+        records = [
+            {"model": {"slug": "have"}, "artifact": {"filename": "have.gguf"}},
+            {"model": {"slug": "need"}, "artifact": {"filename": "need.gguf"}},
+            {"model": {"slug": "off"}, "artifact": {"filename": "off.gguf"}},
+        ]
+        with patch.object(download_model, "load_policy", return_value={"models": {"enabled": ["have", "need"]}}), \
+                patch.object(download_model, "artifact_present", side_effect=lambda r, root: r["model"]["slug"] == "have"), \
+                patch.object(download_model, "download_record", return_value=[]) as fetch, \
+                patch("builtins.print"):
+            download_model.download_enabled(records, None)
+        self.assertEqual([call.args[0]["model"]["slug"] for call in fetch.call_args_list], ["need"])
+
+    def test_empty_policy_points_at_init(self):
+        with patch.object(download_model, "load_policy", return_value={}):
+            with self.assertRaises(SystemExit) as raised:
+                download_model.download_enabled([], None)
+        self.assertIn("./up init", str(raised.exception))

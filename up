@@ -20,6 +20,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from lm_launcher import onboard
 from lm_launcher.service_endpoints import swap_listen
 
 try:
@@ -35,6 +36,7 @@ except ModuleNotFoundError:
 
 
 SESSION = "lm-based"
+COMMANDS = ("init", "doctor", "pull")
 ROOT = Path(__file__).resolve().parent
 RUNTIME = ROOT / ".runtime" / "tmux"
 SHIM = ROOT / "support" / "tmux-service-shim"
@@ -70,26 +72,33 @@ class WindowState:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Manage lm-based services in a tmux session.",
+        description="Set up this host and run lm-based services in a tmux session.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "Targets may be service sets, service names, or model slugs.\n"
+            "Setup commands:\n"
+            "  ./up init      size a starter model set to this host (serve-policy.local.yaml)\n"
+            "  ./up doctor    check prerequisites, downloaded models, and memory\n"
+            "  ./up pull      download the enabled models that are missing\n"
+            "\n"
+            "Otherwise the target is a service set, service name, or model slug.\n"
             "\n"
             "Examples:\n"
-            "  ./up\n"
-            "  ./up direct\n"
-            "  ./up swap\n"
-            "  ./up qwen36-27b-mtp-ud-q5k-xl\n"
-            "  ./up qwen36-27b-mtp-ud-q5k-xl --restart\n"
+            "  ./up                       # llama-swap (same as ./up swap)\n"
+            "  ./up --foreground          # llama-swap in this terminal, no tmux\n"
+            "  ./up direct                # one worker for MODEL_SLUG on :8001\n"
+            "  ./up qwen36-27b-q6k --restart\n"
+            "  ./up observability --add   # stats poller and dashboard (needs Go)\n"
             "  ./up --status\n"
             "  ./up --down\n"
-            "  ./up dashboard --attach\n"
         ),
     )
-    parser.add_argument("target", nargs="?", default="core", help="service-set, service-name, or model slug")
+    parser.add_argument("target", nargs="?", default="swap", help="init, doctor, pull, or a service-set, service-name, or model slug")
     parser.add_argument("--list", action="store_true", help="list known targets")
     parser.add_argument("--dry-run", action="store_true", help="print resolved services without starting tmux")
     parser.add_argument("--attach", action="store_true", help="attach to the tmux session after starting")
+    parser.add_argument("--foreground", action="store_true", help="run the target's main service in this terminal instead of tmux")
+    parser.add_argument("--preset", help="init: starter model set (compact, standard, workstation); default sized to memory")
+    parser.add_argument("--force", action="store_true", help="init: replace an existing serve-policy.local.yaml")
     lifecycle = parser.add_mutually_exclusive_group()
     lifecycle.add_argument("--down", action="store_true", help="stop the entire tmux service session")
     lifecycle.add_argument("--status", action="store_true", help="show current tmux service state")
@@ -98,6 +107,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--add", action="store_true", help="preserve service windows outside the selected target")
     parser.add_argument("--session", default=SESSION, help="tmux session name")
     args = parser.parse_args(argv)
+
+    if args.target == "init":
+        return onboard.init(args.preset, force=args.force)
+    if args.target == "doctor":
+        return onboard.doctor()
+    if args.target == "pull":
+        return onboard.pull()
 
     if args.down:
         return stop_session(args.session)
@@ -120,9 +136,12 @@ def main(argv: list[str] | None = None) -> int:
         print_plan(plan, args.session)
         return 0
 
+    if args.foreground:
+        return run_foreground(plan)
+
     if shutil.which("tmux") is None:
         print_error("tmux is not installed or not on PATH")
-        print("install tmux, then rerun this command", file=sys.stderr)
+        print(f"install tmux, or run in this terminal: ./up {plan.target} --foreground", file=sys.stderr)
         return 1
 
     if not SHIM.exists():
@@ -214,19 +233,17 @@ def build_registry() -> dict[str, Service | tuple[str, ...]]:
             },
             command="./support/sampler-proxy",
         ),
-        "core": ("stats-poll", "dashboard", "serve-manager-status"),
-        "direct": ("model:qwen36-27b-mtp-ud-q5k-xl", "stats-poll", "dashboard", "serve-manager-status"),
-        "observability": ("stats-poll", "dashboard"),
-        "manager": ("stats-poll", "dashboard", "serve-manager-status"),
-        "swap": ("llama-swap", "stats-poll", "dashboard", "serve-manager-status"),
+        "swap": ("llama-swap",),
+        "observability": ("stats-poll", "dashboard", "serve-manager-status"),
         "all": ("llama-swap", "stats-poll", "dashboard", "serve-manager-status"),
     }
+    direct_slug = onboard.setting("MODEL_SLUG")
+    if direct_slug:
+        services["direct"] = (direct_slug,)
     for slug in model_slugs():
         members: list[str] = [f"model:{slug}"]
         if is_mlx_model(slug):
             members.append("sampler-proxy")
-        if supports_llama_server_observability(slug):
-            members += ["stats-poll", "dashboard"]
         services[slug] = tuple(members)
     return services
 
@@ -247,11 +264,6 @@ def model_slugs() -> list[str]:
 def is_mlx_model(slug: str) -> bool:
     """True if the sidecar for ``slug`` is an MLX artifact (needs the sampler proxy)."""
     return model_artifact_format(slug) == "mlx"
-
-
-def supports_llama_server_observability(slug: str) -> bool:
-    """True when the model backend provides llama-server's /metrics and /slots APIs."""
-    return model_artifact_format(slug) == "gguf"
 
 
 def model_artifact_format(slug: str) -> str:
@@ -433,21 +445,35 @@ def service_command(service: Service) -> str:
 
 def service_set_description(name: str) -> str:
     return {
-        "core": "core services: stats, dashboard, status",
-        "direct": "default direct model worker plus core services",
-        "observability": "stats and dashboard only",
-        "manager": "core manager-facing services",
-        "swap": "llama-swap plus core services",
-        "all": "all currently managed service windows",
+        "direct": "direct worker for MODEL_SLUG (.env) on :8001",
+        "observability": "stats poller, dashboard, and serve-manager status (needs Go)",
+        "swap": "llama-swap hot-swap proxy (the default)",
+        "all": "llama-swap plus observability",
     }.get(name, "")
 
 
 def model_target_description(slug: str) -> str:
     if is_mlx_model(slug):
         return "direct MLX worker plus sampler proxy"
-    if supports_llama_server_observability(slug):
-        return "direct llama-server worker plus observability"
-    return "direct model worker"
+    return "direct model worker on :8001"
+
+
+def run_foreground(plan: Plan) -> int:
+    """Run the plan's main service (llama-swap or the model worker) in this terminal."""
+    main = next(
+        (s for s in plan.services if s.name == "llama-swap" or s.name.startswith("model:")),
+        plan.services[0] if len(plan.services) == 1 else None,
+    )
+    if main is None:
+        print_error(f"{plan.target!r} has no main service to run in the foreground")
+        return 2
+    skipped = [s.name for s in plan.services if s is not main]
+    if skipped:
+        print(f"foreground runs {main.name} only; not starting: {', '.join(skipped)}", file=sys.stderr)
+    os.chdir(ROOT)
+    env = {**os.environ, **main.env, "LM_BASED_ROOT": str(ROOT)}
+    os.execvpe("bash", ["bash", "-lc", main.command], env)
+    return 1  # not reached
 
 
 def use_tui() -> bool:

@@ -17,14 +17,20 @@ Stack layers:
 - **L3 Local** — llama-swap in front of llama-server, mlx_lm, and kev workers
 - **L4 Cloud** — GLM-5, ChatGPT, MiniMax, DeepSeek, Claude, Grok, Gemini (direct or via x402/USDC proxy)
 
-First-time setup:
+First-time setup (the README quickstart):
 
 ```bash
-cp .env.example .env      # fill in MODEL_SLUG and any API keys
-uv sync
-./route-config.py         # generate clawrouter.json
+./up init                 # serve-policy.local.yaml sized to host memory; .env from .env.example
+./up doctor               # prerequisites, downloads, memory budget
+./up pull                 # download enabled models into artifacts/
+./up                      # llama-swap in tmux (--foreground without tmux)
 just pi-install           # optional: pinned Pi for ./pi-local
+./route-config.py         # optional extra: generate clawrouter.json
 ```
+
+Core is sidecars, `run-server.py`, llama-swap, `up`, and `download_model.py`. Everything
+else (serve-manager, observability, ClawRouter, kev, the Pi sandbox) is an extra; the
+README lists them. Keep the core runnable with only uv and llama-server.
 
 ## Repo map
 
@@ -34,18 +40,20 @@ just pi-install           # optional: pinned Pi for ./pi-local
 | `lm_launcher/` | Python package: profiles, settings, launchers, client bootstraps |
 | `lm_launcher/profiles.py` | Serving profiles: `infer_profile()` and `profile_defaults()` |
 | `run-server.py` | Builds `ServerSettings` from a sidecar and execs the backend |
-| `serve-policy.yaml` | Which models llama-swap serves, ports, and group routing (JSON content) |
+| `serve-policy.yaml` | Shared default: which models llama-swap serves, ports, group routing (JSON content) |
+| `serve-policy.local.yaml` | Host overlay (gitignored, `./up init`); merged over the default by `lm_launcher/policy.py` and serve-manager |
 | `llama_swap/`, `llama-swap-runner.py` | llama-swap binary management and config generation |
-| `up` | Starts services in the `lm-based` tmux session (`./up --list` for targets) |
+| `up` | `init` / `doctor` / `pull`, and services in the `lm-based` tmux session (`./up --list`) |
+| `lm_launcher/onboard.py` | Memory-sized presets, `./up init`, `./up doctor`, `./up pull` |
 | `cmd/serve-manager/` | Go supervisor, dashboard, and stats poller |
 | `pi-local`, `opencode-local` | Launch Pi / OpenCode against the running local service |
 | `support/pi/` | Repo-pinned Pi install and repo Pi extensions |
 | `route-config.py` | Generates and validates `clawrouter.json` |
-| `download_model.py` | Fetch a model by sidecar slug (`--list` shows slugs) |
-| `artifacts/` | Downloaded binaries (gitignored); `STATUS.md` tracks local provenance |
+| `download_model.py` | Fetch a model by slug, or `--enabled` for the policy (`--list` shows status) |
+| `artifacts/` | Downloaded weights (gitignored, `MODEL_DIR` overrides); `STATUS.md` tracks local provenance |
 | `runs/` | Per-run capture dirs: logs, PIDs, monitor CSVs (read-only for agents) |
 | `.env.example` | Template for all env vars; copy to `.env` |
-| `docs/`, `docs-cms/` | Reference docs; decision records (docuchango) |
+| `docs/`, `docs-cms/` | Reference docs (model research in `docs/research/`); decision records (docuchango) |
 
 ## Verify before you commit
 
@@ -105,8 +113,9 @@ Several agents often work in this checkout at once, and the host runs real model
 1. Write  models/<artifact>.json            (schema below)
 2. Extend lm_launcher/profiles.py if the model needs a new serving profile
 3. Append a row to docs/model-card-index.md
-4. Add the slug to serve-policy.yaml models.enabled to serve it through llama-swap,
-   and to a routing group if it should run beside other models
+4. To serve it on this host, add the slug to serve-policy.local.yaml models.enabled and a
+   routing group. Change the tracked serve-policy.yaml or a preset in
+   lm_launcher/onboard.py only when the model should be a default for everyone
 5. Regenerate: ./route-config.py  and  ./llama-swap-runner.py config
 6. Verify:     ./download_model.py --list   (slug appears)
                ./route-config.py --validate
@@ -192,15 +201,21 @@ Sidecar file names follow the artifact: `<Artifact-QUANT>.gguf.json`,
 
 ```bash
 ./up --list          # targets: service sets, services, model slugs
-./up swap            # llama-swap plus core services in tmux
+./up                 # llama-swap in tmux (same as ./up swap)
 ./up <model-slug>    # one direct worker on 127.0.0.1:8001
+./up direct          # the same for MODEL_SLUG from .env
+./up observability --add   # Go stats poller and dashboard beside what runs
 ./up --status        # what is running
 ```
 
-- llama-swap (Homebrew binary, v264+) listens on `127.0.0.1:8081` and starts workers on
-  `10001`–`10100`. `serve-policy.yaml` `models.enabled` decides which sidecars it serves;
-  `swap.routing` defines groups. Today the `small` group (GLM-OCR, kev) stays resident
-  beside whichever `main` group chat model is loaded.
+- llama-swap (v264+; PATH, `LLAMA_SWAP_BIN`, or `.runtime/bin` from
+  `./llama-swap-runner.py ensure`) listens on `127.0.0.1:8081` and starts workers on
+  `10001`–`10100`. The effective policy's `models.enabled` decides which sidecars it
+  serves, and `swap.routing` defines groups: a `swap: false` group stays resident beside
+  whichever `swap: true` model is loaded.
+- With `policy.require_local_artifact`, config generation leaves out enabled models whose
+  weights are not on disk and prunes them from routing groups (llama-swap rejects unknown
+  group members).
 - llama-swap routes OpenAI-style paths by the request's `model`. Other APIs (kev's
   `/v1/systemone`) go through `/upstream/<slug>/...`.
 - `/v1/models` lists every configured model; `/running` lists the loaded ones and their state.
@@ -259,7 +274,8 @@ Plain imperative summary line. No `Co-Authored-By:` trailers.
 ## Markdown guardrails
 
 `markdownlint-cli2` runs through pre-commit on `README.md`, `AGENTS.md`, `CLAUDE.md`, and
-`docs/` (config: `.markdownlint-cli2.jsonc`; line length is not enforced). Before
+`docs/` except the archived `docs/research/` (config: `.markdownlint-cli2.jsonc`; line
+length is not enforced). Before
 publishing doc-heavy changes, run `pre-commit run --all-files`.
 
 ## docs-cms (docuchango)

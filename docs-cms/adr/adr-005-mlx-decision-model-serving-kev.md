@@ -14,7 +14,7 @@ doc_uuid: 640cf74e-85f0-46a8-9f53-a40851d8a122
 The operator directed adoption of `RoderickQiu/kev-4b-mlx-8bit` as the local
 decision model (typed, calibrated choice/score/yes-no decisions over a state
 document), following the 2026-10-10 capability research pass
-(`reports/Most capable model 128GB Mac.md`).
+(`docs/research/reports/Most capable model 128GB Mac.md`).
 
 Kev-4B ([jaredpalmer/kev-4b](https://huggingface.co/jaredpalmer/kev-4b)) is not
 a chat model: it is a prefill-only pointer head over Qwen3.5-4B-Base that
@@ -130,4 +130,4 @@ for a serving-critical path.
 - MLX-8bit artifact: <https://huggingface.co/RoderickQiu/kev-4b-mlx-8bit>
 - Runtime: <https://github.com/jaredpalmer/kev> (`python -m kev.serve`)
 - MLX backend precedent: [ADR-004](./adr-004-mlx-serving-via-mlx-lm.md)
-- Capability research: `reports/Most capable model 128GB Mac.md`
+- Capability research: `docs/research/reports/Most capable model 128GB Mac.md`

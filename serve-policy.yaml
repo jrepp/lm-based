@@ -16,19 +16,11 @@
   },
   "models": {
     "enabled": [
-      "qwen36-27b-q6k",
-      "qwen25-coder-7b-instruct",
-      "qwen3-coder-next-q6k",
-      "qwen35-122b-ud-q4k-xl",
-      "qwen38-27b-ud-q6k",
-      "qwen38-27b-mtp-q4_0",
-      "glm-ocr-q8_0",
-      "kev-4b-mlx-8bit"
+      "mistral-7b-instruct-v03-q4km",
+      "glm-ocr-q8_0"
     ],
     "disabled": [],
-    "warm": [
-      "qwen25-coder-7b-instruct"
-    ],
+    "warm": [],
     "operator_only": []
   },
   "swap": {
@@ -43,19 +35,12 @@
               "swap": false,
               "exclusive": false,
               "persistent": false,
-              "members": ["glm-ocr-q8_0", "kev-4b-mlx-8bit"]
+              "members": ["glm-ocr-q8_0"]
             },
             "main": {
               "swap": true,
               "exclusive": false,
-              "members": [
-                "qwen25-coder-7b-instruct",
-                "qwen3-coder-next-q6k",
-                "qwen35-122b-ud-q4k-xl",
-                "qwen36-27b-q6k",
-                "qwen38-27b-ud-q6k",
-                "qwen38-27b-mtp-q4_0"
-              ]
+              "members": ["mistral-7b-instruct-v03-q4km"]
             }
           }
         }

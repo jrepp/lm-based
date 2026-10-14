@@ -38,6 +38,8 @@ Reference documentation for the lm-based local LLM stack.
 |---|---|
 | [model-card-index.md](model-card-index.md) | Index of all sidecar-registered models |
 | [qwen-run-stats.md](qwen-run-stats.md) | Observed runtime stats for Qwen models |
+| [research/reports/](research/reports/) | Model-selection research: most capable model for a 128 GB Mac, best small PDF parser |
+| [research/notes/](research/notes/) | Sources and benchmark notes behind those reports |
 
 ## llama-server
 
