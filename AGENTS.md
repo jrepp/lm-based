@@ -221,6 +221,11 @@ Docs: `docs/serving/` (topology, lifecycle, supervisor spec), `docs/serving/tmux
 - Pi's `models.json` only holds chat models. Decision models reach Pi through the `decide`
   extension (`LM_BASED_CLASSIFIERS`).
 - When scripting `./pi-local -p`, close stdin (`< /dev/null`) or Pi waits for piped input.
+- Each launch gets a scratch folder `.pi-run/<run-id>/` (Pi's `TMPDIR`, deleted on exit) and a
+  trajectory under `.runtime/pi/runs/<run-id>/` (extension `run-record`).
+- `./pi-local --sandbox` runs Pi in an OpenShell microVM. A host broker
+  (`lm_launcher/taxdesk_broker.py`, shim in `support/pi/sandbox/`) gives it allowlisted
+  `taxdesk-docs` commands; never widen its allowlist to `login`/`logout` or arbitrary commands.
 - `./opencode-local` does the same for OpenCode from llama-swap's `/v1/models`.
 
 Details: `docs/pi-local-model.md`, `docs/opencode-local-models.md`.

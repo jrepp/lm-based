@@ -1,0 +1,5 @@
+#!/bin/sh
+# taxdesk-docs inside the pi-local sandbox: forwards each call to the host broker.
+# See ../taxdesk-docs.ts and lm_launcher/taxdesk_broker.py.
+here=$(cd "$(dirname "$0")" && pwd)
+exec node --no-warnings "$here/../taxdesk-docs.ts" "$@"

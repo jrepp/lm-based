@@ -237,14 +237,67 @@ export function answerValue(answer: Answer): string | number | boolean {
 	return answer.probability >= 0.5;
 }
 
+export interface Calibration {
+	top_probability: number; // probability of the answer given (bool: of the side chosen)
+	runner_up?: string; // choice: second most likely option
+	runner_up_probability?: number;
+	margin: number; // top probability minus the runner-up's (bool: |2p - 1|)
+	options?: number; // choice: number of options K (confidence 0 means uniform, 1/K each)
+}
+
+const round3 = (value: number) => Math.round(value * 1000) / 1000;
+
+/**
+ * Calibration-friendly view of one answer. kev's choice `confidence` is (p_max - 1/K) / (1 - 1/K),
+ * so it shrinks as K grows; the raw top probability and the margin to the runner-up read the
+ * same across questions with different option counts.
+ */
+export function calibrationOf(answer: Answer): Calibration | undefined {
+	if (answer.type === "bool") {
+		const top = Math.max(answer.probability, 1 - answer.probability);
+		return { top_probability: round3(top), margin: round3(Math.abs(answer.probability * 2 - 1)) };
+	}
+	if (answer.type !== "choice") return undefined;
+	const ranked = Object.entries(answer.probabilities ?? {}).sort((a, b) => b[1] - a[1]);
+	const top = answer.probabilities?.[answer.choice] ?? ranked[0]?.[1] ?? 0;
+	const second = ranked.find(([name]) => name !== answer.choice);
+	return {
+		top_probability: round3(top),
+		...(second ? { runner_up: second[0], runner_up_probability: round3(second[1]) } : {}),
+		margin: round3(top - (second?.[1] ?? 0)),
+		options: ranked.length,
+	};
+}
+
+/** The classifier answer plus its calibration fields, for results files. */
+export function withCalibration(answer: Answer): Answer & Partial<Calibration> {
+	const calibration = calibrationOf(answer);
+	if (!calibration || answer.type === "bool") return answer;
+	const { runner_up, runner_up_probability, margin } = calibration;
+	return { ...answer, ...(runner_up === undefined ? {} : { runner_up, runner_up_probability }), margin };
+}
+
+const HISTOGRAM_EDGES = [0.2, 0.4, 0.6, 0.8];
+const HISTOGRAM_LABELS = ["0-0.2", "0.2-0.4", "0.4-0.6", "0.6-0.8", "0.8-1"];
+function bucket(value: number): number {
+	const index = HISTOGRAM_EDGES.findIndex((edge) => value < edge);
+	return index < 0 ? HISTOGRAM_EDGES.length : index;
+}
+
 interface QuestionStats {
 	type: Answer["type"];
 	answered: number;
 	confidenceSum: number;
 	choices: Record<string, number>;
+	choiceProbabilitySum: Record<string, number>;
 	trueCount: number;
 	probabilitySum: number;
 	scores: number[];
+	topSum: number;
+	marginSum: number;
+	options: number;
+	confidenceHistogram: number[];
+	abstained: number;
 }
 
 export interface Summary {
@@ -252,7 +305,27 @@ export interface Summary {
 	classified: number;
 	failed: number;
 	questions: Record<string, unknown>;
-	lowConfidence: { index: number; line: number; id?: unknown; question: string; answer: unknown; confidence: number; preview: string }[];
+	lowConfidence: {
+		index: number;
+		line: number;
+		id?: unknown;
+		question: string;
+		answer: unknown;
+		confidence: number;
+		top_probability?: number;
+		runner_up?: string;
+		margin?: number;
+		abstained?: true;
+		preview: string;
+	}[];
+}
+
+export interface DecisionResult {
+	record: SourceRecord;
+	id?: unknown;
+	answers?: Record<string, Answer>;
+	abstained?: string[]; // questions whose answer counts as "unsure" (abstain option or thresholds)
+	error?: string;
 }
 
 export function preview(state: Record<string, unknown>, length = 120): string {
@@ -261,11 +334,7 @@ export function preview(state: Record<string, unknown>, length = 120): string {
 	return flat.length > length ? `${flat.slice(0, length - 1)}…` : flat;
 }
 
-export function summarize(
-	results: { record: SourceRecord; id?: unknown; answers?: Record<string, Answer>; error?: string }[],
-	minConfidence: number,
-	maxLowConfidence = 10,
-): Summary {
+export function summarize(results: DecisionResult[], minConfidence: number, maxLowConfidence = 10): Summary {
 	const stats = new Map<string, QuestionStats>();
 	const low: Summary["lowConfidence"] = [];
 	let failed = 0;
@@ -277,19 +346,45 @@ export function summarize(
 		for (const [question, answer] of Object.entries(result.answers)) {
 			let s = stats.get(question);
 			if (!s) {
-				s = { type: answer.type, answered: 0, confidenceSum: 0, choices: {}, trueCount: 0, probabilitySum: 0, scores: [] };
+				s = {
+					type: answer.type,
+					answered: 0,
+					confidenceSum: 0,
+					choices: {},
+					choiceProbabilitySum: {},
+					trueCount: 0,
+					probabilitySum: 0,
+					scores: [],
+					topSum: 0,
+					marginSum: 0,
+					options: 0,
+					confidenceHistogram: HISTOGRAM_LABELS.map(() => 0),
+					abstained: 0,
+				};
 				stats.set(question, s);
 			}
 			const confidence = confidenceOf(answer);
+			const calibration = calibrationOf(answer);
+			const abstained = result.abstained?.includes(question) ?? false;
 			s.answered++;
 			s.confidenceSum += confidence;
-			if (answer.type === "choice") s.choices[answer.choice] = (s.choices[answer.choice] ?? 0) + 1;
+			s.confidenceHistogram[bucket(confidence)]++;
+			if (abstained) s.abstained++;
+			if (calibration) {
+				s.topSum += calibration.top_probability;
+				s.marginSum += calibration.margin;
+				s.options = Math.max(s.options, calibration.options ?? 0);
+			}
+			if (answer.type === "choice") {
+				s.choices[answer.choice] = (s.choices[answer.choice] ?? 0) + 1;
+				s.choiceProbabilitySum[answer.choice] = (s.choiceProbabilitySum[answer.choice] ?? 0) + (calibration?.top_probability ?? 0);
+			}
 			if (answer.type === "bool") {
 				s.probabilitySum += answer.probability;
 				if (answer.probability >= 0.5) s.trueCount++;
 			}
 			if (answer.type === "score") s.scores.push(answer.score);
-			if (confidence < minConfidence) {
+			if (confidence < minConfidence || abstained) {
 				low.push({
 					index: result.record.index,
 					line: result.record.line,
@@ -297,6 +392,10 @@ export function summarize(
 					question,
 					answer: answerValue(answer),
 					confidence: Math.round(confidence * 1000) / 1000,
+					...(calibration && answer.type === "choice"
+						? { top_probability: calibration.top_probability, runner_up: calibration.runner_up, margin: calibration.margin }
+						: {}),
+					...(abstained ? { abstained: true as const } : {}),
 					preview: preview(result.record.state),
 				});
 			}
@@ -305,11 +404,34 @@ export function summarize(
 	const round = (value: number) => Math.round(value * 1000) / 1000;
 	const questions: Record<string, unknown> = {};
 	for (const [question, s] of stats) {
-		const base = { type: s.type, answered: s.answered, mean_confidence: round(s.confidenceSum / s.answered) };
+		const base = {
+			type: s.type,
+			answered: s.answered,
+			mean_confidence: round(s.confidenceSum / s.answered),
+			confidence_histogram: Object.fromEntries(HISTOGRAM_LABELS.map((label, i) => [label, s.confidenceHistogram[i]])),
+			...(s.abstained ? { abstained: s.abstained } : {}),
+		};
 		if (s.type === "choice") {
-			questions[question] = { ...base, counts: Object.fromEntries(Object.entries(s.choices).sort((a, b) => b[1] - a[1])) };
+			const counts = Object.entries(s.choices).sort((a, b) => b[1] - a[1]);
+			questions[question] = {
+				...base,
+				counts: Object.fromEntries(counts),
+				options: s.options,
+				uniform_probability: s.options ? round(1 / s.options) : undefined,
+				mean_top_probability: round(s.topSum / s.answered),
+				mean_margin: round(s.marginSum / s.answered),
+				mean_probability_when_chosen: Object.fromEntries(
+					counts.map(([choice, count]) => [choice, round(s.choiceProbabilitySum[choice] / count)]),
+				),
+			};
 		} else if (s.type === "bool") {
-			questions[question] = { ...base, true: s.trueCount, false: s.answered - s.trueCount, mean_probability: round(s.probabilitySum / s.answered) };
+			questions[question] = {
+				...base,
+				true: s.trueCount,
+				false: s.answered - s.trueCount,
+				mean_probability: round(s.probabilitySum / s.answered),
+				mean_margin: round(s.marginSum / s.answered),
+			};
 		} else {
 			const sorted = [...s.scores].sort((a, b) => a - b);
 			const histogram: Record<string, number> = {};
@@ -336,19 +458,20 @@ export function summarize(
 
 // ─── output ─────────────────────────────────────────────────────────────────
 
-function csvCell(value: unknown): string {
+export function csvCell(value: unknown): string {
 	const text = value === undefined || value === null ? "" : typeof value === "string" ? value : JSON.stringify(value);
 	return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-/** CSV header + rows: record position, the id column, then one or two columns per question. */
-export function toCsv(
-	results: { record: SourceRecord; id?: unknown; answers?: Record<string, Answer>; error?: string }[],
-	questions: string[],
-): string {
+/**
+ * CSV header + rows: record position, the id column, then one or two columns per question.
+ * With `abstainColumn`, a final `abstained` column lists unsure questions (`;`-separated).
+ */
+export function toCsv(results: DecisionResult[], questions: string[], abstainColumn = false): string {
 	const header = ["index", "line", "id"];
 	for (const question of questions) header.push(question, `${question}_confidence`);
 	header.push("error");
+	if (abstainColumn) header.push("abstained");
 	const lines = [header.join(",")];
 	for (const result of results) {
 		const row: unknown[] = [result.record.index, result.record.line, result.id];
@@ -357,6 +480,7 @@ export function toCsv(
 			row.push(answer ? answerValue(answer) : "", answer ? Math.round(confidenceOf(answer) * 1000) / 1000 : "");
 		}
 		row.push(result.error ?? "");
+		if (abstainColumn) row.push((result.abstained ?? []).join(";"));
 		lines.push(row.map(csvCell).join(","));
 	}
 	return `${lines.join("\n")}\n`;
