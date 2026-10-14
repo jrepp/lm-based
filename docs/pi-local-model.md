@@ -38,6 +38,131 @@ directly with custom env to tune it.
 The llama-server stats poller and dashboard are omitted because `mlx_lm.server` does not
 provide llama.cpp's `/metrics` and `/slots` endpoints.
 
+## Pinned Pi install
+
+`./pi-local` does not use a global `pi`. It runs the version pinned in
+`support/pi/package.json` (lockfile committed, `node_modules/` ignored):
+
+| Package | Version | Provides |
+|---|---|---|
+| `@earendil-works/pi-coding-agent` | 1.2.0 | Pi itself |
+| `@narumitw/pi-goal` | 0.54.11 | `/goal` autonomous objective loop (`goal_complete`, `goal_blocked`, `goal_wait`) |
+| `pi-subagents` | 0.78.0 | `subagent` delegation, background runs, scout/worker/reviewer/oracle agents |
+
+```bash
+just pi-install   # npm ci in support/pi
+```
+
+Pi state lives in `.runtime/pi/agent` (`PI_CODING_AGENT_DIR`), not `~/.pi/agent`, so the
+repo-managed config, sessions, and subagent artifacts never touch a global Pi setup.
+The bootstrap registers both extensions in that directory's `settings.json` as local
+package paths, disables install telemetry, and sets `PI_SKIP_VERSION_CHECK=1`.
+Subagents run the same pinned CLI and inherit the agent directory and local model.
+
+To upgrade, bump the versions in `support/pi/package.json`, run `npm install` there,
+and review the extension source before committing the new lockfile — Pi extensions run
+with full system access.
+
+`/goal <objective>` works in the TUI. In print mode (`-p`) pi-goal 0.54.11 fails on
+Pi 1.2.0 with `turn_end could not resolve the persisted assistant entry ID`; use the TUI
+for goals until that is fixed upstream.
+
+## Run pi-local from any directory
+
+```bash
+just pi-link            # ln -s <repo>/pi-local ~/.local/bin/pi-local
+cd ~/src/some-project
+pi-local                # Pi works in some-project, configured from this repo
+```
+
+The launching directory is Pi's workspace: tools run there, project `.pi/` settings and
+`AGENTS.md` there apply, and sessions are grouped by that path. Everything else comes from
+this repo: the pinned Pi in `support/pi`, the agent directory `.runtime/pi/agent`, the
+extensions, and the model sidecars. The script resolves the repo through its own location,
+so the symlink needs no environment setup. Its shebang pins `--python >=3.14` so a
+`.python-version` near the symlink cannot select another interpreter.
+
+## Hot-swapping models through llama-swap
+
+```bash
+./pi-local             # llama-swap if it answers /running, else the tmux-registered service
+./pi-local --dry-run   # show every model and whether it is loaded
+./pi-local --swap      # require llama-swap (fail instead of falling back)
+./pi-local --tmux      # ignore llama-swap; use the tmux service discovery below
+```
+
+With no arguments, `./pi-local` first tries the llama-swap proxy from `serve-policy.yaml`. A
+valid `/running` response identifies it as llama-swap, so this is not a port guess; it does
+not need to run inside tmux. Every chat model with a sidecar is registered in Pi, so `/model`
+lists them all; choosing one makes llama-swap load it on the next request and unload the
+current one. Decision models (kev) are left out because they are classifiers, not chat models.
+
+The starting model is, in order: `--model`, the model llama-swap already has loaded, the
+model Pi last used, then the first registered model.
+
+`/v1/models` lists every configured model; `/running` says which are in memory. The
+bootstrap joins the two:
+
+```text
+llama-swap models:
+  ○ qwen25-coder-7b-instruct         unloaded
+  ● qwen3-coder-next-q6k             ready  <- selected
+```
+
+The repo extension `support/pi/extensions/llama-swap` shows the same state inside Pi:
+
+- the footer shows what llama-swap currently holds (`swap: qwen3-coder-next-q6k ready`), refreshed every 3 s
+- choosing an unloaded model warns that the next request cold-loads it and which model gets unloaded
+- `/swap` opens a picker with ● loaded / ○ unloaded markers and switches to the chosen model
+
+The extension only runs when `./pi-local` launches Pi against llama-swap; it sets
+`LM_BASED_SWAP_URL` and `LM_BASED_PROVIDER` for it.
+
+## Decision models as a tool: `decide_records`
+
+The repo extension `support/pi/extensions/decide` gives the chat model a `decide_records`
+tool backed by the local decision model (kev). The chat model writes typed questions; the
+tool runs every record of a file through kev and returns a summary instead of the data, so
+large files never enter the chat context.
+
+| Input | Records |
+|---|---|
+| `.csv`, `.tsv` | one per row (header row = field names; quoted fields may span lines) |
+| `.ndjson`, `.jsonl` | one per line (malformed lines are reported, not fatal) |
+| `.json` | one per array element |
+| `.log` | one per non-empty line |
+| anything else (`.md`, `.txt`, …) | paragraph-aligned chunks of `chunk_chars` (default 6000) |
+
+Questions use Pi's classifier types:
+
+```json
+{
+  "topic":    {"type": "choice", "instructions": "Main topic?", "criteria": {"outage": "service down", "billing": "payments", "feature": "request"}},
+  "urgent":   {"type": "bool",   "instructions": "Needs a response within the hour?"},
+  "severity": {"type": "score",  "instructions": "How severe?", "criteria": ["cosmetic", "degraded", "broken", "data loss"]}
+}
+```
+
+Other parameters: `fields` (columns sent to kev), `id_field`, `context` (shared background
+added to every record), `offset`/`limit` (default 1000), `output` (`.csv` or NDJSON; default
+`<path>.decisions.ndjson`), `min_confidence` (default 0.5), `concurrency` (default 8).
+
+The result reports counts per choice, true/false totals, score distributions, failures, and
+the least confident records; per-record answers are in the output file. On a 36-row ticket
+CSV, kev labelled every topic correctly in 2.2 s with Coder-Next driving.
+
+Wiring, and why it is not in `models.json`: Pi's `models.json` loader treats every entry as a
+chat model, so classifier models must come from an extension provider. `./pi-local` puts the
+decision models it finds on llama-swap into `LM_BASED_CLASSIFIERS`; the extension registers
+them as the `lm-based-decision` provider using pi-ai's TypeSafe System One client. llama-swap
+routes only OpenAI paths by model name, so the classifier base URL is
+`http://127.0.0.1:8081/upstream/kev-4b-mlx-8bit/v1`. kev is in the llama-swap `small` group,
+so it stays resident alongside the active chat model. Classifiers also work from `codemode`
+scripts and from other extensions through `ctx.modelRegistry.classify()`.
+
+When scripting `./pi-local -p`, close stdin (`< /dev/null`): Pi reads piped stdin as prompt
+input and waits for it to end.
+
 ## Bootstrap Pi
 
 Run the repository bootstrap after starting the model:
@@ -51,8 +176,9 @@ The bootstrap refuses to guess from open ports alone. It:
 1. reads the live service registrations written by `support/tmux-service-shim`
 2. verifies that each shim PID belongs to a running pane in the selected tmux session
 3. chooses the sampler proxy, direct worker, or llama-swap endpoint from that service set
+   (this path runs only with `--tmux`, or when llama-swap is not answering)
 4. checks the selected endpoint's `/v1/models` response against model sidecars
-5. merges an `lm-based` provider into `~/.pi/agent/models.json`
+5. merges an `lm-based` provider into `.runtime/pi/agent/models.json`
 6. sets that provider and model as Pi's default, then launches Pi pinned to both
 
 Other providers and settings are preserved. Before an existing Pi file changes, its previous
