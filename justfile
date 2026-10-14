@@ -51,9 +51,9 @@ pi-link dir="~/.local/bin":
 install dir="$HOME/.local/bin":
     @mkdir -p {{dir}} && for entry in pi-local opencode-local up; do ln -sfn "{{justfile_directory()}}/$entry" "{{dir}}/$entry"; done && ls -l {{dir}}/pi-local {{dir}}/opencode-local {{dir}}/up
 
-# Test the repo Pi extensions' pure modules
+# Test the repo Pi extensions, including tool execution regressions
 pi-test:
-    @node --test support/pi/extensions/decide/records.test.ts
+    @node --test support/pi/extensions/*/*.test.ts
 
 # Show the Pi provider ./pi-local would configure
 pi-plan:

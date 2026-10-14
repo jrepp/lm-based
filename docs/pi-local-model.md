@@ -154,6 +154,10 @@ Other parameters: `fields` (columns sent to kev), `id_field`, `context` (shared 
 added to every record), `offset`/`limit` (default 1000), `output` (`.csv` or NDJSON; default
 `<path>.decisions.ndjson`), `min_confidence` (default 0.5), `concurrency` (default 8).
 
+The output must differ from the input, including symlink and hardlink aliases. A completed
+run replaces the output atomically. Cancelled runs leave any previous output intact and
+do not publish partial results.
+
 The result reports counts per choice, true/false totals, score distributions, failures, and
 the least confident records; per-record answers are in the output file. On a 36-row ticket
 CSV, kev labelled every topic correctly in 2.2 s with Coder-Next driving.
@@ -169,6 +173,27 @@ scripts and from other extensions through `ctx.modelRegistry.classify()`.
 
 When scripting `./pi-local -p`, close stdin (`< /dev/null`): Pi reads piped stdin as prompt
 input and waits for it to end.
+
+## PDF and image OCR
+
+The `pdf_extract` tool uses `glm-ocr-q8_0` through llama-swap. Its sidecar downloads
+both the language model and the required vision projector from
+[ggml-org/GLM-OCR-GGUF](https://huggingface.co/ggml-org/GLM-OCR-GGUF).
+PDF conversion also requires Ghostscript (`gs` on PATH).
+
+```bash
+./download_model.py glm-ocr-q8_0
+./llama-swap-runner.py config
+```
+
+Restart llama-swap after regenerating its config unless it is watching for changes.
+The OCR model belongs to the `small` group and stays out of Pi's chat picker.
+The launcher passes its projector with `--mmproj` and checks that it exists before
+starting the worker. `MMPROJ` can override the projector path.
+
+New swap installs use the same pinned release as the Python wrapper. To replace an
+older installed binary, stop the proxy and run `./llama-swap-runner.py ensure --overwrite`
+before starting it again.
 
 ## Bootstrap Pi
 

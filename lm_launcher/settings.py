@@ -77,6 +77,7 @@ class ServerSettings(BaseSettings):
     model_slug: str | None = None
     model_file: str = ""
     model_path: Path | None = None
+    mmproj: Path | None = None
     mlx_model: str | None = None
     profile: str = "auto"
     run_mode: str = "direct"
@@ -201,13 +202,15 @@ class ServerSettings(BaseSettings):
                 mlx_model_env = recommended_env.get("MLX_MODEL")
                 if mlx_model_env:
                     self.mlx_model = mlx_model_env
-            if "mmproj" not in self.model_fields_set:
-                mmproj_env = recommended_env.get("MMPROJ")
-                if mmproj_env:
-                    mmproj_path = Path(mmproj_env)
-                    self.mmproj = (
-                        mmproj_path if mmproj_path.is_absolute() else _PROJECT_ROOT / mmproj_path
+            if self.mmproj is None and recommended_env.get("MMPROJ"):
+                projector = Path(recommended_env["MMPROJ"])
+                if not projector.is_absolute():
+                    project_relative = _PROJECT_ROOT / projector
+                    projector = (
+                        project_relative if project_relative.exists()
+                        else self.model_dir / projector
                     )
+                self.mmproj = projector
 
         return self
 

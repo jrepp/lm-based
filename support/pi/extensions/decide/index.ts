@@ -17,7 +17,7 @@
 import { StringEnum } from "@earendil-works/pi-ai";
 import { classify as systemOneClassify } from "@earendil-works/pi-ai/api/typesafe-system-one";
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { stat, readFile, writeFile } from "node:fs/promises";
+import { stat, readFile, writeFile, mkdtemp, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { Type } from "typebox";
 import {
@@ -106,6 +106,19 @@ function validateQuestions(questions: Record<string, { type: string; criteria?: 
 
 const PROVIDER = "lm-based-decision";
 
+async function checkOutputPath(input: string, output: string): Promise<void> {
+	if (input === output) throw new Error("output must not overwrite the input file");
+	const source = await stat(input);
+	try {
+		const target = await stat(output);
+		if (source.dev === target.dev && source.ino === target.ino) {
+			throw new Error("output must not overwrite the input file (including links)");
+		}
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+	}
+}
+
 function configuredClassifiers(): any[] {
 	try {
 		const parsed = JSON.parse(process.env.LM_BASED_CLASSIFIERS ?? "[]");
@@ -148,12 +161,15 @@ export default function decideExtension(pi: ExtensionAPI) {
 			parameters: Params,
 
 			async execute(_toolCallId, params, signal, onUpdate, ctx) {
+				signal?.throwIfAborted();
 				validateQuestions(params.questions);
 
 				const filePath = path.resolve(ctx.cwd ?? process.cwd(), params.path);
 				const info = await stat(filePath);
 				if (!info.isFile()) throw new Error(`${filePath} is not a file`);
 				if (info.size > MAX_FILE_BYTES) throw new Error(`${filePath} is larger than ${MAX_FILE_BYTES} bytes`);
+				const output = path.resolve(ctx.cwd ?? process.cwd(), params.output ?? `${params.path}.decisions.ndjson`);
+				await checkOutputPath(filePath, output);
 
 				const modelId = params.model ?? process.env.LM_BASED_DECISION_MODEL;
 				const classifiers = ctx.modelRegistry.getModelsOfType("classifier", provider);
@@ -229,6 +245,7 @@ export default function decideExtension(pi: ExtensionAPI) {
 				};
 				const concurrency = Math.min(params.concurrency ?? DEFAULT_CONCURRENCY, selected.length);
 				await Promise.all(Array.from({ length: concurrency }, worker));
+				signal?.throwIfAborted();
 
 				if (fatal) {
 					throw new Error(
@@ -239,7 +256,6 @@ export default function decideExtension(pi: ExtensionAPI) {
 				const finished = results.filter(Boolean);
 				const questionIds = Object.keys(questions);
 
-				const output = path.resolve(ctx.cwd ?? process.cwd(), params.output ?? `${params.path}.decisions.ndjson`);
 				const body = output.toLowerCase().endsWith(".csv")
 					? toCsv(finished, questionIds)
 					: finished
@@ -252,7 +268,18 @@ export default function decideExtension(pi: ExtensionAPI) {
 								}),
 							)
 							.join("\n") + "\n";
-				await writeFile(output, body);
+				// Publish a complete result atomically. Cancellation or a failed write
+				// leaves a previous successful result intact.
+				const temporary = await mkdtemp(path.join(path.dirname(output), ".decide-"));
+				try {
+					const staged = path.join(temporary, "results");
+					await writeFile(staged, body, { signal, mode: 0o600 });
+					await checkOutputPath(filePath, output);
+					signal?.throwIfAborted();
+					await rename(staged, output);
+				} finally {
+					await rm(temporary, { recursive: true, force: true });
+				}
 
 				const summary = summarize(finished, params.min_confidence ?? 0.5);
 				const firstError = finished.find((r) => r.error)?.error;
