@@ -98,14 +98,15 @@ lists them all; choosing one makes llama-swap load it on the next request and un
 current one. Decision models (kev) are left out because they are classifiers, not chat models.
 
 The starting model is, in order: `--model`, the model llama-swap already has loaded, the
-model Pi last used, then the first registered model. Decision (kev) and OCR (GLM-OCR)
-models are never chat candidates.
+model Pi last used, then the first registered model. Only sidecars with `model.kind: chat`
+are chat candidates; `decision` models (kev) go to `decide_records` and `ocr` models
+(GLM-OCR) to `pdf_extract` (pi-local passes the hot OCR model as `LM_BASED_OCR_MODEL`).
 
-Each model's `contextWindow` comes from its profile's `ctx_size`, except for models that are
-already loaded: pi-local reads the `n_ctx` the server actually allocated (via llama-swap's
-`/upstream/<slug>/props`) and uses it when smaller. llama-server caps slot context at the
-model's training window (see `docs/llama-server-cache-architecture-explainer.md`), so
-Qwen3-Coder-Next's 1M profile serves 262144 tokens, and Pi must compact before that.
+Each model's `contextWindow` is its profile's `ctx_size`, capped at the sidecar's
+`model.context_length` (the native window; llama-server caps slots there anyway, see
+`docs/llama-server-cache-architecture-explainer.md`). For models that are already loaded,
+pi-local also reads the `n_ctx` the server actually allocated (via llama-swap's
+`/upstream/<slug>/props`) and uses it when smaller.
 
 `/v1/models` lists every configured model; `/running` says which are in memory. The
 bootstrap joins the two:

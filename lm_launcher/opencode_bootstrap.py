@@ -103,10 +103,14 @@ def build_plan(
             raise OpenCodeBootstrapError(
                 f"hot-model endpoint returned unknown model {model_id!r}; every public ID must match a sidecar slug"
             )
+        if sidecar.kind != "chat":
+            continue  # decision and OCR models are reached through tools, not as chat models
         if model_id not in seen:
             models.append((model_id, opencode_model(sidecar)))
             seen.add(model_id)
 
+    if not models:
+        raise OpenCodeBootstrapError(f"hot-model endpoint {endpoint}/models exposes no chat models")
     model_ids = [model_id for model_id, _ in models]
     if requested_model is not None:
         if requested_model not in model_ids:
