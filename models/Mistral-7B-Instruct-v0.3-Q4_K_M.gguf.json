@@ -11,6 +11,8 @@
   },
   "model": {
     "slug": "mistral-7b-instruct-v03-q4km",
+    "kind": "chat",
+    "context_length": 32768,
     "family": "Mistral-7B",
     "name": "Mistral-7B-Instruct-v0.3",
     "canonical_model_card": "https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3"

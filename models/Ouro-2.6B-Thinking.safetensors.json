@@ -11,6 +11,8 @@
   },
   "model": {
     "slug": "ouro-2.6b-thinking",
+    "kind": "chat",
+    "context_length": 65536,
     "family": "Ouro",
     "name": "Ouro-2.6B-Thinking",
     "canonical_model_card": "https://huggingface.co/ByteDance/Ouro-2.6B-Thinking"

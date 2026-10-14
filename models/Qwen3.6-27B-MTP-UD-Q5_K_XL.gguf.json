@@ -11,6 +11,8 @@
   },
   "model": {
     "slug": "qwen36-27b-mtp-ud-q5k-xl",
+    "kind": "chat",
+    "context_length": 262144,
     "family": "Qwen3.6-MTP",
     "name": "Qwen3.6-27B-MTP",
     "canonical_model_card": "https://huggingface.co/Qwen/Qwen3.6-27B"

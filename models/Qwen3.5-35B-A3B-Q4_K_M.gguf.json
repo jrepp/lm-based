@@ -11,6 +11,8 @@
   },
   "model": {
     "slug": "qwen35-35b-a3b-q4km",
+    "kind": "chat",
+    "context_length": 262144,
     "family": "Qwen3.5",
     "name": "Qwen3.5-35B-A3B",
     "canonical_model_card": "https://huggingface.co/Qwen/Qwen3.5-35B-A3B"

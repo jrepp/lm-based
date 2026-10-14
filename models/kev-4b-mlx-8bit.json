@@ -11,6 +11,8 @@
   },
   "model": {
     "slug": "kev-4b-mlx-8bit",
+    "kind": "decision",
+    "context_length": 262144,
     "family": "Kev",
     "name": "Kev-4B MLX 8-bit",
     "canonical_model_card": "https://huggingface.co/jaredpalmer/kev-4b"

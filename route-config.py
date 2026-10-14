@@ -37,6 +37,7 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from lm_launcher.model_index import load_model_records
+from lm_launcher.profiles import profile_defaults
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 MODELS_DIR = PROJECT_ROOT / "models"
@@ -159,6 +160,9 @@ def _docker_base(port: int) -> str:
 # Validation
 # ---------------------------------------------------------------------------
 
+MODEL_KINDS = ("chat", "decision", "ocr", "embedding")
+
+
 @dataclass
 class Issue:
     severity: str   # "error" | "warning"
@@ -192,6 +196,24 @@ def validate_records(records: list[dict[str, Any]]) -> list[Issue]:
         # Repo-relative so sidecars survive clones and renames (absolute paths went stale twice).
         if launcher.get("script") != "run-server.py":
             issues.append(Issue("error", f"{src}: launcher.script must be \"run-server.py\", got {launcher.get('script')!r}"))
+
+        # model.kind decides which clients may offer the model as chat (Pi, OpenCode).
+        kind = model.get("kind")
+        if kind not in MODEL_KINDS:
+            issues.append(Issue("error", f"{src}: model.kind must be one of {', '.join(MODEL_KINDS)}, got {kind!r}"))
+        native = model.get("context_length")
+        if not isinstance(native, int) or isinstance(native, bool) or native <= 0:
+            issues.append(Issue("error", f"{src}: model.context_length must be the native context (a positive int)"))
+        else:
+            profile = launcher.get("recommended_env", {}).get("PROFILE") or launcher.get("profile") or "generic"
+            requested = profile_defaults(str(profile), str(model.get("name", ""))).get("ctx_size")
+            # The generic profile is capped at the native window by the launcher; a
+            # model-specific profile asking for more is a bug (Coder-Next asked for 1M of 262144).
+            if profile != "generic" and isinstance(requested, int) and requested > native:
+                issues.append(Issue(
+                    "error",
+                    f"{src}: profile {profile!r} requests ctx_size {requested} above the native {native}",
+                ))
 
         local_path = artifact.get("local_path")
         artifact_format = artifact.get("format", "gguf")
@@ -262,6 +284,8 @@ def build_config(profile: str = "auto", proxy_port_override: int | None = None) 
         local.append({
             "slug": model.get("slug", ""),
             "family": model.get("family", "unknown"),
+            "kind": model.get("kind", "chat"),
+            "context_length": model.get("context_length"),
             "filename": artifact.get("filename", ""),
             "profile": launcher.get("profile", "auto"),
             "local_path": artifact.get("local_path"),

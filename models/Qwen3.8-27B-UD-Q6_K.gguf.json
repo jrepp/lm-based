@@ -11,6 +11,8 @@
   },
   "model": {
     "slug": "qwen38-27b-ud-q6k",
+    "kind": "chat",
+    "context_length": 262144,
     "family": "Qwen3.8",
     "name": "Qwen3.8-27B",
     "canonical_model_card": "https://huggingface.co/Qwen/Qwen3.8-27B"

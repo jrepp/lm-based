@@ -11,6 +11,8 @@
   },
   "model": {
     "slug": "gemma4-e2b-uncensored-aggressive-q4kp",
+    "kind": "chat",
+    "context_length": 131072,
     "family": "Gemma-4",
     "name": "Gemma-4-E2B-Uncensored-HauhauCS-Aggressive",
     "canonical_model_card": "https://huggingface.co/HauhauCS/Gemma-4-E2B-Uncensored-HauhauCS-Aggressive"
