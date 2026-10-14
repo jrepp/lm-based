@@ -56,6 +56,7 @@ def build_args(settings: ServerSettings) -> list[str]:
     ]
 
     add_arg(args, "--api-key", settings.api_key)
+    add_arg(args, "--mmproj", settings.mmproj)
     add_arg(args, "--device", settings.device)
     add_arg(args, "--temp", settings.temperature)
     add_arg(args, "--top-k", settings.top_k)
@@ -178,6 +179,9 @@ def validate_runtime(settings: ServerSettings) -> None:
 
     if not settings.model_path or not settings.model_path.is_file():
         fail(f"Model file not found: {settings.model_path}")
+
+    if settings.mmproj is not None and not settings.mmproj.is_file():
+        fail(f"Multimodal projector not found: {settings.mmproj}")
 
     model_size = settings.model_path.stat().st_size
     if model_size < settings.min_model_bytes:
