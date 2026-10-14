@@ -49,7 +49,7 @@ pi-link dir="~/.local/bin":
 
 # Test the repo Pi extensions' pure modules
 pi-test:
-    @node --test support/pi/extensions/decide/records.test.ts
+    @node --test support/pi/extensions/*.test.ts support/pi/extensions/*/*.test.ts
 
 # Show the Pi provider ./pi-local would configure
 pi-plan:
