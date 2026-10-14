@@ -76,11 +76,18 @@ def download_record(record: dict, output_dir: Path | None, token: str | None) ->
     artifact = record.get("artifact", {})
     explicit_local_dir = download.get("local_dir")
     local_path = Path(artifact["local_path"])
-    if output_dir is not None or explicit_local_dir:
-        # An explicit per-record destination (download.local_dir) is honored
-        # verbatim; hf_hub_download/snapshot_download recreate the repo-relative
-        # subpath underneath it.
-        local_dir = Path(explicit_local_dir or output_dir)
+    is_snapshot = download.get("snapshot") or download.get("type") == "snapshot"
+    if output_dir is not None:
+        local_dir = output_dir
+    elif explicit_local_dir:
+        local_dir = Path(explicit_local_dir)
+        if not local_dir.is_absolute():
+            local_dir = ROOT / local_dir
+    elif is_snapshot and artifact.get("format") != "gguf":
+        # Snapshot anchors (config.json / weight index) live at the Hub repo
+        # root, inside a dedicated local model directory. Never download their
+        # README, tokenizer and config into the project root.
+        local_dir = (ROOT / local_path).parent
     elif local_path.is_absolute():
         local_dir = local_path.parent
     else:
@@ -90,7 +97,7 @@ def download_record(record: dict, output_dir: Path | None, token: str | None) ->
         # project root for the artifact to land at local_path.
         local_dir = ROOT
 
-    if download.get("snapshot") or download.get("type") == "snapshot":
+    if is_snapshot:
         allow_patterns = download.get("allow_patterns")
         path = snapshot_download(
             repo_id=repo_id,

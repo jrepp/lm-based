@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from llama_swap.bin import download_url, ensure_binary, find_binary, install_binary
+from llama_swap.bin import DEFAULT_VERSION, download_url, ensure_binary, find_binary, install_binary
 from llama_swap.config import build_config, config_to_yaml, write_config
 from llama_swap.wrapper import LlamaSwap
 from lm_launcher.service_endpoints import swap_listen
@@ -14,7 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 def cmd_ensure(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="llama-swap ensure")
-    parser.add_argument("--version", default="v209")
+    parser.add_argument("--version", default=DEFAULT_VERSION)
     parser.add_argument("--dest", type=Path)
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args(argv)
