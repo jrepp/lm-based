@@ -268,15 +268,12 @@ def model_artifact_format(slug: str) -> str:
 def model_service(slug: str) -> Service:
     port = "8001"
     safe = safe_name(slug)
-    recommended_env = model_recommended_env(slug)
     env = {
         "MODEL_SLUG": slug,
         "HOST": "127.0.0.1",
         "PORT": port,
         "RUN_MODE": "direct",
     }
-    if recommended_env.get("LLAMA_SERVER_BIN"):
-        env["LLAMA_SERVER_BIN"] = os.path.expanduser(recommended_env["LLAMA_SERVER_BIN"])
     return Service(
         name=f"model:{slug}",
         window=f"model-{safe}"[:32],
@@ -284,24 +281,6 @@ def model_service(slug: str) -> Service:
         env=env,
         command=f"./support/model-service {shell_quote(slug)} {shell_quote(port)}",
     )
-
-
-def model_recommended_env(slug: str) -> dict[str, str]:
-    for path in sorted((ROOT / "models").glob("*.json")):
-        try:
-            data = json.loads(path.read_text())
-        except json.JSONDecodeError:
-            continue
-        if data.get("model", {}).get("slug") != slug:
-            continue
-        recommended_env = data.get("launcher", {}).get("recommended_env", {})
-        if isinstance(recommended_env, dict):
-            return {
-                str(key): str(value)
-                for key, value in recommended_env.items()
-                if isinstance(key, str) and value is not None
-            }
-    return {}
 
 
 def resolve_target(target: str, registry: dict[str, Service | tuple[str, ...]]) -> Plan:

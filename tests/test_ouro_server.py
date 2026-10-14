@@ -24,9 +24,10 @@ class OuroPathTests(unittest.TestCase):
 from unittest.mock import patch
 from lm_launcher import ouro_server as server
 with patch.object(server.os, "execv") as execute:
+    root = server.ouro_repo_root()
     server.main()
     binary, argv = execute.call_args.args
-    assert binary == str(server.OURO_REPO_ROOT / ".venv/bin/python")
+    assert binary == str(root / ".venv/bin/python")
     assert server.Path(binary).is_absolute()
     assert server.Path(argv[1]).is_file(), argv[1]
 '''], cwd=root, capture_output=True, text=True,

@@ -36,7 +36,7 @@
   },
   "notes": [
     "Transformer-based model (not llama-server). Uses FastAPI + transformers pipeline.",
-    "Located in the Ouro checkout (OURO_REPO_ROOT, default ../ouro next to this repo) at models/Ouro-2.6B-Thinking/",
+    "Located in the Ouro checkout named by OURO_REPO_ROOT, under models/Ouro-2.6B-Thinking/",
     "Custom architecture with thinking token support."
   ]
 }

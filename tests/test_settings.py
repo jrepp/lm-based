@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import os
 import unittest
+from unittest import mock
 from pathlib import Path
+from unittest.mock import patch
 
 try:
     from lm_launcher.settings import ServerSettings
@@ -19,20 +21,19 @@ class ServerSettingsModelIndexTests(unittest.TestCase):
         settings = ServerSettings(_env_file=None, llama_server_bin="~/custom/llama-server")
         self.assertEqual(settings.llama_server_bin, os.path.expanduser("~/custom/llama-server"))
 
-    def test_model_slug_applies_recommended_llama_server_binary(self) -> None:
-        settings = ServerSettings(
-            model_slug="qwen36-27b-mtp-ud-q5k-xl",
-            enable_run_capture=False,
-        )
+    def test_llama_server_binary_comes_from_machine_config(self) -> None:
+        # Sidecars never pin a binary path; LLAMA_SERVER_BIN is set per machine (.env).
+        with mock.patch.dict(os.environ, {"LLAMA_SERVER_BIN": "/opt/llama.cpp/bin/llama-server"}):
+            settings = ServerSettings(
+                model_slug="qwen36-27b-mtp-ud-q5k-xl",
+                enable_run_capture=False,
+            )
 
-        self.assertEqual(
-            settings.llama_server_bin,
-            os.path.expanduser("~/d/llama.cpp/build/bin/llama-server"),
-        )
+        self.assertEqual(settings.llama_server_bin, "/opt/llama.cpp/bin/llama-server")
         self.assertEqual(settings.spec_type, "draft-mtp")
         self.assertEqual(settings.spec_draft_n_max, 4)
 
-    def test_explicit_llama_server_binary_overrides_sidecar_recommendation(self) -> None:
+    def test_explicit_llama_server_binary_wins(self) -> None:
         settings = ServerSettings(
             model_slug="qwen36-27b-mtp-ud-q5k-xl",
             llama_server_bin="/tmp/custom-llama-server",
@@ -70,6 +71,29 @@ class ServerSettingsModelIndexTests(unittest.TestCase):
         # config.json is the directory anchor; mlx_lm serves its parent.
         self.assertEqual(settings.model_path.name, "config.json")
         self.assertEqual(settings.model_path.parent.name, "Ternary-Bonsai-27B-MLX-2bit")
+
+    def test_projector_path_with_and_without_local_artifacts(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        filename = "mmproj-GLM-OCR-Q8_0.gguf"
+        project_path = root / filename
+        artifact_path = root / "artifacts" / filename
+        original_exists = Path.exists
+        for existing, expected in [
+            (set(), project_path),
+            ({project_path}, project_path),
+            ({artifact_path}, artifact_path),
+            ({project_path, artifact_path}, project_path),
+        ]:
+            with self.subTest(existing=existing):
+                def exists(path):
+                    return path in existing if path.name == filename else original_exists(path)
+
+                with patch.object(Path, "exists", exists), patch.dict("os.environ", {}, clear=True):
+                    settings = ServerSettings(
+                        _env_file=None, model_slug="glm-ocr-q8_0",
+                        model_dir=root / "artifacts", enable_run_capture=False,
+                    )
+                self.assertEqual(settings.mmproj, expected)
 
 
 if __name__ == "__main__":

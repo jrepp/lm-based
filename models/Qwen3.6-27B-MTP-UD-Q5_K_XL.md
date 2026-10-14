@@ -25,7 +25,7 @@ Recorded: 2026-05-24
 ## Local Serving
 
 - Launcher profile: `qwen3.6-mtp`
-- Local server binary: `~/d/llama.cpp/build/bin/llama-server`
+- Server binary: a llama-server build with draft-mtp support, set as `LLAMA_SERVER_BIN` in `.env`
 - Context: `262144`
 - Speculative decoding: `--spec-type draft-mtp --spec-draft-n-max 4`
 - Parallel slots: `1`
