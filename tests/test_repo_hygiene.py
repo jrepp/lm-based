@@ -6,6 +6,7 @@ Each check names the regression it prevents so a failure explains itself.
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
 import subprocess
 import sys
@@ -17,13 +18,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # Absolute home-directory paths. Sidecar launcher paths pointing at an old
 # checkout (/Users/.../d/qwen) were fixed twice and came back; docs linked to
-# files that only existed on one machine.
-HOME_PATH = re.compile(r"/Users/(?!example/)[^/\s\"'`)<]+/")  # <name> placeholders are fine
-# Citations into a local llama.cpp checkout, kept because their line anchors
-# have no stable upstream URL.
-HOME_PATH_ALLOWED = {
-    "docs/llama-server-cache-architecture-explainer.md": "/d/llama.cpp/",
-}
+# files that only existed on one machine. Machine-specific locations belong in
+# .env or the environment, never in tracked files.
+HOME_PATH = re.compile(r"(?:/Users|/home)/(?!example/)[^/\s\"'`)<]+/")  # <name> placeholders are fine
 
 # bash 4+ features. macOS runs scripts under /bin/bash 3.2; `mapfile` crashed
 # support/model-service on startup (c8a7a0c).
@@ -66,19 +63,34 @@ class RepoHygieneTests(unittest.TestCase):
             text = read_text(path)
             if text is None:
                 continue
-            allowed = HOME_PATH_ALLOWED.get(rel)
             for number, line in enumerate(text.splitlines(), 1):
                 for match in HOME_PATH.finditer(line):
-                    rest = line[match.start():]
-                    if allowed and allowed in rest.split(")", 1)[0]:
-                        continue
-                    problems.append(f"{rel}:{number}: {rest[:80]}")
+                    problems.append(f"{rel}:{number}: {line[match.start():][:80]}")
         self.assertEqual(
             problems,
             [],
             "absolute home paths break on other machines and checkouts; use "
             "repo-relative paths (sidecars: launcher.script = \"run-server.py\")",
         )
+
+    def test_sidecars_hold_no_local_paths(self) -> None:
+        # Sidecars describe a model, not a machine: artifact paths are relative to
+        # artifacts/, and binaries or checkouts come from .env (LLAMA_SERVER_BIN).
+        problems = []
+
+        def walk(value: object, where: str, rel: str) -> None:
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    walk(item, f"{where}.{key}", rel)
+            elif isinstance(value, list):
+                for index, item in enumerate(value):
+                    walk(item, f"{where}[{index}]", rel)
+            elif isinstance(value, str) and re.match(r"(?:/|~)", value):
+                problems.append(f"{rel}: {where.lstrip('.')} = {value!r}")
+
+        for path in sorted((ROOT / "models").glob("*.json")):
+            walk(json.loads(path.read_text()), "", path.relative_to(ROOT).as_posix())
+        self.assertEqual(problems, [])
 
     def test_uv_scripts_target_the_project_python(self) -> None:
         # Entry scripts drifted back to `--python 3.11` pins three times

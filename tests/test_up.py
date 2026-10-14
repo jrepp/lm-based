@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 import types
@@ -40,10 +39,8 @@ class UpResolverTests(unittest.TestCase):
             [f"model:{slug}", "stats-poll", "dashboard"],
         )
         self.assertEqual(plan.services[0].env["MODEL_SLUG"], slug)
-        self.assertEqual(
-            plan.services[0].env["LLAMA_SERVER_BIN"],
-            os.path.expanduser("~/d/llama.cpp/build/bin/llama-server"),
-        )
+        # The binary is machine config (.env), not something ./up pins per model.
+        self.assertNotIn("LLAMA_SERVER_BIN", plan.services[0].env)
 
     def test_mlx_slug_includes_sampler_proxy(self) -> None:
         registry = self.up.build_registry()

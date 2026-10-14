@@ -1,4 +1,3 @@
-import os
 import re
 import subprocess
 from pathlib import Path
@@ -190,11 +189,6 @@ class ServerSettings(BaseSettings):
                 profile_env = recommended_env.get("PROFILE")
                 if profile_env:
                     self.profile = profile_env
-            if "llama_server_bin" not in self.model_fields_set:
-                llama_server_bin_env = recommended_env.get("LLAMA_SERVER_BIN")
-                if llama_server_bin_env:
-                    # Sidecars write ~/... so they work for any user.
-                    self.llama_server_bin = os.path.expanduser(llama_server_bin_env)
             if "backend_python" not in self.model_fields_set:
                 backend_python_env = recommended_env.get("BACKEND_PYTHON")
                 if backend_python_env:

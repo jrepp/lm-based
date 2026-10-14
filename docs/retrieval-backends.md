@@ -1,7 +1,7 @@
 # Retrieval Backends
 
 Comparison of storage backends for medium-scale RAG and agent memory use cases.
-Primary reference: analysis of `~/d/memvid` (memvid-core v2.0.139, Rust) conducted April 2026.
+Primary reference: analysis of the memvid source (memvid-core v2.0.139, Rust) conducted April 2026.
 
 For embedding model selection: [embedding-model-selection.md](embedding-model-selection.md)
 For retrieval algorithms and index structures: [retrieval-concepts.md](retrieval-concepts.md)

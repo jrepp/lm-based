@@ -2,20 +2,23 @@ import os
 import sys
 from pathlib import Path
 
-# The Ouro checkout sits next to this repo unless OURO_REPO_ROOT says otherwise.
-OURO_REPO_ROOT = Path(os.environ.get("OURO_REPO_ROOT") or Path(__file__).resolve().parents[2] / "ouro")
-VENV_PYTHON = OURO_REPO_ROOT / ".venv" / "bin" / "python"
-SERVER_FILE = OURO_REPO_ROOT / "server.py"
-
 
 def fail(message: str) -> None:
     print(message, file=sys.stderr)
     raise SystemExit(1)
 
 
-def validate_runtime() -> None:
-    if not SERVER_FILE.is_file():
-        fail(f"Ouro server file not found: {SERVER_FILE}")
+def ouro_repo_root() -> Path:
+    # Machine-specific: where this host keeps its Ouro checkout.
+    root = os.environ.get("OURO_REPO_ROOT")
+    if not root:
+        fail("OURO_REPO_ROOT is not set; export it as the path to your Ouro checkout")
+    return Path(root)
+
+
+def validate_runtime(root: Path) -> None:
+    if not (root / "server.py").is_file():
+        fail(f"Ouro server file not found: {root / 'server.py'}")
 
 
 def print_startup(model_id: str, host: str, port: int) -> None:
@@ -25,7 +28,8 @@ def print_startup(model_id: str, host: str, port: int) -> None:
 
 
 def main() -> None:
-    validate_runtime()
+    root = ouro_repo_root()
+    validate_runtime(root)
 
     model_id = os.getenv("OURO_MODEL_ID", "ByteDance/Ouro-2.6B-Thinking")
     host = os.getenv("OURO_HOST", "0.0.0.0")
@@ -33,5 +37,6 @@ def main() -> None:
 
     print_startup(model_id, host, port)
 
-    os.chdir(OURO_REPO_ROOT)
-    os.execv(str(VENV_PYTHON), [str(VENV_PYTHON), str(SERVER_FILE)])
+    venv_python = root / ".venv" / "bin" / "python"
+    os.chdir(root)
+    os.execv(str(venv_python), [str(venv_python), str(root / "server.py")])

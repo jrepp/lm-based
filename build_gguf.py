@@ -14,8 +14,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 INDEX_DIR = ROOT / "models"
-DEFAULT_LLAMA_CPP_DIR = Path("~/d/llama.cpp").expanduser()
-DEFAULT_LLAMA_CPP_BIN_DIR = DEFAULT_LLAMA_CPP_DIR / "build" / "bin"
 UV_CACHE_DIR = Path("/tmp/uv-cache")
 
 CONVERTER_DEPS = [
@@ -167,8 +165,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--llama-cpp-dir",
         type=Path,
-        default=DEFAULT_LLAMA_CPP_DIR,
-        help=f"Path to llama.cpp checkout. Default: {DEFAULT_LLAMA_CPP_DIR}",
+        default=os.environ.get("LLAMA_CPP_DIR"),
+        required="LLAMA_CPP_DIR" not in os.environ,
+        help="Path to your llama.cpp checkout (default: $LLAMA_CPP_DIR).",
     )
     parser.add_argument(
         "--outtype",

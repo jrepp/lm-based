@@ -158,8 +158,10 @@ Sidecar file names follow the artifact: `<Artifact-QUANT>.gguf.json`,
   model directory's `config.json`.
 - Leave `size_bytes` and `sha256` null until the artifact is downloaded and checksummed.
 - `provenance_status`: `user_reported` | `planned_download` | `verified`.
-- No absolute home paths (`/Users/<name>/...`) anywhere in tracked files: `launcher.script`
-  is exactly `run-server.py`, `LLAMA_SERVER_BIN` may use `~/`, and docs link repo-relative.
+- No home or machine-local paths in tracked files. Sidecars describe the model, not a host:
+  `launcher.script` is exactly `run-server.py`, artifact paths are relative to `artifacts/`,
+  and binaries or checkouts come from `.env` / the environment (`LLAMA_SERVER_BIN`,
+  `OURO_REPO_ROOT`, `LLAMA_CPP_DIR`). Docs link repo-relative or to upstream URLs.
   `tests/test_repo_hygiene.py` and `./route-config.py --validate` enforce this.
 
 ## Profile guidelines

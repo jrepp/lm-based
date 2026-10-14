@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import unittest
+from unittest import mock
 from pathlib import Path
 
 try:
@@ -15,20 +16,19 @@ except ModuleNotFoundError as exc:
 
 @unittest.skipIf(ServerSettings is None, "pydantic launcher dependencies are not installed")
 class ServerSettingsModelIndexTests(unittest.TestCase):
-    def test_model_slug_applies_recommended_llama_server_binary(self) -> None:
-        settings = ServerSettings(
-            model_slug="qwen36-27b-mtp-ud-q5k-xl",
-            enable_run_capture=False,
-        )
+    def test_llama_server_binary_comes_from_machine_config(self) -> None:
+        # Sidecars never pin a binary path; LLAMA_SERVER_BIN is set per machine (.env).
+        with mock.patch.dict(os.environ, {"LLAMA_SERVER_BIN": "/opt/llama.cpp/bin/llama-server"}):
+            settings = ServerSettings(
+                model_slug="qwen36-27b-mtp-ud-q5k-xl",
+                enable_run_capture=False,
+            )
 
-        self.assertEqual(
-            settings.llama_server_bin,
-            os.path.expanduser("~/d/llama.cpp/build/bin/llama-server"),
-        )
+        self.assertEqual(settings.llama_server_bin, "/opt/llama.cpp/bin/llama-server")
         self.assertEqual(settings.spec_type, "draft-mtp")
         self.assertEqual(settings.spec_draft_n_max, 4)
 
-    def test_explicit_llama_server_binary_overrides_sidecar_recommendation(self) -> None:
+    def test_explicit_llama_server_binary_wins(self) -> None:
         settings = ServerSettings(
             model_slug="qwen36-27b-mtp-ud-q5k-xl",
             llama_server_bin="/tmp/custom-llama-server",

@@ -35,13 +35,12 @@
     "recommended_env": {
       "MODEL_FILE": "GLM-OCR-Q8_0.gguf",
       "MMPROJ": "mmproj-GLM-OCR-Q8_0.gguf",
-      "PROFILE": "glm-ocr",
-      "LLAMA_SERVER_BIN": "~/d/llama.cpp/build/bin/llama-server"
+      "PROFILE": "glm-ocr"
     }
   },
   "notes": [
     "0.9B document-parsing vision model (CogViT encoder + GLM-0.5B decoder, glm4 arch); MIT license; OmniDocBench V1.5 94.62 (#1 at release), olmOCR-Bench 75.2.",
-    "Served via llama-server --mmproj (ggml-org official Q8_0 weights + Q8_0 mmproj projector, ~1.8GB total); LLAMA_SERVER_BIN pinned to the local build verified for mtmd/mmproj support.",
+    "Served via llama-server --mmproj (ggml-org official Q8_0 weights + Q8_0 mmproj projector, ~1.8GB total); needs a llama-server build with mtmd/mmproj support (set LLAMA_SERVER_BIN in .env).",
     "Task prompts are plain strings sent with a page image: 'Text Recognition:', 'Formula Recognition:', 'Table Recognition:'. Information extraction uses user-supplied JSON-schema prompts.",
     "The upstream SDK wraps the model with PP-DocLayoutV3 layout analysis (Apache-2.0); the raw llama-server path serves page-level parsing without that pipeline.",
     "Greedy decode (temperature 0.0) via the glm-ocr profile; ctx 32768 conservative under the 131072 native ceiling.",
