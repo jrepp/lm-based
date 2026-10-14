@@ -53,7 +53,7 @@ install dir="$HOME/.local/bin":
 
 # Test the repo Pi extensions, including tool execution regressions
 pi-test:
-    @node --test support/pi/extensions/*.test.ts support/pi/extensions/*/*.test.ts
+    @node --test support/pi/extensions/*.test.ts support/pi/extensions/*/*.test.ts support/pi/sandbox/*.test.ts
 
 # Show the Pi provider ./pi-local would configure
 pi-plan:

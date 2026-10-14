@@ -162,6 +162,73 @@ The result reports counts per choice, true/false totals, score distributions, fa
 the least confident records; per-record answers are in the output file. On a 36-row ticket
 CSV, kev labelled every topic correctly in 2.2 s with Coder-Next driving.
 
+### Reading confidence
+
+kev returns the full probability distribution for every answer. Its choice `confidence` is
+`(p_max - 1/K) / (1 - 1/K)`: 0 at a uniform distribution over the K options, 1 at certainty.
+It shrinks as K grows, so a 30-option question with a clear winner at p = 0.4 reports
+confidence 0.38. Bool confidence is `|2p - 1|`. To compare questions with different option
+counts, the summary also gives, per question:
+
+| Field | Meaning |
+|---|---|
+| `options`, `uniform_probability` | K and 1/K, the "no idea" baseline |
+| `mean_top_probability` | mean probability of the answer given |
+| `mean_margin` | mean lead of the answer over the runner-up |
+| `mean_probability_when_chosen` | per option, how sure kev was when it picked it |
+| `confidence_histogram` | answers per confidence band |
+
+Results files carry `margin`, `runner_up` and `runner_up_probability` on every choice answer,
+and `low_confidence` entries show them too.
+
+### Abstaining, examples, and chained stages
+
+- `abstain: {"choice": "unsure"}` adds an "unsure" option to every choice question (with
+  `description` as its criterion). `min_confidence` and `min_margin` also count low or close
+  answers as unsure. Unsure answers are reported (`abstained` in the summary, per record in the
+  results), never forced into an option. kev has no abstain of its own; this is that option
+  plus thresholds applied by the tool.
+- `examples: [{"record": {...}, "answers": {"category": "medical"}}]`, or
+  `examples_from: {"path": "labeled.ndjson", "answer_fields": {"category": "category"}, "limit": 12}`
+  to pick rows a person already labeled, round-robin across answers. Examples go into the
+  state ahead of the record (`labeled_examples`, then `record`), at most 24 per stage. The
+  shared prefix is cached by kev, but examples still count against its state context, so keep
+  them few and narrow (use `fields`).
+- `stages` replaces `questions` with an ordered list of stages, each with its own
+  `questions`, `examples`/`examples_from`, `abstain`, `context`, and a `when` filter on earlier
+  stages' answers (`is`, `min_probability`, `min_confidence`, `min_score`/`max_score`; a list
+  means all must hold). Filters only look back; at most 6 stages. A record stops at the first
+  stage where it abstains, errors, or fails a filter, and is marked `outcome`
+  (`complete`, `filtered`, `abstained`, `error`) and `stopped_at`. With `otherwise: "continue"`
+  a failed filter skips that stage instead, which is how branches are written.
+
+The tax-row pattern: a bool relevance question first, then a short choice only for relevant
+rows, with an abstain option:
+
+```json
+{
+  "path": "rows.ndjson", "id_field": "row", "fields": ["payee", "amountCents", "memo"],
+  "stages": [
+    {"id": "relevance", "questions": {"tax_relevant": {"type": "bool",
+      "instructions": "Is this a tax-relevant household payment (not a transfer between own accounts, utility, loan or card payment)?"}}},
+    {"id": "category",
+     "when": {"stage": "relevance", "question": "tax_relevant", "is": true, "min_probability": 0.8},
+     "questions": {"category": {"type": "choice", "instructions": "Which category?",
+       "criteria": {"medical": "doctors, pharmacy", "charity": "donations", "childcare": "daycare, nanny"}}},
+     "abstain": {"choice": "unsure"},
+     "examples_from": {"path": "categorized.ndjson", "answer_fields": {"category": "category"}}}
+  ]
+}
+```
+
+The staged summary gives `outcomes`, `stopped_at` (per stage: filtered / abstained / error),
+`paths` (counts per route, such as `relevance>category` or `relevance | filtered@category`),
+and per stage `reached`, `skipped`, `filtered`, `abstained`, `errors` and the question
+statistics above. Each NDJSON result line holds every stage's answers with probabilities.
+With a `.csv` output, columns are `<stage>.<question>`, `_confidence`, and `_margin` for
+choice questions. The single-stage shape keeps its original results layout; with `abstain`
+it adds an `abstained` field (CSV: a final `abstained` column).
+
 Wiring, and why it is not in `models.json`: Pi's `models.json` loader treats every entry as a
 chat model, so classifier models must come from an extension provider. `./pi-local` puts the
 decision models it finds on llama-swap into `LM_BASED_CLASSIFIERS`; the extension registers
@@ -173,6 +240,69 @@ scripts and from other extensions through `ctx.modelRegistry.classify()`.
 
 When scripting `./pi-local -p`, close stdin (`< /dev/null`): Pi reads piped stdin as prompt
 input and waits for it to end.
+
+## Run files and trajectories
+
+Every launch (sandboxed or not) gets a run id and:
+
+- a scratch folder in the workspace, `.pi-run/<run-id>/`, whose `tmp/` is Pi's `TMPDIR`.
+  `.pi-run/` holds a `.gitignore` of `*`, so git never lists it. It is deleted when Pi exits;
+  `--keep-run-files` keeps it.
+- a records folder outside the workspace, `.runtime/pi/runs/<run-id>/` (gitignored, mode 700):
+  `trajectory.jsonl` lists every user prompt, assistant message, tool call with its arguments,
+  and tool result (text clipped at 256 KiB, with the full length and sha256), so the numbers in
+  a model's report can be checked against what the tools returned. `--no-trajectory` turns it
+  off. With household data, the trajectory holds household data too: delete old runs when
+  they are no longer needed.
+
+The `run-record` extension (`support/pi/extensions/run-record`) writes the trajectory, tells
+the model where scratch files go, and blocks `write`/`edit` calls into shared temp folders
+(`/tmp`, `/var/folders`). Bash commands are not intercepted. After an unsandboxed run,
+pi-local lists new untracked files the session left in a git workspace.
+
+## Sandboxed launches and Tax Desk
+
+```bash
+./pi-local --sandbox                    # OpenShell microVM; egress only to the host gateway
+./pi-local --sandbox --no-taxdesk       # the same without the taxdesk-docs broker
+./pi-local --sandbox --keep-run-files   # keep .pi-run/<run-id> inside the VM's workspace copy
+```
+
+`--sandbox` runs Pi in an OpenShell microVM: the workspace, the pinned Pi, and the agent
+directory are uploaded, and the policy allows only the node binary to reach the sandbox
+gateway (`LM_BASED_SANDBOX_GATEWAY`, default `192.168.127.254`) on the llama-swap port.
+Decision models reach `decide_records` through the same gateway. The VM works on a copy:
+files it writes are not synced back to the host workspace.
+
+The Tax Desk CLI (`taxdesk-docs`) is a macOS binary that reads its credential from the login
+Keychain and calls the Tax Desk server over HTTPS, so it cannot run in the VM. When pi-local
+finds it on the host (`TAXDESK_DOCS_BIN`, then `PATH`, then `./dist/taxdesk-docs` in the
+launch directory) it starts a broker (`lm_launcher/taxdesk_broker.py`, ADR-006) for the
+session and stops it on exit:
+
+- it listens on `127.0.0.1:<ephemeral port>` (`LM_BASED_TAXDESK_BROKER_PORT` to pin it); the
+  policy gains one rule for that port on the gateway, for node only
+- inside the VM, `taxdesk-docs` on `PATH` is a shim (`support/pi/sandbox/`) that forwards
+  argv and stdin to the broker with a per-launch token, writes `--out` files locally (mode 600),
+  and sends `--body <file>` as stdin
+- the broker runs only allowlisted subcommands with validated arguments: `manifest`, `whoami`,
+  `context`, `list`, `next`, `get`, `text`, `propose`, `tables`, `table`, `overlay`, `suggest`,
+  `report`, `txns`, intersected with the host binary's `manifest`. Never `login`, `logout`,
+  `--url`, or `--help`.
+- the binary runs with a minimal environment (HOME, USER, PATH, and the host's own
+  `TAXDESK_URL`/`TAXDESK_CA`) in a private temporary directory; the VM never sees the
+  credential, the host environment, or host paths
+- `.runtime/pi/runs/<run-id>/broker.log` records command names, exit codes, and durations only
+
+To work on Tax Desk data from the sandbox, a person first runs `bun run login` in the Tax Desk
+checkout (in their own terminal, outside the sandbox), then:
+
+```bash
+cd ~/src/taxes                     # the Tax Desk checkout (its skills load from .agents/skills)
+pi-local --sandbox                 # finds ./dist/taxdesk-docs and starts the broker
+```
+
+The in-sandbox trajectory is downloaded to `.runtime/pi/runs/<run-id>/` when Pi exits.
 
 ## PDF and image OCR
 
