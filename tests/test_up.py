@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import types
@@ -41,7 +42,7 @@ class UpResolverTests(unittest.TestCase):
         self.assertEqual(plan.services[0].env["MODEL_SLUG"], slug)
         self.assertEqual(
             plan.services[0].env["LLAMA_SERVER_BIN"],
-            "/Users/jrepp/d/llama.cpp/build/bin/llama-server",
+            os.path.expanduser("~/d/llama.cpp/build/bin/llama-server"),
         )
 
     def test_mlx_slug_includes_sampler_proxy(self) -> None:

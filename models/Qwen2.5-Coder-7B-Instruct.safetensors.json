@@ -41,7 +41,7 @@
     "revision": null
   },
   "launcher": {
-    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "script": "run-server.py",
     "profile": "qwen2.5-coder-transformers",
     "recommended_env": {
       "MODEL_FILE": "Qwen2.5-Coder-7B-Instruct",

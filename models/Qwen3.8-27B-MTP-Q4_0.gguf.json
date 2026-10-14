@@ -30,13 +30,13 @@
     "revision": null
   },
   "launcher": {
-    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "script": "run-server.py",
     "profile": "qwen3.8-mtp",
     "recommended_env": {
       "MODEL_FILE": "Qwen3.8-27B-Q4_0.gguf",
       "MODEL_DRAFT": "MTP/mtp-Qwen3.8-27B-Q4_0.gguf",
       "PROFILE": "qwen3.8-mtp",
-      "LLAMA_SERVER_BIN": "/Users/jrepp/d/llama.cpp/build/bin/llama-server"
+      "LLAMA_SERVER_BIN": "~/d/llama.cpp/build/bin/llama-server"
     }
   },
   "notes": [

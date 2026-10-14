@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import unittest
 from pathlib import Path
 
@@ -22,7 +23,7 @@ class ServerSettingsModelIndexTests(unittest.TestCase):
 
         self.assertEqual(
             settings.llama_server_bin,
-            "/Users/jrepp/d/llama.cpp/build/bin/llama-server",
+            os.path.expanduser("~/d/llama.cpp/build/bin/llama-server"),
         )
         self.assertEqual(settings.spec_type, "draft-mtp")
         self.assertEqual(settings.spec_draft_n_max, 4)

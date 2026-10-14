@@ -2,7 +2,8 @@ import os
 import sys
 from pathlib import Path
 
-OURO_REPO_ROOT = Path("/Users/jrepp/d/ouro")
+# The Ouro checkout sits next to this repo unless OURO_REPO_ROOT says otherwise.
+OURO_REPO_ROOT = Path(os.environ.get("OURO_REPO_ROOT") or Path(__file__).resolve().parents[2] / "ouro")
 VENV_PYTHON = OURO_REPO_ROOT / ".venv" / "bin" / "python"
 SERVER_FILE = OURO_REPO_ROOT / "server.py"
 

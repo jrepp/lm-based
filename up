@@ -276,7 +276,7 @@ def model_service(slug: str) -> Service:
         "RUN_MODE": "direct",
     }
     if recommended_env.get("LLAMA_SERVER_BIN"):
-        env["LLAMA_SERVER_BIN"] = recommended_env["LLAMA_SERVER_BIN"]
+        env["LLAMA_SERVER_BIN"] = os.path.expanduser(recommended_env["LLAMA_SERVER_BIN"])
     return Service(
         name=f"model:{slug}",
         window=f"model-{safe}"[:32],

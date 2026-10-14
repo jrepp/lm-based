@@ -30,13 +30,13 @@
     "revision": null
   },
   "launcher": {
-    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "script": "run-server.py",
     "profile": "glm-ocr",
     "recommended_env": {
       "MODEL_FILE": "GLM-OCR-Q8_0.gguf",
       "MMPROJ": "mmproj-GLM-OCR-Q8_0.gguf",
       "PROFILE": "glm-ocr",
-      "LLAMA_SERVER_BIN": "/Users/jrepp/d/llama.cpp/build/bin/llama-server"
+      "LLAMA_SERVER_BIN": "~/d/llama.cpp/build/bin/llama-server"
     }
   },
   "notes": [

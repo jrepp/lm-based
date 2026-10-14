@@ -27,7 +27,7 @@
     "revision": null
   },
   "launcher": {
-    "script": "/Users/jrepp/d/qwen/run-server.py",
+    "script": "run-server.py",
     "profile": "generic",
     "recommended_env": {
       "MODEL_FILE": "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",

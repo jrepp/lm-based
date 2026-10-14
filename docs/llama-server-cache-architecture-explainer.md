@@ -35,7 +35,7 @@ This is the model-side memory backing already-processed tokens. At the libllama 
 
 For the captured `Qwen3-Coder-Next` run, the raw context was built at `1048576` tokens and used `freq_scale = 0.25`:
 
-- [llama-server.log](/Users/jrepp/d/qwen/runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:171)
+- [llama-server.log](../runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:171)
 
 ### 2. Per-slot prompt state in `server_slot`
 
@@ -86,9 +86,9 @@ The important consequence is that server behavior is slot-centric, not just mode
 
 For `Qwen3-Coder-Next`, libllama accepted the 1M context request, but `llama-server` then capped slot context back to the model training window:
 
-- raw context built at `1048576`: [llama-server.log](/Users/jrepp/d/qwen/runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:171)
-- server warning about slot capping: [llama-server.log](/Users/jrepp/d/qwen/runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:206)
-- slot created with `n_ctx = 262144`: [llama-server.log](/Users/jrepp/d/qwen/runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:209)
+- raw context built at `1048576`: [llama-server.log](../runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:171)
+- server warning about slot capping: [llama-server.log](../runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:206)
+- slot created with `n_ctx = 262144`: [llama-server.log](../runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:209)
 
 The exact server-side cap is here:
 
@@ -158,7 +158,7 @@ Example from the local run:
 
 See:
 
-- [qwen-run-stats.md](/Users/jrepp/d/qwen/qwen-run-stats.md:24)
+- [qwen-run-stats.md](qwen-run-stats.md:24)
 
 ## Prompt Cache
 
@@ -293,8 +293,8 @@ Local logs and llama.cpp model handling show:
 
 Relevant log and code:
 
-- [llama-server.log](/Users/jrepp/d/qwen/runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:16)
-- [llama-server.log](/Users/jrepp/d/qwen/runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:194)
+- [llama-server.log](../runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:16)
+- [llama-server.log](../runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:194)
 - [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:2514)
 
 This is why:
@@ -329,7 +329,7 @@ From the local FAQ:
 
 See:
 
-- [llama-server-stats-faq.md](/Users/jrepp/d/qwen/llama-server-stats-faq.md:141)
+- [llama-server-stats-faq.md](llama-server-stats-faq.md:141)
 
 The local run also showed heavy checkpoint churn:
 
@@ -338,7 +338,7 @@ The local run also showed heavy checkpoint churn:
 
 See:
 
-- [llama-server-stats-faq.md](/Users/jrepp/d/qwen/llama-server-stats-faq.md:62)
+- [llama-server-stats-faq.md](llama-server-stats-faq.md:62)
 
 Interpretation:
 
@@ -417,8 +417,8 @@ Local source and notes:
 - [server-task.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-task.cpp:760)
 - [speculative.cpp](/Users/jrepp/d/llama.cpp/common/speculative.cpp:823)
 - [llama-context.cpp](/Users/jrepp/d/llama.cpp/src/llama-context.cpp:199)
-- [llama-server-stats-faq.md](/Users/jrepp/d/qwen/llama-server-stats-faq.md:62)
-- [qwen-run-stats.md](/Users/jrepp/d/qwen/qwen-run-stats.md:24)
+- [llama-server-stats-faq.md](llama-server-stats-faq.md:62)
+- [qwen-run-stats.md](qwen-run-stats.md:24)
 
 External docs:
 

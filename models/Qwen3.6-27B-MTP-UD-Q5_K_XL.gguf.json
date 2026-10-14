@@ -27,12 +27,12 @@
     "revision": null
   },
   "launcher": {
-    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "script": "run-server.py",
     "profile": "qwen3.6-mtp",
     "recommended_env": {
       "MODEL_FILE": "Qwen3.6-27B-UD-Q5_K_XL.gguf",
       "PROFILE": "qwen3.6-mtp",
-      "LLAMA_SERVER_BIN": "/Users/jrepp/d/llama.cpp/build/bin/llama-server"
+      "LLAMA_SERVER_BIN": "~/d/llama.cpp/build/bin/llama-server"
     }
   },
   "notes": [
