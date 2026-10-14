@@ -168,7 +168,7 @@ def profile_defaults(profile: str, model_name: str) -> dict[str, object]:
     if profile == "qwen3.8-mtp":
         # MTP-preserved quant for native draft-mtp speculative decoding,
         # mirroring the validated qwen3.6-mtp profile. Requires a llama-server
-        # build with draft-mtp support (the sidecar pins LLAMA_SERVER_BIN).
+        # build with draft-mtp support (LLAMA_SERVER_BIN in .env).
         defaults.update(
             {
                 "ctx_size": 262144,

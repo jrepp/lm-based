@@ -1,10 +1,15 @@
+# The native push guard is installed by scripts/install-hooks.sh.
+default_stages: [pre-commit]
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: check-merge-conflict
       - id: end-of-file-fixer
+        stages: [pre-commit]  # its manifest also opts into pre-push
       - id: trailing-whitespace
+        stages: [pre-commit]  # its manifest also opts into pre-push
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2
     rev: v0.18.1

@@ -2,10 +2,10 @@
 
 This repo expects a recent `llama.cpp` build when using newer serving features such as Qwen3.6 MTP with `draft-mtp`.
 
-The local checkout is expected to live next to this repo:
+Clone it wherever you like and export its location; the commands below use it:
 
-```text
-../llama.cpp
+```bash
+export LLAMA_CPP_DIR=/path/to/llama.cpp
 ```
 
 ## Update And Build
@@ -13,7 +13,7 @@ The local checkout is expected to live next to this repo:
 From this repo:
 
 ```bash
-cd ../llama.cpp
+cd "$LLAMA_CPP_DIR"
 git fetch origin
 git rebase origin/master
 
@@ -48,11 +48,14 @@ If `draft-mtp` is missing, the binary is too old for Qwen3.6 MTP serving.
 When starting a local model from this repo, point `LLAMA_SERVER_BIN` at the rebuilt binary:
 
 ```bash
-LLAMA_SERVER_BIN=../llama.cpp/build/bin/llama-server \
+LLAMA_SERVER_BIN="$LLAMA_CPP_DIR/build/bin/llama-server" \
 MODEL_SLUG=qwen36-27b-mtp-ud-q5k-xl \
 ENABLE_RUN_CAPTURE=false \
 ./run-server.py
 ```
+
+To make it the default for every model (llama-swap workers included), set `LLAMA_SERVER_BIN` to the
+binary's full path in `.env`.
 
 Use `ENABLE_RUN_CAPTURE=false` for manual bring-up when you do not want to create a new `runs/` directory.
 
@@ -77,5 +80,5 @@ Check both:
 ```bash
 which llama-server
 llama-server --version
-../llama.cpp/build/bin/llama-server --version
+"$LLAMA_CPP_DIR/build/bin/llama-server" --version
 ```

@@ -9,6 +9,23 @@ llama-server, mlx_lm, and kev (decision models), a llama-swap hot-swap proxy wit
 parallel model groups, tmux-managed services, client bootstraps for Pi and OpenCode, and
 ClawRouter routing config. `docs/architecture.html` shows the full stack.
 
+Stack layers:
+
+- **L0 Ingress** — Tailscale VPN, Telegram bot, open-webui chat UX
+- **L1 Agent** — Claw, Hermes, Pi, OpenCode
+- **L2 Router** — ClawRouter (OpenAI-compatible routing)
+- **L3 Local** — llama-swap in front of llama-server, mlx_lm, and kev workers
+- **L4 Cloud** — GLM-5, ChatGPT, MiniMax, DeepSeek, Claude, Grok, Gemini (direct or via x402/USDC proxy)
+
+First-time setup:
+
+```bash
+cp .env.example .env      # fill in MODEL_SLUG and any API keys
+uv sync
+./route-config.py         # generate clawrouter.json
+just pi-install           # optional: pinned Pi for ./pi-local
+```
+
 ## Repo map
 
 | Path | Purpose |
@@ -24,6 +41,10 @@ ClawRouter routing config. `docs/architecture.html` shows the full stack.
 | `pi-local`, `opencode-local` | Launch Pi / OpenCode against the running local service |
 | `support/pi/` | Repo-pinned Pi install and repo Pi extensions |
 | `route-config.py` | Generates and validates `clawrouter.json` |
+| `download_model.py` | Fetch a model by sidecar slug (`--list` shows slugs) |
+| `artifacts/` | Downloaded binaries (gitignored); `STATUS.md` tracks local provenance |
+| `runs/` | Per-run capture dirs: logs, PIDs, monitor CSVs (read-only for agents) |
+| `.env.example` | Template for all env vars; copy to `.env` |
 | `docs/`, `docs-cms/` | Reference docs; decision records (docuchango) |
 
 ## Verify before you commit
@@ -35,9 +56,18 @@ uv sync --frozen
 uv run --frozen python -m unittest discover -s tests   # Python tests
 go test ./...                                          # serve-manager
 ./route-config.py --validate                           # sidecar lint
-just pi-test                                           # Pi extension modules (node --test)
+just pi-install && just pi-test                        # Pi extensions load + record tests
 pre-commit run --all-files                             # markdownlint + whitespace
 ```
+
+Run `./scripts/install-hooks.sh` once per clone to install pre-commit and a native
+pre-push guard. The guard checks every pushed destination branch against its remote
+repository and refuses updates whose PR is already merged. It skips deletions and tags,
+and fails open when `gh` is unavailable or GitHub cannot be queried. The installer
+refuses to overwrite an existing pre-push hook; preserve or remove it explicitly first.
+`tests/test_repo_hygiene.py` holds repo-wide guards for past regressions: absolute home
+paths, uv scripts drifting off the project Python, bash 4+ syntax in shell scripts
+(macOS `/bin/bash` is 3.2), and generated files missing from `.gitignore`.
 
 `.venv` has no pytest; use `unittest` as above. Tests must not depend on live services.
 
@@ -116,7 +146,7 @@ Sidecar file names follow the artifact: `<Artifact-QUANT>.gguf.json`,
     "revision": null
   },
   "launcher": {
-    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "script": "run-server.py",
     "profile": "<profile-name>",
     "recommended_env": {
       "MODEL_FILE": "<stem>.gguf",
@@ -131,6 +161,11 @@ Sidecar file names follow the artifact: `<Artifact-QUANT>.gguf.json`,
   model directory's `config.json`.
 - Leave `size_bytes` and `sha256` null until the artifact is downloaded and checksummed.
 - `provenance_status`: `user_reported` | `planned_download` | `verified`.
+- No home or machine-local paths in tracked files. Sidecars describe the model, not a host:
+  `launcher.script` is exactly `run-server.py`, artifact paths are relative to `artifacts/`,
+  and binaries or checkouts come from `.env` / the environment (`LLAMA_SERVER_BIN`,
+  `OURO_REPO_ROOT`, `LLAMA_CPP_DIR`). Docs link repo-relative or to upstream URLs.
+  `tests/test_repo_hygiene.py` and `./route-config.py --validate` enforce this.
 
 ## Profile guidelines
 

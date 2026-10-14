@@ -5,8 +5,8 @@ Recorded: 2026-04-29
 ## Artifact
 
 - Local selector: `qwen25-coder-7b-instruct`
-- Local path anchor: [Qwen2.5-Coder-7B-Instruct/model.safetensors.index.json](/Users/jrepp/d/lm-based/Qwen2.5-Coder-7B-Instruct/model.safetensors.index.json)
-- Structured sidecar: [Qwen2.5-Coder-7B-Instruct.safetensors.json](/Users/jrepp/d/lm-based/models/Qwen2.5-Coder-7B-Instruct.safetensors.json)
+- Local path anchor: [Qwen2.5-Coder-7B-Instruct/model.safetensors.index.json](../artifacts/Qwen2.5-Coder-7B-Instruct/model.safetensors.index.json)
+- Structured sidecar: [Qwen2.5-Coder-7B-Instruct.safetensors.json](Qwen2.5-Coder-7B-Instruct.safetensors.json)
 - Upstream Unsloth repo: [unsloth/Qwen2.5-Coder-7B-Instruct](https://huggingface.co/unsloth/Qwen2.5-Coder-7B-Instruct)
 - Canonical base model card: [Qwen/Qwen2.5-Coder-7B-Instruct](https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct)
 - Format: `safetensors`

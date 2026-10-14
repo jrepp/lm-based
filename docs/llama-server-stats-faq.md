@@ -6,7 +6,7 @@ This FAQ explains the `llama-server` stats and memory numbers you will see in lo
 
 For each captured run, the launcher writes a directory under `runs/`, for example:
 
-- [runs/20260413T144134Z-qwen3-coder-next-iq4xs](/Users/jrepp/d/qwen/runs/20260413T144134Z-qwen3-coder-next-iq4xs:1)
+- [runs/20260413T144134Z-qwen3-coder-next-iq4xs](../runs/20260413T144134Z-qwen3-coder-next-iq4xs:1)
 
 Typical files:
 

@@ -5,8 +5,8 @@ Recorded: 2026-04-27
 ## Artifact
 
 - Local selector: `qwen36-27b-unsloth`
-- Local path anchor: [Qwen3.6-27B/model.safetensors.index.json](/Users/jrepp/d/lm-based/Qwen3.6-27B/model.safetensors.index.json)
-- Structured sidecar: [Qwen3.6-27B.safetensors.json](/Users/jrepp/d/lm-based/models/Qwen3.6-27B.safetensors.json)
+- Local path anchor: [Qwen3.6-27B/model.safetensors.index.json](../artifacts/Qwen3.6-27B/model.safetensors.index.json)
+- Structured sidecar: [Qwen3.6-27B.safetensors.json](Qwen3.6-27B.safetensors.json)
 - Upstream Unsloth repo: [unsloth/Qwen3.6-27B](https://huggingface.co/unsloth/Qwen3.6-27B)
 - Canonical base model card: [Qwen/Qwen3.6-27B](https://huggingface.co/Qwen/Qwen3.6-27B)
 - Format: `safetensors`

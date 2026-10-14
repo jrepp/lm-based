@@ -44,7 +44,7 @@
     "revision": null
   },
   "launcher": {
-    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "script": "run-server.py",
     "profile": "mlx-bonsai",
     "recommended_env": {
       "MODEL_FILE": "Ternary-Bonsai-27B-MLX-2bit",

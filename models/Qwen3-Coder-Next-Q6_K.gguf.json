@@ -31,7 +31,7 @@
     "revision": null
   },
   "launcher": {
-    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "script": "run-server.py",
     "profile": "qwen3-coder-next",
     "recommended_env": {
       "MODEL_FILE": "Q6_K/Qwen3-Coder-Next-Q6_K-00001-of-00003.gguf",

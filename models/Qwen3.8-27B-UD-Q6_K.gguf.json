@@ -27,7 +27,7 @@
     "revision": null
   },
   "launcher": {
-    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "script": "run-server.py",
     "profile": "qwen3.8",
     "recommended_env": {
       "MODEL_FILE": "Qwen3.8-27B-UD-Q6_K.gguf",

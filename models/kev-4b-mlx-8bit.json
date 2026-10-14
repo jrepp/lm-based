@@ -42,7 +42,7 @@
     "revision": null
   },
   "launcher": {
-    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "script": "run-server.py",
     "profile": "mlx-kev",
     "recommended_env": {
       "MODEL_FILE": "kev-4b-mlx-8bit/config.json",

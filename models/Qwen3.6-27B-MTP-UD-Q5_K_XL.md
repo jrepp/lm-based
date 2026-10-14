@@ -5,8 +5,8 @@ Recorded: 2026-05-24
 ## Artifact
 
 - Local selector: `qwen36-27b-mtp-ud-q5k-xl`
-- Local path: [Qwen3.6-27B-UD-Q5_K_XL.gguf](/Users/jrepp/d/lm-based/Qwen3.6-27B-UD-Q5_K_XL.gguf)
-- Structured sidecar: [Qwen3.6-27B-MTP-UD-Q5_K_XL.gguf.json](/Users/jrepp/d/lm-based/models/Qwen3.6-27B-MTP-UD-Q5_K_XL.gguf.json)
+- Local path: [Qwen3.6-27B-UD-Q5_K_XL.gguf](../artifacts/Qwen3.6-27B-UD-Q5_K_XL.gguf)
+- Structured sidecar: [Qwen3.6-27B-MTP-UD-Q5_K_XL.gguf.json](Qwen3.6-27B-MTP-UD-Q5_K_XL.gguf.json)
 - GGUF source repo: [unsloth/Qwen3.6-27B-MTP-GGUF](https://huggingface.co/unsloth/Qwen3.6-27B-MTP-GGUF)
 - Canonical model card: [Qwen/Qwen3.6-27B](https://huggingface.co/Qwen/Qwen3.6-27B)
 - Format: `gguf`
@@ -25,7 +25,7 @@ Recorded: 2026-05-24
 ## Local Serving
 
 - Launcher profile: `qwen3.6-mtp`
-- Local server binary: `/Users/jrepp/d/llama.cpp/build/bin/llama-server`
+- Server binary: a llama-server build with draft-mtp support, set as `LLAMA_SERVER_BIN` in `.env`
 - Context: `262144`
 - Speculative decoding: `--spec-type draft-mtp --spec-draft-n-max 4`
 - Parallel slots: `1`

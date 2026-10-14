@@ -2,6 +2,9 @@
 
 Recorded: 2026-04-13
 
+llama.cpp source links point at upstream commit `e21cdc1` (2026-04-13, the recording date).
+The line anchors came from a local checkout of that period and may be off by a few lines.
+
 ## Scope
 
 This note explains how `llama-server` caching actually works for local serving, with emphasis on:
@@ -30,12 +33,12 @@ There are three distinct reuse layers in `llama-server`.
 
 This is the model-side memory backing already-processed tokens. At the libllama level, the context can be created with `n_ctx > n_ctx_train`; libllama warns but does not itself cap this:
 
-- [llama-context.cpp](/Users/jrepp/d/llama.cpp/src/llama-context.cpp:199)
-- [llama-context.cpp](/Users/jrepp/d/llama.cpp/src/llama-context.cpp:215)
+- [llama-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/src/llama-context.cpp#L199)
+- [llama-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/src/llama-context.cpp#L215)
 
 For the captured `Qwen3-Coder-Next` run, the raw context was built at `1048576` tokens and used `freq_scale = 0.25`:
 
-- [llama-server.log](/Users/jrepp/d/qwen/runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:171)
+- [llama-server.log](../runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:171)
 
 ### 2. Per-slot prompt state in `server_slot`
 
@@ -49,7 +52,7 @@ For the captured `Qwen3-Coder-Next` run, the raw context was built at `1048576` 
 
 See:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:50)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L50)
 
 This slot object is the unit that drives request admission, truncation, reuse, and generation.
 
@@ -57,8 +60,8 @@ This slot object is the unit that drives request admission, truncation, reuse, a
 
 Idle slots can be saved to a host-side prompt cache and later restored. This is separate from the live KV memory currently active in the slot:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:105)
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:608)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L105)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L608)
 
 So when the server reports cached tokens, that may come from live slot reuse, shifted KV reuse, or restored prompt-cache state.
 
@@ -76,9 +79,9 @@ Each slot carries its own:
 
 See:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:66)
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:70)
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:76)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L66)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L70)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L76)
 
 The important consequence is that server behavior is slot-centric, not just model-centric.
 
@@ -86,13 +89,13 @@ The important consequence is that server behavior is slot-centric, not just mode
 
 For `Qwen3-Coder-Next`, libllama accepted the 1M context request, but `llama-server` then capped slot context back to the model training window:
 
-- raw context built at `1048576`: [llama-server.log](/Users/jrepp/d/qwen/runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:171)
-- server warning about slot capping: [llama-server.log](/Users/jrepp/d/qwen/runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:206)
-- slot created with `n_ctx = 262144`: [llama-server.log](/Users/jrepp/d/qwen/runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:209)
+- raw context built at `1048576`: [llama-server.log](../runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:171)
+- server warning about slot capping: [llama-server.log](../runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:206)
+- slot created with `n_ctx = 262144`: [llama-server.log](../runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:209)
 
 The exact server-side cap is here:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:760)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L760)
 
 So:
 
@@ -110,8 +113,8 @@ It uses two strategies:
 
 See:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:962)
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:1008)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L962)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L1008)
 
 The LCP similarity score is measured as:
 
@@ -119,7 +122,7 @@ The LCP similarity score is measured as:
 
 The threshold is controlled by `slot_prompt_similarity`:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:967)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L967)
 
 This works well when prompts grow append-only. It works badly when the prompt is semantically similar but token-structurally different.
 
@@ -129,7 +132,7 @@ Multi-turn reuse is mostly prefix reuse.
 
 If a slot already holds a prompt whose token prefix matches the new request, the server can skip reprocessing that shared prefix:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:2267)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L2267)
 
 The count of reused prompt tokens is stored in:
 
@@ -137,7 +140,7 @@ The count of reused prompt tokens is stored in:
 
 See:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:2462)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L2462)
 
 And this is surfaced back to clients as:
 
@@ -146,8 +149,8 @@ And this is surfaced back to clients as:
 
 See:
 
-- [server-task.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-task.cpp:760)
-- [server-task.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-task.cpp:1158)
+- [server-task.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-task.cpp#L760)
+- [server-task.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-task.cpp#L1158)
 
 This is what makes an apparently giant request sometimes only evaluate a small delta.
 
@@ -158,17 +161,17 @@ Example from the local run:
 
 See:
 
-- [qwen-run-stats.md](/Users/jrepp/d/qwen/qwen-run-stats.md:24)
+- [qwen-run-stats.md](qwen-run-stats.md:24)
 
 ## Prompt Cache
 
 If the server is about to reuse or evict a slot, it can serialize that slot's prompt state to the host-side prompt cache:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:1040)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L1040)
 
 Idle slots can also be saved and cleared explicitly:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:608)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L608)
 
 This is not the same thing as keeping live slot KV around. It is a snapshot/restore path.
 
@@ -191,12 +194,12 @@ This is controlled by `n_cache_reuse` and only applies if:
 
 See:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:2277)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L2277)
 
 The server scans for matching chunks and, when it finds a big enough match, it physically shifts KV state from old positions to new positions:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:2311)
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:2319)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L2311)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L2319)
 
 This can be powerful, but it is fragile. Small edits near the front of the prompt can invalidate a lot of downstream reuse.
 
@@ -212,15 +215,15 @@ This shows up in three major places:
 
 Speculative compatibility literally probes for support:
 
-- [speculative.cpp](/Users/jrepp/d/llama.cpp/common/speculative.cpp:823)
+- [speculative.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/common/speculative.cpp#L823)
 
 Prompt suffix truncation uses partial sequence removal:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:2481)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L2481)
 
 Context shifting uses partial removal plus adding shifted spans:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:2040)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L2040)
 
 If partial removal is weak or unsupported for a given architecture/memory layout, many server features become less effective or get disabled.
 
@@ -230,15 +233,15 @@ Context shift is the infinite-generation path that drops older prompt spans and 
 
 See:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:2016)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L2016)
 
 It is disabled if the context cannot safely shift:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:735)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L735)
 
 If context shift is disabled, generation simply stops when `slot.prompt.n_tokens() + 1 >= slot.n_ctx`:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:1280)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L1280)
 
 For `Qwen3-Coder-Next`, this matters because the architecture is hybrid/recurrent and the server is already conservative around memory mutation.
 
@@ -253,7 +256,7 @@ The server only enables checkpoint creation when:
 
 See:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:2509)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L2509)
 
 This is directly relevant for `Qwen3-Coder-Next`.
 
@@ -265,15 +268,15 @@ The checkpoint flow is:
 
 Creation path:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:2655)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L2655)
 
 Restore path:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:2416)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L2416)
 
 Full-reset fallback:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:2432)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L2432)
 
 This line is the most important one for understanding long-context pain on hybrid/recurrent models:
 
@@ -293,9 +296,9 @@ Local logs and llama.cpp model handling show:
 
 Relevant log and code:
 
-- [llama-server.log](/Users/jrepp/d/qwen/runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:16)
-- [llama-server.log](/Users/jrepp/d/qwen/runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:194)
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:2514)
+- [llama-server.log](../runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:16)
+- [llama-server.log](../runs/20260413T144134Z-qwen3-coder-next-iq4xs/llama-server.log:194)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L2514)
 
 This is why:
 
@@ -329,7 +332,7 @@ From the local FAQ:
 
 See:
 
-- [llama-server-stats-faq.md](/Users/jrepp/d/qwen/llama-server-stats-faq.md:141)
+- [llama-server-stats-faq.md](llama-server-stats-faq.md:141)
 
 The local run also showed heavy checkpoint churn:
 
@@ -338,7 +341,7 @@ The local run also showed heavy checkpoint churn:
 
 See:
 
-- [llama-server-stats-faq.md](/Users/jrepp/d/qwen/llama-server-stats-faq.md:62)
+- [llama-server-stats-faq.md](llama-server-stats-faq.md:62)
 
 Interpretation:
 
@@ -413,12 +416,12 @@ For `Qwen3-Coder-Next`, `llama-server` currently behaves like a cautious serving
 
 Local source and notes:
 
-- [server-context.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-context.cpp:50)
-- [server-task.cpp](/Users/jrepp/d/llama.cpp/tools/server/server-task.cpp:760)
-- [speculative.cpp](/Users/jrepp/d/llama.cpp/common/speculative.cpp:823)
-- [llama-context.cpp](/Users/jrepp/d/llama.cpp/src/llama-context.cpp:199)
-- [llama-server-stats-faq.md](/Users/jrepp/d/qwen/llama-server-stats-faq.md:62)
-- [qwen-run-stats.md](/Users/jrepp/d/qwen/qwen-run-stats.md:24)
+- [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-context.cpp#L50)
+- [server-task.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/tools/server/server-task.cpp#L760)
+- [speculative.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/common/speculative.cpp#L823)
+- [llama-context.cpp](https://github.com/ggml-org/llama.cpp/blob/e21cdc11a0461d8b0cbd28cc356d993bf6be7282/src/llama-context.cpp#L199)
+- [llama-server-stats-faq.md](llama-server-stats-faq.md:62)
+- [qwen-run-stats.md](qwen-run-stats.md:24)
 
 External docs:
 

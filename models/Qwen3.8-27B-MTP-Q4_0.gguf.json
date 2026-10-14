@@ -30,18 +30,17 @@
     "revision": null
   },
   "launcher": {
-    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "script": "run-server.py",
     "profile": "qwen3.8-mtp",
     "recommended_env": {
       "MODEL_FILE": "Qwen3.8-27B-Q4_0.gguf",
       "MODEL_DRAFT": "MTP/mtp-Qwen3.8-27B-Q4_0.gguf",
-      "PROFILE": "qwen3.8-mtp",
-      "LLAMA_SERVER_BIN": "/Users/jrepp/d/llama.cpp/build/bin/llama-server"
+      "PROFILE": "qwen3.8-mtp"
     }
   },
   "notes": [
     "Unlike Qwen3.6 (embedded-MTP repo), unsloth ships the Qwen3.8 MTP module separately: MTP/mtp-Qwen3.8-27B-Q4_0.gguf is an 18-tensor draft GGUF (verified locally: GGUF v3, 18 tensors, no metadata KVs) meant to pair with the main Q4_0 quant via --model-draft.",
-    "Local llama.cpp profile: --spec-type draft-mtp --spec-draft-n-max 4 --model-draft MTP/mtp-Qwen3.8-27B-Q4_0.gguf, on the pinned LLAMA_SERVER_BIN build (2026-05-24) that ships draft-mtp.",
+    "Local llama.cpp profile: --spec-type draft-mtp --spec-draft-n-max 4 --model-draft MTP/mtp-Qwen3.8-27B-Q4_0.gguf, on a llama-server build with draft-mtp (verified with a 2026-05-24 build; set LLAMA_SERVER_BIN in .env).",
     "Qwen3.8 chat template documents 262144-token native context; the qwen3.8-mtp profile uses that native context with q4_0 KV cache.",
     "Companion to the UD-Q6_K base sidecar (qwen38-27b-ud-q6k); this Q4_0 pairing trades ~4.5 bits/weight for speculative decoding headroom.",
     "Verify size and sha256 locally before flipping provenance_status to verified."

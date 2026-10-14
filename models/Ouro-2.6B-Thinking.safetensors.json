@@ -27,7 +27,7 @@
     "revision": null
   },
   "launcher": {
-    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "script": "run-server.py",
     "profile": "ouro",
     "recommended_env": {
       "PROFILE": "ouro",
@@ -36,7 +36,7 @@
   },
   "notes": [
     "Transformer-based model (not llama-server). Uses FastAPI + transformers pipeline.",
-    "Located at /Users/jrepp/d/ouro/models/Ouro-2.6B-Thinking/",
+    "Located in the Ouro checkout named by OURO_REPO_ROOT, under models/Ouro-2.6B-Thinking/",
     "Custom architecture with thinking token support."
   ]
 }
