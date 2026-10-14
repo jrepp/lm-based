@@ -9,6 +9,23 @@ llama-server, mlx_lm, and kev (decision models), a llama-swap hot-swap proxy wit
 parallel model groups, tmux-managed services, client bootstraps for Pi and OpenCode, and
 ClawRouter routing config. `docs/architecture.html` shows the full stack.
 
+Stack layers:
+
+- **L0 Ingress** — Tailscale VPN, Telegram bot, open-webui chat UX
+- **L1 Agent** — Claw, Hermes, Pi, OpenCode
+- **L2 Router** — ClawRouter (OpenAI-compatible routing)
+- **L3 Local** — llama-swap in front of llama-server, mlx_lm, and kev workers
+- **L4 Cloud** — GLM-5, ChatGPT, MiniMax, DeepSeek, Claude, Grok, Gemini (direct or via x402/USDC proxy)
+
+First-time setup:
+
+```bash
+cp .env.example .env      # fill in MODEL_SLUG and any API keys
+uv sync
+./route-config.py         # generate clawrouter.json
+just pi-install           # optional: pinned Pi for ./pi-local
+```
+
 ## Repo map
 
 | Path | Purpose |
@@ -24,6 +41,10 @@ ClawRouter routing config. `docs/architecture.html` shows the full stack.
 | `pi-local`, `opencode-local` | Launch Pi / OpenCode against the running local service |
 | `support/pi/` | Repo-pinned Pi install and repo Pi extensions |
 | `route-config.py` | Generates and validates `clawrouter.json` |
+| `download_model.py` | Fetch a model by sidecar slug (`--list` shows slugs) |
+| `artifacts/` | Downloaded binaries (gitignored); `STATUS.md` tracks local provenance |
+| `runs/` | Per-run capture dirs: logs, PIDs, monitor CSVs (read-only for agents) |
+| `.env.example` | Template for all env vars; copy to `.env` |
 | `docs/`, `docs-cms/` | Reference docs; decision records (docuchango) |
 
 ## Verify before you commit
