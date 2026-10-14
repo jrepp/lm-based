@@ -9,7 +9,7 @@ import sys
 import tempfile
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable
 
@@ -37,6 +37,9 @@ PI_ENV = {"PI_SKIP_VERSION_CHECK": "1", "PI_TELEMETRY": "0"}
 DEFAULT_PROVIDER = "lm-based"
 # Decision/classifier models (kev.serve) answer typed questions, not chat; keep them out of /model.
 DECISION_PROFILES = frozenset({"mlx-kev"})
+# Document OCR models take page images with fixed task prompts; they are not general chat models.
+OCR_PROFILES = frozenset({"glm-ocr"})
+NON_CHAT_PROFILES = DECISION_PROFILES | OCR_PROFILES
 ZERO_COST = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}
 
 
@@ -276,6 +279,59 @@ def swap_model_states(
     return states
 
 
+def live_context_window(
+    props_url: str,
+    timeout: float,
+    *,
+    opener: Callable[..., object] = urllib.request.urlopen,
+) -> int | None:
+    """n_ctx a running llama-server actually allocated, or None when it cannot say."""
+    try:
+        with opener(urllib.request.Request(props_url, headers={"Accept": "application/json"}), timeout=timeout) as response:  # type: ignore[attr-defined]
+            payload = json.load(response)
+    except (OSError, urllib.error.URLError, json.JSONDecodeError, ValueError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    settings = payload.get("default_generation_settings")
+    n_ctx = settings.get("n_ctx") if isinstance(settings, dict) else payload.get("n_ctx")
+    return n_ctx if isinstance(n_ctx, int) and n_ctx > 0 else None
+
+
+def apply_live_context(
+    state: ServiceState,
+    sidecars: tuple[Sidecar, ...],
+    swap_states: dict[str, str] | None,
+    timeout: float,
+    *,
+    probe: Callable[[str, float], int | None] = live_context_window,
+) -> tuple[Sidecar, ...]:
+    """Lower each loaded model's context window to what its server allocated.
+
+    Profiles state the requested --ctx-size; llama-server can allocate less (for example
+    when it caps at the model's training context). Pi compacts based on contextWindow, so
+    an overstated value lets requests overflow. Only loaded models are probed: asking
+    llama-swap about an unloaded one would start it.
+    """
+    adjusted: list[Sidecar] = []
+    for sidecar in sidecars:
+        url = None
+        if swap_states is not None and swap_states.get(sidecar.slug) == "ready":
+            url = f"{swap_root(state.endpoint)}/upstream/{sidecar.slug}/props"
+        elif swap_states is None and state.model_slugs == (sidecar.slug,):
+            url = f"{swap_root(state.endpoint)}/props"
+        live = probe(url, timeout) if url else None
+        if live is not None and live < sidecar.context_window:
+            print(
+                f"note: {sidecar.slug} serves {live} tokens of context "
+                f"(profile requests {sidecar.context_window}); Pi will use {live}",
+                file=sys.stderr,
+            )
+            sidecar = replace(sidecar, context_window=live)
+        adjusted.append(sidecar)
+    return tuple(adjusted)
+
+
 def api_id_matches_sidecar(api_id: str, sidecar: Sidecar) -> bool:
     defaults = profile_defaults(sidecar.profile, sidecar.name)
     aliases = {sidecar.slug, sidecar.name, str(defaults.get("alias") or "")}
@@ -310,7 +366,7 @@ def resolve_sidecars(
     resolved: list[Sidecar] = []
     for api_id in api_ids:
         match = next((sidecar for sidecar in sidecars.values() if api_id_matches_sidecar(api_id, sidecar)), None)
-        if match is not None and match not in resolved and match.profile not in DECISION_PROFILES:
+        if match is not None and match not in resolved and match.profile not in NON_CHAT_PROFILES:
             resolved.append(match)
     if not resolved:
         raise BootstrapError("none of the endpoint models match local chat-model sidecar metadata")
@@ -443,8 +499,15 @@ def atomic_write_json(path: Path, value: dict[str, Any]) -> bool:
     return True
 
 
-def merge_packages(existing: object, managed: tuple[Path, ...]) -> list[Any]:
-    packages = list(existing) if isinstance(existing, list) else []
+def merge_packages(existing: object, managed: tuple[Path, ...], owned_root: Path = PI_DIR) -> list[Any]:
+    """User entries stay; entries under owned_root are replaced by the current managed set,
+    so an extension removed from the repo stops loading."""
+    owned = str(owned_root) + os.sep
+    packages = [
+        entry
+        for entry in (existing if isinstance(existing, list) else [])
+        if not (isinstance(entry, str) and entry.startswith(owned))
+    ]
     for package in managed:
         if str(package) not in packages:
             packages.append(str(package))
@@ -537,7 +600,7 @@ def derive_plan(args: argparse.Namespace) -> BootstrapPlan:
             api_ids = endpoint_model_ids(state.endpoint, args.timeout)
             if "llama-swap" in state.services and not state.model_slugs:
                 swap_states = swap_model_states(state.endpoint, api_ids, args.timeout)
-    resolved = resolve_sidecars(state, api_ids, sidecars)
+    resolved = apply_live_context(state, resolve_sidecars(state, api_ids, sidecars), swap_states, args.timeout)
     classifiers = resolve_classifiers(api_ids, sidecars) if swap_states is not None else ()
     previous = previous_default_model(args.agent_dir, args.provider)
     return build_plan(args.provider, args.model, state, resolved, swap_states, previous, classifiers)
@@ -556,8 +619,9 @@ def print_swap_states(plan: BootstrapPlan) -> None:
         if model_id in classifiers:
             note = "  (decision model; classifier for decide_records)"
         elif model_id not in registered:
-            decision = model_id in sidecars and sidecars[model_id].profile in DECISION_PROFILES
-            note = "  (decision model; not in /model)" if decision else "  (no sidecar; not in /model)"
+            profile = sidecars[model_id].profile if model_id in sidecars else None
+            kind = "decision model" if profile in DECISION_PROFILES else "OCR model" if profile in OCR_PROFILES else "no sidecar"
+            note = f"  ({kind}; not in /model)"
         current = "  <- selected" if model_id == plan.selected_model else ""
         print(f"  {mark} {model_id:<32} {state}{current}{note}")
 
