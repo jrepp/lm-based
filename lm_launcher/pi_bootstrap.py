@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -11,8 +12,11 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, replace
 from pathlib import Path
+from urllib.parse import urlparse
 from typing import Any, Callable
 
+from lm_launcher import pi_run, taxdesk_broker
+from lm_launcher.pi_run import RUN_DIR_NAME, RunContext
 from lm_launcher.profiles import profile_defaults
 from lm_launcher.service_endpoints import swap_api_base
 
@@ -32,7 +36,9 @@ PI_EXTENSIONS = (
     PI_DIR / "extensions" / "llama-swap" / "index.ts",
     PI_DIR / "extensions" / "pdf-extract" / "index.ts",
     PI_DIR / "extensions" / "decide" / "index.ts",
+    PI_DIR / "extensions" / "run-record" / "index.ts",
 )
+
 # Keep the repo-managed Pi quiet: no version checks or install telemetry.
 PI_ENV = {"PI_SKIP_VERSION_CHECK": "1", "PI_TELEMETRY": "0"}
 DEFAULT_PROVIDER = "lm-based"
@@ -41,6 +47,25 @@ DECISION_PROFILES = frozenset({"mlx-kev"})
 # Document OCR models take page images with fixed task prompts; they are not general chat models.
 OCR_PROFILES = frozenset({"glm-ocr"})
 NON_CHAT_PROFILES = DECISION_PROFILES | OCR_PROFILES
+
+# OpenShell sandboxed launch (pi-local --sandbox): a microVM with default-deny
+# egress whose only permitted destination is the host gateway address that
+# reaches llama-swap, so the agent never sees host env vars, SSH keys, or the
+# filesystem outside its workspace.
+SANDBOX_NAME = "pi-local"
+SANDBOX_NODE_VERSION = "v22.21.1"
+DEFAULT_SANDBOX_GATEWAY = "192.168.127.254"
+SANDBOX_NODE_BIN = f"/sandbox/.local/node-{SANDBOX_NODE_VERSION}-linux-arm64/bin/node"
+SANDBOX_AGENT_DIR = "/sandbox/agent-sandbox"
+SANDBOX_RECORDS = "/sandbox/.pi-records"
+SANDBOX_SHIM_BIN = "/sandbox/support/pi/sandbox/bin"
+TAXDESK_SHIM_CONFIG = "taxdesk-broker.json"
+# Provisioning timeouts, keyed by operation class (the interactive Pi session
+# itself is never timed). One wall-clock budget bounds the whole launch.
+SANDBOX_TIMEOUT_PROBE = 30     # readiness and marker probes: fast-fail
+SANDBOX_TIMEOUT_STATE = 180    # create/policy/extract/npm-ci state changes
+SANDBOX_TIMEOUT_TRANSFER = 600  # workspace and node-tarball uploads
+SANDBOX_LAUNCH_BUDGET = 900    # wall clock for all provisioning combined
 ZERO_COST = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}
 
 
@@ -121,6 +146,26 @@ def build_parser() -> argparse.ArgumentParser:
         "--tmux",
         action="store_true",
         help="skip llama-swap and use the service registered in the tmux session",
+    )
+    parser.add_argument(
+        "--sandbox",
+        action="store_true",
+        help="run Pi inside an OpenShell sandbox (isolated filesystem and env; egress limited to llama-swap)",
+    )
+    parser.add_argument(
+        "--no-taxdesk",
+        action="store_true",
+        help="with --sandbox: do not start the host taxdesk-docs broker even when the binary is found",
+    )
+    parser.add_argument(
+        "--keep-run-files",
+        action="store_true",
+        help=f"keep the run's scratch folder ({RUN_DIR_NAME}/<run-id>, TMPDIR) after Pi exits",
+    )
+    parser.add_argument(
+        "--no-trajectory",
+        action="store_true",
+        help="do not record tool calls and outputs under .runtime/pi/runs/<run-id>/",
     )
     parser.add_argument("--session", default="lm-based", help="tmux session name (default: lm-based)")
     parser.add_argument("--timeout", type=float, default=3.0, help="health-check timeout in seconds (default: 3)")
@@ -638,6 +683,394 @@ def print_plan(plan: BootstrapPlan) -> None:
         print(json.dumps(list(plan.classifiers), indent=2))
 
 
+def sandbox_gateway() -> str:
+    """Host-side address a sandbox uses to reach services on this host."""
+    return os.environ.get("LM_BASED_SANDBOX_GATEWAY", DEFAULT_SANDBOX_GATEWAY)
+
+
+def render_sandbox_policy(plan: BootstrapPlan, dest: Path, broker_port: int | None = None) -> Path:
+    port = urlparse(plan.endpoint).port or 8081
+    gateway = sandbox_gateway()
+    policy = (
+        "version: 1\n"
+        "network_policies:\n"
+        "  lm-based-swap:\n"
+        "    binaries:\n"
+        f"      - {{path: {SANDBOX_NODE_BIN}}}\n"
+        "    endpoints:\n"
+        f"      - {{host: {gateway}, port: {port}, allowed_ips: [\"{gateway}/32\"]}}\n"
+        "  setup-npm:\n"
+        "    binaries:\n"
+        f"      - {{path: {SANDBOX_NODE_BIN}}}\n"
+        "    endpoints:\n"
+        "      - {host: registry.npmjs.org, ports: [443]}\n"
+        f"      - {{host: {gateway}, port: {port}, allowed_ips: [\"{gateway}/32\"]}}\n"
+        f"      - {{host: {gateway}, port: {port}, allowed_ips: [\"{gateway}/32\"]}}\n"
+    )
+    if broker_port is not None:
+        # The host taxdesk-docs broker: same gateway address, its own port, node only
+        # (the in-sandbox shim runs under node). Nothing else is opened for Tax Desk.
+        policy += (
+            "  taxdesk-broker:\n"
+            "    binaries:\n"
+            f"      - {{path: {SANDBOX_NODE_BIN}}}\n"
+            "    endpoints:\n"
+            f"      - {{host: {gateway}, port: {broker_port}, allowed_ips: [\"{gateway}/32\"]}}\n"
+        )
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(policy, encoding="utf-8")
+    return dest
+
+
+def sandbox_agent_dir(
+    args: argparse.Namespace, plan: BootstrapPlan, broker: taxdesk_broker.BrokerServer | None = None
+) -> Path:
+    """Copy the configured agent dir, pointing providers at the sandbox gateway.
+
+    With a taxdesk broker, also writes the shim's config (broker URL and per-launch token)."""
+    import shutil as _shutil
+
+    port = urlparse(plan.endpoint).port or 8081
+    source, dest = args.agent_dir, ROOT / ".runtime" / "pi" / "agent-sandbox"
+    if dest.exists():
+        _shutil.rmtree(dest)
+    _shutil.copytree(source, dest)
+    for file in dest.rglob("*"):
+        if file.is_file() and file.suffix in {".json", ".jsonc", ".toml", ".yaml"}:
+            text = file.read_text(encoding="utf-8")
+            if f"http://127.0.0.1:{port}" in text:
+                file.write_text(
+                    text.replace(f"http://127.0.0.1:{port}", f"http://{sandbox_gateway()}:{port}"),
+                    encoding="utf-8",
+                )
+    if broker is not None:
+        taxdesk_broker.write_shim_config(
+            dest / TAXDESK_SHIM_CONFIG, f"http://{sandbox_gateway()}:{broker.port}", broker.broker.token
+        )
+    return dest
+
+
+def run_openshell(*args: str, timeout: float = 120, check: bool = True, capture: bool = True) -> subprocess.CompletedProcess[str]:
+    # `check` mirrors subprocess.run's signature for call-site readability; the
+    # CompletedProcess returncode is always inspected by the caller instead.
+    # capture=False streams output (upload progress bars) at the cost of not
+    # being able to inspect stderr afterwards.
+    del check
+    openshell = shutil.which("openshell")
+    if openshell is None:
+        error = BootstrapError("openshell CLI not found on PATH")
+        error.hint = "install OpenShell: curl -LsS https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh | sh"
+        raise error
+    try:
+        return subprocess.run(
+            [openshell, *args],
+            capture_output=capture,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        error = BootstrapError(f"openshell {' '.join(args[:2])} timed out after {timeout:.0f}s")
+        error.hint = "the sandbox may be wedged; rerun ./pi-local --sandbox to recreate it"
+        raise error from exc
+
+
+def wait_sandbox_ready(timeout_s: float = 90) -> bool:
+    # `sandbox get` can report Phase: Provisioning even for a working sandbox,
+    # so readiness is probed with a trivial exec instead of the phase string.
+    # A sandbox in phase Error is never going to become ready: return False so
+    # the caller can recreate it.
+    import time
+
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        probe = run_openshell(
+            "sandbox", "exec", "-n", SANDBOX_NAME, "--", "true", check=False,
+            timeout=SANDBOX_TIMEOUT_PROBE
+        )
+        if probe.returncode == 0:
+            return True
+        if "phase: error" in (probe.stdout + probe.stderr).lower():
+            return False
+        time.sleep(3)
+    return False
+
+
+def ensure_sandbox(
+    plan: BootstrapPlan,
+    args: argparse.Namespace,
+    retry: bool = True,
+    budget_s: float = SANDBOX_LAUNCH_BUDGET,
+    broker: taxdesk_broker.BrokerServer | None = None,
+) -> None:
+    import time
+
+    deadline = time.monotonic() + budget_s
+
+    def budget_left() -> float:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            error = BootstrapError(f"sandbox provisioning exceeded its {budget_s:.0f}s budget")
+            error.hint = "rerun ./pi-local --sandbox; completed steps are reused"
+            raise error
+        return left
+
+    policy = render_sandbox_policy(
+        plan, ROOT / ".runtime" / "pi" / "openshell-policy.yaml", broker.port if broker else None
+    )
+    print("sandbox: checking for an existing OpenShell sandbox ...", flush=True)
+    probe = run_openshell("sandbox", "get", SANDBOX_NAME, check=False,
+                          timeout=SANDBOX_TIMEOUT_PROBE)
+    if probe.returncode != 0:
+        print(f"sandbox: creating {SANDBOX_NAME} (first run takes ~a minute) ...", flush=True)
+        created = run_openshell(
+            "sandbox", "create", "--name", SANDBOX_NAME, "--policy", str(policy),
+            timeout=SANDBOX_TIMEOUT_STATE
+        )
+        if created.returncode != 0:
+            error = BootstrapError(f"sandbox create failed: {created.stderr.strip() or created.stdout.strip()}")
+            error.hint = "inspect the gateway with: openshell doctor"
+            raise error
+    else:
+        print("sandbox: refreshing policy ...", flush=True)
+        # Network rules are live-updatable; keep them in sync with the policy.
+        run_openshell("policy", "set", SANDBOX_NAME, "--policy", str(policy), "--wait",
+                      timeout=SANDBOX_TIMEOUT_STATE)
+    print("sandbox: waiting for readiness ...", flush=True)
+    if not wait_sandbox_ready():
+        if not retry:
+            raise BootstrapError(f"sandbox {SANDBOX_NAME} is in phase Error and did not recover")
+        # A wedged sandbox (e.g. an interrupted upload, restart policy never)
+        # only recovers by recreation; the workspace is rebuilt from the host.
+        print("sandbox: wedged; recreating ...", flush=True)
+        run_openshell("sandbox", "delete", SANDBOX_NAME, check=False)
+        return ensure_sandbox(plan, args, retry=False, budget_s=budget_left(), broker=broker)
+
+    workspace = Path.cwd()
+    print("sandbox: syncing workspace, Pi install, and agent config ...", flush=True)
+    pi_provisioned = run_openshell(
+        "sandbox", "exec", "-n", SANDBOX_NAME, "--",
+        "bash", "-c", "[ -x /sandbox/support/pi/node_modules/.bin/pi ]", check=False,
+        timeout=SANDBOX_TIMEOUT_PROBE,
+    ).returncode == 0
+    # Upload nests <source basename> under <dest>: support/pi lands at
+    # /sandbox/support/pi, the workspace at /sandbox/<launch-dir-name>.
+    uploads = [
+        # (source, dest, no_git_ignore): the workspace honors .gitignore (it
+        # excludes model binaries and runs/); only the agent dir lives under a
+        # gitignored path and needs the override.
+        (workspace, "/sandbox", False),
+        (ROOT / "support" / "pi", "/sandbox/support", True),
+        (sandbox_agent_dir(args, plan, broker), "/sandbox", True),
+    ]
+    for source, dest, no_ignore in uploads:
+        budget_left()
+        print(f"sandbox: uploading {source} -> {dest} ...", flush=True)
+        args_extra = ["--no-git-ignore"] if no_ignore else []
+        result = run_openshell(
+            "sandbox", "upload", SANDBOX_NAME, str(source), dest, *args_extra,
+            timeout=min(SANDBOX_TIMEOUT_TRANSFER, budget_left()),
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or "").strip() or (result.stdout or "").strip() or "(see streamed output above)"
+            error = BootstrapError(f"sandbox upload of {source} failed: {detail}")
+            error.hint = "check the sandbox is running: openshell sandbox list"
+            raise error
+
+    pi_provisioned = run_openshell(
+        "sandbox", "exec", "-n", SANDBOX_NAME, "--",
+        "bash", "-c", "[ -x /sandbox/support/pi/node_modules/.bin/pi ]", check=False,
+        timeout=SANDBOX_TIMEOUT_PROBE,
+    ).returncode == 0
+    node_ready = run_openshell(
+        "sandbox", "exec", "-n", SANDBOX_NAME, "--",
+        "bash", "-c", f"[ -x {SANDBOX_NODE_BIN} ]", check=False,
+        timeout=SANDBOX_TIMEOUT_PROBE,
+    )
+    if node_ready.returncode != 0:
+        print(f"sandbox: installing node {SANDBOX_NODE_VERSION} ...", flush=True)
+        tar_path = ROOT / ".runtime" / "pi" / f"node-{SANDBOX_NODE_VERSION}-linux-arm64.tar.gz"
+        if not tar_path.is_file():
+            url = f"https://nodejs.org/dist/{SANDBOX_NODE_VERSION}/node-{SANDBOX_NODE_VERSION}-linux-arm64.tar.gz"
+            tar_path.parent.mkdir(parents=True, exist_ok=True)
+            urllib.request.urlretrieve(url, tar_path)
+        run_openshell("sandbox", "upload", SANDBOX_NAME, str(tar_path), "/sandbox/node.tgz",
+                      "--no-git-ignore", timeout=SANDBOX_TIMEOUT_TRANSFER)
+        extract = run_openshell(
+            "sandbox", "exec", "-n", SANDBOX_NAME, "--",
+            "bash", "-c",
+            "mkdir -p ~/.local && tar -xz -C ~/.local -f /sandbox/node.tgz",
+            timeout=SANDBOX_TIMEOUT_STATE,
+        )
+        if extract.returncode != 0:
+            error = BootstrapError(f"node extract failed in sandbox: {extract.stderr.strip()}")
+            error.hint = "inspect with: openshell logs " + SANDBOX_NAME
+            raise error
+    if not pi_provisioned:
+        # support/pi uploads without node_modules (gitignored); install the
+        # pinned tree in-sandbox against the lockfile. npm runs as node, so
+        # the setup-npm network rule keys on the node binary path.
+        print("sandbox: npm ci for the pinned Pi (one-time per sandbox) ...", flush=True)
+        npm_ci = run_openshell(
+            "sandbox", "exec", "-n", SANDBOX_NAME, "--workdir", "/sandbox/support/pi",
+            "--", "bash", "-c",
+            f"export PATH=$HOME/.local/node-{SANDBOX_NODE_VERSION}-linux-arm64/bin:$PATH && "
+            "npm ci --no-fund --no-audit",
+            timeout=SANDBOX_TIMEOUT_STATE, capture=False,
+        )
+        if npm_ci.returncode != 0:
+            error = BootstrapError("npm ci failed inside the sandbox")
+            error.hint = "inspect with: openshell logs " + SANDBOX_NAME
+            raise error
+
+
+def sandbox_command(
+    plan: BootstrapPlan,
+    pi_args: list[str],
+    run: RunContext | None = None,
+    taxdesk: bool = False,
+) -> list[str]:
+    port = urlparse(plan.endpoint).port or 8081
+    workspace = Path.cwd() if run is None else run.workspace
+    inner = shlex.join([
+        "/sandbox/support/pi/node_modules/.bin/pi",
+        "--provider", plan.provider,
+        "--model", plan.selected_model,
+        *pi_args,
+    ])
+    exports = {
+        "PI_CODING_AGENT_DIR": SANDBOX_AGENT_DIR,
+        "PI_SKIP_VERSION_CHECK": "1",
+        "PI_TELEMETRY": "0",
+        "LM_BASED_SWAP_URL": f"http://{sandbox_gateway()}:{port}",
+        "LM_BASED_PROVIDER": plan.provider,
+    }
+    if plan.classifiers:
+        # Without this decide_records has no decision model inside the sandbox.
+        exports["LM_BASED_CLASSIFIERS"] = json.dumps(sandbox_classifiers(plan))
+    if taxdesk:
+        exports["TAXDESK_BROKER_CONFIG"] = f"{SANDBOX_AGENT_DIR}/{TAXDESK_SHIM_CONFIG}"
+    shim_path = f"{SANDBOX_SHIM_BIN}:" if taxdesk else ""
+    lines = [
+        f"export PATH={shim_path}$HOME/.local/node-{SANDBOX_NODE_VERSION}-linux-arm64/bin:$PATH",
+        "export " + " ".join(f"{key}={shlex.quote(value)}" for key, value in exports.items()),
+        f"ws=/sandbox/{shlex.quote(workspace.name)}",
+        'cd "$ws" 2>/dev/null || { ws=/sandbox; cd /sandbox; }',
+    ]
+    if taxdesk:
+        lines.append(f"chmod +x {SANDBOX_SHIM_BIN}/taxdesk-docs 2>/dev/null")
+    if run is None:
+        lines.append(f"exec node {inner}")
+    else:
+        # The same hygiene as an unsandboxed run, inside the VM's copy of the workspace.
+        records = f"{SANDBOX_RECORDS}/{run.run_id}"
+        lines += [
+            f'run="$ws/{RUN_DIR_NAME}/{run.run_id}"',
+            f"mkdir -p \"$run/tmp\" && chmod 700 \"$ws/{RUN_DIR_NAME}\" \"$run\" \"$run/tmp\" "
+            f"&& printf '*\\n' > \"$ws/{RUN_DIR_NAME}/.gitignore\"",
+            f'export TMPDIR="$run/tmp" LM_BASED_RUN_DIR="$run" LM_BASED_RUN_ID={run.run_id}',
+        ]
+        if run.trajectory:
+            lines += [
+                f"mkdir -p {records} && chmod 700 {records}",
+                f"export LM_BASED_TRAJECTORY={records}/trajectory.jsonl",
+            ]
+        lines += [f"node {inner}", "status=$?"]
+        if not run.keep:
+            lines.append(f'rm -rf "$run"; rm -f "$ws/{RUN_DIR_NAME}/.gitignore"; rmdir "$ws/{RUN_DIR_NAME}" 2>/dev/null')
+        lines.append("exit $status")
+    return [
+        "sandbox", "exec", "-n", SANDBOX_NAME,
+        "--workdir", "/sandbox",
+        "--", "bash", "-c", "\n".join(lines),
+    ]
+
+
+def sandbox_classifiers(plan: BootstrapPlan) -> list[dict[str, Any]]:
+    """Classifier entries with their llama-swap base URL rewritten to the sandbox gateway."""
+    port = urlparse(plan.endpoint).port or 8081
+    loopback, gateway = f"http://127.0.0.1:{port}", f"http://{sandbox_gateway()}:{port}"
+    return [{**model, "baseUrl": str(model.get("baseUrl", "")).replace(loopback, gateway)} for model in plan.classifiers]
+
+
+def start_taxdesk_broker(args: argparse.Namespace, run: RunContext) -> taxdesk_broker.BrokerServer | None:
+    """Start the host taxdesk-docs broker for the sandbox, or None when there is no binary."""
+    if getattr(args, "no_taxdesk", False):
+        return None
+    binary = taxdesk_broker.find_binary(cwd=run.workspace)
+    if binary is None:
+        print(
+            "sandbox: no host taxdesk-docs (TAXDESK_DOCS_BIN, PATH, ./dist/taxdesk-docs); "
+            "the sandbox has no Tax Desk access",
+            flush=True,
+        )
+        return None
+    pi_run.prepare_records(run)
+    broker = taxdesk_broker.Broker(binary, log_path=run.records / "broker.log")
+    try:
+        warnings = broker.load_manifest()
+    except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+        print(f"sandbox: taxdesk-docs broker disabled: {exc}", flush=True)
+        return None
+    for warning in warnings:
+        print(f"sandbox: note: {warning}", flush=True)
+    port = int(os.environ.get("LM_BASED_TAXDESK_BROKER_PORT", "0"))
+    server = taxdesk_broker.BrokerServer(broker, port=port).start()
+    print(
+        f"sandbox: taxdesk-docs broker on 127.0.0.1:{server.port} ({len(broker.allowed)} commands) -> {binary}",
+        flush=True,
+    )
+    return server
+
+
+def fetch_sandbox_records(run: RunContext) -> Path | None:
+    """Copy the in-sandbox trajectory to .runtime/pi/runs/<run-id>/ and remove it from the VM."""
+    source = f"{SANDBOX_RECORDS}/{run.run_id}"
+    staging = run.records / "download"
+    staging.mkdir(parents=True, exist_ok=True)
+    target = run.records / "trajectory.jsonl"
+    try:
+        run_openshell("sandbox", "download", SANDBOX_NAME, source, str(staging), timeout=SANDBOX_TIMEOUT_TRANSFER)
+        found = next(iter(sorted(staging.rglob("trajectory.jsonl"))), None)
+        if found is not None:
+            os.replace(found, target)
+            target.chmod(0o600)
+        run_openshell(
+            "sandbox", "exec", "-n", SANDBOX_NAME, "--no-tty", "--", "rm", "-rf", source,
+            timeout=SANDBOX_TIMEOUT_PROBE,
+        )
+    except BootstrapError as exc:
+        print(f"sandbox: could not fetch the trajectory: {exc}", file=sys.stderr)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+    return target if target.exists() else None
+
+
+def launch_sandboxed(plan: BootstrapPlan, args: argparse.Namespace, pi_args: list[str], run: RunContext) -> int:
+    broker = start_taxdesk_broker(args, run)
+    try:
+        ensure_sandbox(plan, args, broker=broker)
+        command = ["openshell", *sandbox_command(plan, pi_args, run, taxdesk=broker is not None)]
+        code = pi_run.run_child(command)
+        if run.trajectory:
+            fetch_sandbox_records(run)
+        return code
+    finally:
+        if broker is not None:
+            broker.stop()
+            (ROOT / ".runtime" / "pi" / "agent-sandbox" / TAXDESK_SHIM_CONFIG).unlink(missing_ok=True)
+
+
+def launch_local(plan: BootstrapPlan, args: argparse.Namespace, pi_args: list[str], run: RunContext) -> int:
+    pi_run.prepare_run_dir(run)
+    try:
+        command = [str(PI_CLI), "--provider", plan.provider, "--model", plan.selected_model, *pi_args]
+        env = pi_environment(args.agent_dir, plan=plan)
+        env.update(pi_run.run_environment(run))
+        return pi_run.run_child(command, env)
+    finally:
+        pi_run.cleanup_run(run)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args, pi_args = parser.parse_known_args(argv)
@@ -664,10 +1097,24 @@ def main(argv: list[str] | None = None) -> int:
         print_swap_states(plan)
         if args.configure_only:
             return 0
-        command = [str(PI_CLI), "--provider", plan.provider, "--model", plan.selected_model, *pi_args]
-        os.execve(command[0], command, pi_environment(args.agent_dir, plan=plan))
+        run = RunContext(
+            run_id=pi_run.new_run_id(),
+            workspace=Path.cwd().resolve(),
+            keep=args.keep_run_files,
+            trajectory=not args.no_trajectory,
+        )
+        if run.trajectory:
+            pi_run.prepare_records(run)
+        if args.sandbox:
+            # The VM works on an uploaded copy; host workspace changes are not expected.
+            code = launch_sandboxed(plan, args, pi_args, run)
+            pi_run.report_run(run, None)
+        else:
+            before = pi_run.untracked_files(run.workspace)
+            code = launch_local(plan, args, pi_args, run)
+            pi_run.report_run(run, before)
+        return code
     except BootstrapError as exc:
         print(f"error: {exc}", file=sys.stderr)
         print(exc.hint, file=sys.stderr)
         return 1
-    return 0

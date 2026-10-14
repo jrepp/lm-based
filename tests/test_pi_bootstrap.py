@@ -346,3 +346,118 @@ class PiBootstrapTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SandboxLaunchTests(unittest.TestCase):
+    def _plan(self, endpoint: str = "http://127.0.0.1:8081/v1") -> pi_bootstrap.BootstrapPlan:
+        return pi_bootstrap.BootstrapPlan(
+            provider="lm-based", endpoint=endpoint, models=(), selected_model="qwen36-27b-q6k",
+        )
+
+    def test_render_sandbox_policy_targets_gateway_for_node_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "openshell-policy.yaml"
+            rendered = pi_bootstrap.render_sandbox_policy(self._plan(), dest)
+            text = rendered.read_text()
+            self.assertIn("version: 1", text)
+            self.assertIn(pi_bootstrap.DEFAULT_SANDBOX_GATEWAY, text)
+            self.assertIn("port: 8081", text)
+            self.assertIn(pi_bootstrap.SANDBOX_NODE_BIN, text)
+            self.assertNotIn("host.openshell.internal", text)
+
+    def test_sandbox_agent_dir_rewrites_loopback_to_gateway(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "agent"
+            source.mkdir()
+            (source / "models.json").write_text(json.dumps({
+                "providers": {"lm-based": {"baseUrl": "http://127.0.0.1:8081/v1"}}
+            }))
+            args = unittest.mock.Mock()
+            args.agent_dir = source
+            import os as _os
+            _os.environ.pop("LM_BASED_SANDBOX_GATEWAY", None)
+            dest = pi_bootstrap.sandbox_agent_dir(args, self._plan())
+            models = json.loads((dest / "models.json").read_text())
+            self.assertEqual(
+                models["providers"]["lm-based"]["baseUrl"],
+                f"http://{pi_bootstrap.DEFAULT_SANDBOX_GATEWAY}:8081/v1",
+            )
+
+
+class SandboxTaxdeskTests(unittest.TestCase):
+    def _plan(self) -> pi_bootstrap.BootstrapPlan:
+        return pi_bootstrap.BootstrapPlan(
+            provider="lm-based",
+            endpoint="http://127.0.0.1:8081/v1",
+            models=(),
+            selected_model="qwen36-27b-q6k",
+            classifiers=({"id": "kev", "baseUrl": "http://127.0.0.1:8081/upstream/kev/v1"},),
+        )
+
+    def setUp(self) -> None:
+        self._gateway = pi_bootstrap.os.environ.pop("LM_BASED_SANDBOX_GATEWAY", None)
+
+    def tearDown(self) -> None:
+        if self._gateway is not None:
+            pi_bootstrap.os.environ["LM_BASED_SANDBOX_GATEWAY"] = self._gateway
+
+    def test_policy_opens_only_the_broker_port_on_the_gateway(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            without = pi_bootstrap.render_sandbox_policy(self._plan(), Path(tmp) / "a.yaml").read_text()
+            text = pi_bootstrap.render_sandbox_policy(self._plan(), Path(tmp) / "b.yaml", broker_port=40123).read_text()
+        self.assertNotIn("taxdesk-broker", without)
+        added = text[len(without):]
+        self.assertIn("taxdesk-broker:", added)
+        self.assertIn(f"{{host: {pi_bootstrap.DEFAULT_SANDBOX_GATEWAY}, port: 40123", added)
+        self.assertIn(pi_bootstrap.SANDBOX_NODE_BIN, added)
+        self.assertNotIn("taxdesk.home", text)
+        self.assertNotIn("443", added)
+
+    def test_agent_dir_carries_shim_config_only_with_a_broker(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "agent"
+            source.mkdir()
+            args = unittest.mock.Mock(agent_dir=source)
+            broker = unittest.mock.Mock(port=40123)
+            broker.broker.token = "t" * 64
+            dest = pi_bootstrap.sandbox_agent_dir(args, self._plan(), broker)
+            config = json.loads((dest / pi_bootstrap.TAXDESK_SHIM_CONFIG).read_text())
+            self.assertEqual(config["url"], f"http://{pi_bootstrap.DEFAULT_SANDBOX_GATEWAY}:40123")
+            self.assertEqual(config["token"], "t" * 64)
+            dest = pi_bootstrap.sandbox_agent_dir(args, self._plan())
+            self.assertFalse((dest / pi_bootstrap.TAXDESK_SHIM_CONFIG).exists())
+
+    def test_sandbox_command_wires_classifiers_shim_and_run_hygiene(self) -> None:
+        run = pi_bootstrap.RunContext(run_id="20261014T000000Z-abc123", workspace=Path("/x/taxes"))
+        script = pi_bootstrap.sandbox_command(self._plan(), ["-p", "hi"], run, taxdesk=True)[-1]
+        self.assertIn(f"/upstream/kev/v1", script)
+        self.assertIn(f"http://{pi_bootstrap.DEFAULT_SANDBOX_GATEWAY}:8081/upstream/kev/v1", script)
+        self.assertNotIn("127.0.0.1", script)
+        self.assertIn(f"export PATH={pi_bootstrap.SANDBOX_SHIM_BIN}:", script)
+        self.assertIn("TAXDESK_BROKER_CONFIG=/sandbox/agent-sandbox/taxdesk-broker.json", script)
+        self.assertIn('export TMPDIR="$run/tmp"', script)
+        self.assertIn("LM_BASED_TRAJECTORY=/sandbox/.pi-records/20261014T000000Z-abc123/trajectory.jsonl", script)
+        self.assertIn('rm -rf "$run"', script)
+        self.assertTrue(script.rstrip().endswith("exit $status"))
+        subprocess.run(["bash", "-n", "-c", script], check=True)
+
+        kept = pi_bootstrap.sandbox_command(
+            self._plan(), [], pi_bootstrap.RunContext(run_id="r", workspace=Path("/x/t"), keep=True, trajectory=False)
+        )[-1]
+        self.assertNotIn('rm -rf "$run"', kept)
+        self.assertNotIn("LM_BASED_TRAJECTORY", kept)
+        self.assertNotIn("TAXDESK_BROKER_CONFIG", kept)
+        self.assertNotIn(pi_bootstrap.SANDBOX_SHIM_BIN, kept)
+
+    def test_sandbox_flags_parse(self) -> None:
+        args, rest = pi_bootstrap.build_parser().parse_known_args(
+            ["--sandbox", "--no-taxdesk", "--keep-run-files", "--no-trajectory", "-p", "x"]
+        )
+        self.assertTrue(args.sandbox and args.no_taxdesk and args.keep_run_files and args.no_trajectory)
+        self.assertEqual(rest, ["-p", "x"])
+
+    def test_no_taxdesk_or_missing_binary_starts_no_broker(self) -> None:
+        run = pi_bootstrap.RunContext(run_id="r", workspace=Path("/nonexistent"))
+        self.assertIsNone(pi_bootstrap.start_taxdesk_broker(unittest.mock.Mock(no_taxdesk=True), run))
+        with unittest.mock.patch.object(pi_bootstrap.taxdesk_broker, "find_binary", return_value=None):
+            self.assertIsNone(pi_bootstrap.start_taxdesk_broker(unittest.mock.Mock(no_taxdesk=False), run))

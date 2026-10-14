@@ -63,7 +63,7 @@ jobs:
         working-directory: support/pi
 
       - name: Run Pi extension tests
-        run: node --test support/pi/extensions/*.test.ts support/pi/extensions/*/*.test.ts
+        run: node --test support/pi/extensions/*.test.ts support/pi/extensions/*/*.test.ts support/pi/sandbox/*.test.ts
 
       - name: Validate model sidecars
         env:
