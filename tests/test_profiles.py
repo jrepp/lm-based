@@ -99,5 +99,41 @@ class Qwen38MtpProfileTests(unittest.TestCase):
         self.assertEqual(defaults["cache_type_k"], "q4_0")
 
 
+
+class ProfileDefinitionTests(unittest.TestCase):
+    def test_each_profile_is_defined_once(self) -> None:
+        # Two `if profile == "glm-ocr"` blocks (from #6 and #11) silently overrode each
+        # other, so the served context differed from what the sidecar described.
+        import ast
+        from pathlib import Path
+
+        source = (Path(__file__).resolve().parents[1] / "lm_launcher" / "profiles.py").read_text()
+        function = next(
+            node for node in ast.walk(ast.parse(source))
+            if isinstance(node, ast.FunctionDef) and node.name == "profile_defaults"
+        )
+        names = [
+            test.comparators[0].value
+            for node in function.body
+            if isinstance(node, ast.If)
+            and isinstance(test := node.test, ast.Compare)
+            and isinstance(test.left, ast.Name)
+            and test.left.id == "profile"
+            and isinstance(test.comparators[0], ast.Constant)
+        ]
+        duplicates = sorted({name for name in names if names.count(name) > 1})
+        self.assertEqual(duplicates, [])
+
+
+class QwenCoderNextProfileTests(unittest.TestCase):
+    def test_serves_native_context_without_yarn(self) -> None:
+        # llama-server caps the slot at the 262144 training context; a 1M YaRN
+        # profile only allocated KV cache that could never be used.
+        defaults = profile_defaults("qwen3-coder-next", "Qwen3-Coder-Next-Q6_K.gguf")
+        self.assertEqual(defaults["ctx_size"], 262144)
+        self.assertNotIn("rope_scaling", defaults)
+        self.assertNotIn("rope_scale", defaults)
+        self.assertEqual(defaults["alias"], "qwen3-coder-next")
+
 if __name__ == "__main__":
     unittest.main()
