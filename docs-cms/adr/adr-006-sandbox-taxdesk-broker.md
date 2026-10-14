@@ -1,9 +1,9 @@
 ---
 title: Host broker for taxdesk-docs in the Pi sandbox
-status: Proposed
+status: Accepted
 created: 2026-10-14T00:00:00Z
 deciders: maintainer
-tags: [adr, pi, proposed, sandbox, security]
+tags: [adr, pi, sandbox, security]
 id: adr-006
 project_id: lm-based
 doc_uuid: 9ae91493-034a-40c1-9b55-512647db11a8
