@@ -1,5 +1,5 @@
 default_install_hook_types: [pre-commit, pre-push]
-# Hooks run at commit time unless they opt into another stage (branch-not-merged).
+# Hooks run at commit time; only branch-not-merged runs on push.
 default_stages: [pre-commit]
 
 repos:
@@ -8,7 +8,9 @@ repos:
     hooks:
       - id: check-merge-conflict
       - id: end-of-file-fixer
+        stages: [pre-commit]  # its manifest also opts into pre-push
       - id: trailing-whitespace
+        stages: [pre-commit]  # its manifest also opts into pre-push
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2
     rev: v0.18.1
