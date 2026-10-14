@@ -52,6 +52,12 @@ SANDBOX_NAME = "pi-local"
 SANDBOX_NODE_VERSION = "v22.21.1"
 DEFAULT_SANDBOX_GATEWAY = "192.168.127.254"
 SANDBOX_NODE_BIN = f"/sandbox/.local/node-{SANDBOX_NODE_VERSION}-linux-arm64/bin/node"
+# Provisioning timeouts, keyed by operation class (the interactive Pi session
+# itself is never timed). One wall-clock budget bounds the whole launch.
+SANDBOX_TIMEOUT_PROBE = 30     # readiness and marker probes: fast-fail
+SANDBOX_TIMEOUT_STATE = 180    # create/policy/extract/npm-ci state changes
+SANDBOX_TIMEOUT_TRANSFER = 600  # workspace and node-tarball uploads
+SANDBOX_LAUNCH_BUDGET = 900    # wall clock for all provisioning combined
 ZERO_COST = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}
 
 
@@ -737,7 +743,8 @@ def wait_sandbox_ready(timeout_s: float = 90) -> bool:
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
         probe = run_openshell(
-            "sandbox", "exec", "-n", SANDBOX_NAME, "--", "true", check=False, timeout=30
+            "sandbox", "exec", "-n", SANDBOX_NAME, "--", "true", check=False,
+            timeout=SANDBOX_TIMEOUT_PROBE
         )
         if probe.returncode == 0:
             return True
@@ -747,14 +754,30 @@ def wait_sandbox_ready(timeout_s: float = 90) -> bool:
     return False
 
 
-def ensure_sandbox(plan: BootstrapPlan, args: argparse.Namespace, retry: bool = True) -> None:
+def ensure_sandbox(
+    plan: BootstrapPlan, args: argparse.Namespace, retry: bool = True, budget_s: float = SANDBOX_LAUNCH_BUDGET
+) -> None:
+    import time
+
+    deadline = time.monotonic() + budget_s
+
+    def budget_left() -> float:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            error = BootstrapError(f"sandbox provisioning exceeded its {budget_s:.0f}s budget")
+            error.hint = "rerun ./pi-local --sandbox; completed steps are reused"
+            raise error
+        return left
+
     policy = render_sandbox_policy(plan, ROOT / ".runtime" / "pi" / "openshell-policy.yaml")
     print("sandbox: checking for an existing OpenShell sandbox ...", flush=True)
-    probe = run_openshell("sandbox", "get", SANDBOX_NAME, check=False, timeout=30)
+    probe = run_openshell("sandbox", "get", SANDBOX_NAME, check=False,
+                          timeout=SANDBOX_TIMEOUT_PROBE)
     if probe.returncode != 0:
         print(f"sandbox: creating {SANDBOX_NAME} (first run takes ~a minute) ...", flush=True)
         created = run_openshell(
-            "sandbox", "create", "--name", SANDBOX_NAME, "--policy", str(policy), timeout=180
+            "sandbox", "create", "--name", SANDBOX_NAME, "--policy", str(policy),
+            timeout=SANDBOX_TIMEOUT_STATE
         )
         if created.returncode != 0:
             error = BootstrapError(f"sandbox create failed: {created.stderr.strip() or created.stdout.strip()}")
@@ -763,7 +786,8 @@ def ensure_sandbox(plan: BootstrapPlan, args: argparse.Namespace, retry: bool = 
     else:
         print("sandbox: refreshing policy ...", flush=True)
         # Network rules are live-updatable; keep them in sync with the policy.
-        run_openshell("policy", "set", SANDBOX_NAME, "--policy", str(policy), "--wait", timeout=90)
+        run_openshell("policy", "set", SANDBOX_NAME, "--policy", str(policy), "--wait",
+                      timeout=SANDBOX_TIMEOUT_STATE)
     print("sandbox: waiting for readiness ...", flush=True)
     if not wait_sandbox_ready():
         if not retry:
@@ -772,13 +796,14 @@ def ensure_sandbox(plan: BootstrapPlan, args: argparse.Namespace, retry: bool = 
         # only recovers by recreation; the workspace is rebuilt from the host.
         print("sandbox: wedged; recreating ...", flush=True)
         run_openshell("sandbox", "delete", SANDBOX_NAME, check=False)
-        return ensure_sandbox(plan, args, retry=False)
+        return ensure_sandbox(plan, args, retry=False, budget_s=budget_left())
 
     workspace = Path.cwd()
     print("sandbox: syncing workspace, Pi install, and agent config ...", flush=True)
     pi_provisioned = run_openshell(
         "sandbox", "exec", "-n", SANDBOX_NAME, "--",
-        "bash", "-c", "[ -x /sandbox/support/pi/node_modules/.bin/pi ]", check=False, timeout=30,
+        "bash", "-c", "[ -x /sandbox/support/pi/node_modules/.bin/pi ]", check=False,
+        timeout=SANDBOX_TIMEOUT_PROBE,
     ).returncode == 0
     # Upload nests <source basename> under <dest>: support/pi lands at
     # /sandbox/support/pi, the workspace at /sandbox/<launch-dir-name>.
@@ -791,11 +816,12 @@ def ensure_sandbox(plan: BootstrapPlan, args: argparse.Namespace, retry: bool = 
         (sandbox_agent_dir(args, plan), "/sandbox", True),
     ]
     for source, dest, no_ignore in uploads:
+        budget_left()
         print(f"sandbox: uploading {source} -> {dest} ...", flush=True)
         args_extra = ["--no-git-ignore"] if no_ignore else []
         result = run_openshell(
             "sandbox", "upload", SANDBOX_NAME, str(source), dest, *args_extra,
-            timeout=600,
+            timeout=min(SANDBOX_TIMEOUT_TRANSFER, budget_left()),
         )
         if result.returncode != 0:
             detail = (result.stderr or "").strip() or (result.stdout or "").strip() or "(see streamed output above)"
@@ -805,11 +831,13 @@ def ensure_sandbox(plan: BootstrapPlan, args: argparse.Namespace, retry: bool = 
 
     pi_provisioned = run_openshell(
         "sandbox", "exec", "-n", SANDBOX_NAME, "--",
-        "bash", "-c", "[ -x /sandbox/support/pi/node_modules/.bin/pi ]", check=False, timeout=30,
+        "bash", "-c", "[ -x /sandbox/support/pi/node_modules/.bin/pi ]", check=False,
+        timeout=SANDBOX_TIMEOUT_PROBE,
     ).returncode == 0
     node_ready = run_openshell(
         "sandbox", "exec", "-n", SANDBOX_NAME, "--",
-        "bash", "-c", f"[ -x {SANDBOX_NODE_BIN} ]", check=False, timeout=30,
+        "bash", "-c", f"[ -x {SANDBOX_NODE_BIN} ]", check=False,
+        timeout=SANDBOX_TIMEOUT_PROBE,
     )
     if node_ready.returncode != 0:
         print(f"sandbox: installing node {SANDBOX_NODE_VERSION} ...", flush=True)
@@ -818,11 +846,13 @@ def ensure_sandbox(plan: BootstrapPlan, args: argparse.Namespace, retry: bool = 
             url = f"https://nodejs.org/dist/{SANDBOX_NODE_VERSION}/node-{SANDBOX_NODE_VERSION}-linux-arm64.tar.gz"
             tar_path.parent.mkdir(parents=True, exist_ok=True)
             urllib.request.urlretrieve(url, tar_path)
-        run_openshell("sandbox", "upload", SANDBOX_NAME, str(tar_path), "/sandbox/node.tgz", "--no-git-ignore", timeout=300)
+        run_openshell("sandbox", "upload", SANDBOX_NAME, str(tar_path), "/sandbox/node.tgz",
+                      "--no-git-ignore", timeout=SANDBOX_TIMEOUT_TRANSFER)
         extract = run_openshell(
             "sandbox", "exec", "-n", SANDBOX_NAME, "--",
             "bash", "-c",
-            "mkdir -p ~/.local && tar -xz -C ~/.local -f /sandbox/node.tgz", timeout=120,
+            "mkdir -p ~/.local && tar -xz -C ~/.local -f /sandbox/node.tgz",
+            timeout=SANDBOX_TIMEOUT_STATE,
         )
         if extract.returncode != 0:
             error = BootstrapError(f"node extract failed in sandbox: {extract.stderr.strip()}")
@@ -838,7 +868,7 @@ def ensure_sandbox(plan: BootstrapPlan, args: argparse.Namespace, retry: bool = 
             "--", "bash", "-c",
             f"export PATH=$HOME/.local/node-{SANDBOX_NODE_VERSION}-linux-arm64/bin:$PATH && "
             "npm ci --no-fund --no-audit",
-            timeout=600, capture=False,
+            timeout=SANDBOX_TIMEOUT_STATE, capture=False,
         )
         if npm_ci.returncode != 0:
             error = BootstrapError("npm ci failed inside the sandbox")
