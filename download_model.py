@@ -1,10 +1,4 @@
-#!/usr/bin/env -S uv run --python 3.11 --script
-# /// script
-# requires-python = ">=3.11,<3.14"
-# dependencies = [
-#   "huggingface_hub>=0.34,<1",
-# ]
-# ///
+#!/usr/bin/env -S uv run
 
 from __future__ import annotations
 
