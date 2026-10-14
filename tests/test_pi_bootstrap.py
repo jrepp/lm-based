@@ -346,3 +346,39 @@ class PiBootstrapTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SandboxLaunchTests(unittest.TestCase):
+    def _plan(self, endpoint: str = "http://127.0.0.1:8081/v1") -> pi_bootstrap.BootstrapPlan:
+        return pi_bootstrap.BootstrapPlan(
+            provider="lm-based", endpoint=endpoint, models=(), selected_model="qwen36-27b-q6k",
+        )
+
+    def test_render_sandbox_policy_targets_gateway_for_node_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "openshell-policy.yaml"
+            rendered = pi_bootstrap.render_sandbox_policy(self._plan(), dest)
+            text = rendered.read_text()
+            self.assertIn("version: 1", text)
+            self.assertIn(pi_bootstrap.DEFAULT_SANDBOX_GATEWAY, text)
+            self.assertIn("port: 8081", text)
+            self.assertIn(pi_bootstrap.SANDBOX_NODE_BIN, text)
+            self.assertNotIn("host.openshell.internal", text)
+
+    def test_sandbox_agent_dir_rewrites_loopback_to_gateway(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "agent"
+            source.mkdir()
+            (source / "models.json").write_text(json.dumps({
+                "providers": {"lm-based": {"baseUrl": "http://127.0.0.1:8081/v1"}}
+            }))
+            args = unittest.mock.Mock()
+            args.agent_dir = source
+            import os as _os
+            _os.environ.pop("LM_BASED_SANDBOX_GATEWAY", None)
+            dest = pi_bootstrap.sandbox_agent_dir(args, self._plan())
+            models = json.loads((dest / "models.json").read_text())
+            self.assertEqual(
+                models["providers"]["lm-based"]["baseUrl"],
+                f"http://{pi_bootstrap.DEFAULT_SANDBOX_GATEWAY}:8081/v1",
+            )

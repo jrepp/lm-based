@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -11,6 +12,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, replace
 from pathlib import Path
+from urllib.parse import urlparse
 from typing import Any, Callable
 
 from lm_launcher.profiles import profile_defaults
@@ -41,6 +43,15 @@ DECISION_PROFILES = frozenset({"mlx-kev"})
 # Document OCR models take page images with fixed task prompts; they are not general chat models.
 OCR_PROFILES = frozenset({"glm-ocr"})
 NON_CHAT_PROFILES = DECISION_PROFILES | OCR_PROFILES
+
+# OpenShell sandboxed launch (pi-local --sandbox): a microVM with default-deny
+# egress whose only permitted destination is the host gateway address that
+# reaches llama-swap, so the agent never sees host env vars, SSH keys, or the
+# filesystem outside its workspace.
+SANDBOX_NAME = "pi-local"
+SANDBOX_NODE_VERSION = "v22.21.1"
+DEFAULT_SANDBOX_GATEWAY = "192.168.127.254"
+SANDBOX_NODE_BIN = f"/sandbox/.local/node-{SANDBOX_NODE_VERSION}-linux-arm64/bin/node"
 ZERO_COST = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}
 
 
@@ -121,6 +132,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--tmux",
         action="store_true",
         help="skip llama-swap and use the service registered in the tmux session",
+    )
+    parser.add_argument(
+        "--sandbox",
+        action="store_true",
+        help="run Pi inside an OpenShell sandbox (isolated filesystem and env; egress limited to llama-swap)",
     )
     parser.add_argument("--session", default="lm-based", help="tmux session name (default: lm-based)")
     parser.add_argument("--timeout", type=float, default=3.0, help="health-check timeout in seconds (default: 3)")
@@ -638,6 +654,222 @@ def print_plan(plan: BootstrapPlan) -> None:
         print(json.dumps(list(plan.classifiers), indent=2))
 
 
+def sandbox_gateway() -> str:
+    """Host-side address a sandbox uses to reach services on this host."""
+    return os.environ.get("LM_BASED_SANDBOX_GATEWAY", DEFAULT_SANDBOX_GATEWAY)
+
+
+def render_sandbox_policy(plan: BootstrapPlan, dest: Path) -> Path:
+    port = urlparse(plan.endpoint).port or 8081
+    gateway = sandbox_gateway()
+    policy = (
+        "version: 1\n"
+        "network_policies:\n"
+        "  lm-based-swap:\n"
+        "    binaries:\n"
+        f"      - {{path: {SANDBOX_NODE_BIN}}}\n"
+        "    endpoints:\n"
+        f"      - {{host: {gateway}, port: {port}, allowed_ips: [\"{gateway}/32\"]}}\n"
+        "  setup-npm:\n"
+        "    binaries:\n"
+        f"      - {{path: {SANDBOX_NODE_BIN}}}\n"
+        "    endpoints:\n"
+        "      - {host: registry.npmjs.org, ports: [443]}\n"
+        f"      - {{host: {gateway}, port: {port}, allowed_ips: [\"{gateway}/32\"]}}\n"
+        f"      - {{host: {gateway}, port: {port}, allowed_ips: [\"{gateway}/32\"]}}\n"
+    )
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(policy, encoding="utf-8")
+    return dest
+
+
+def sandbox_agent_dir(args: argparse.Namespace, plan: BootstrapPlan) -> Path:
+    """Copy the configured agent dir, pointing providers at the sandbox gateway."""
+    import shutil as _shutil
+
+    port = urlparse(plan.endpoint).port or 8081
+    source, dest = args.agent_dir, ROOT / ".runtime" / "pi" / "agent-sandbox"
+    if dest.exists():
+        _shutil.rmtree(dest)
+    _shutil.copytree(source, dest)
+    for file in dest.rglob("*"):
+        if file.is_file() and file.suffix in {".json", ".jsonc", ".toml", ".yaml"}:
+            text = file.read_text(encoding="utf-8")
+            if f"http://127.0.0.1:{port}" in text:
+                file.write_text(
+                    text.replace(f"http://127.0.0.1:{port}", f"http://{sandbox_gateway()}:{port}"),
+                    encoding="utf-8",
+                )
+    return dest
+
+
+def run_openshell(*args: str, timeout: float = 120, check: bool = True, capture: bool = True) -> subprocess.CompletedProcess[str]:
+    # `check` mirrors subprocess.run's signature for call-site readability; the
+    # CompletedProcess returncode is always inspected by the caller instead.
+    # capture=False streams output (upload progress bars) at the cost of not
+    # being able to inspect stderr afterwards.
+    del check
+    openshell = shutil.which("openshell")
+    if openshell is None:
+        error = BootstrapError("openshell CLI not found on PATH")
+        error.hint = "install OpenShell: curl -LsS https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh | sh"
+        raise error
+    try:
+        return subprocess.run(
+            [openshell, *args],
+            capture_output=capture,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        error = BootstrapError(f"openshell {' '.join(args[:2])} timed out after {timeout:.0f}s")
+        error.hint = "the sandbox may be wedged; rerun ./pi-local --sandbox to recreate it"
+        raise error from exc
+
+
+def wait_sandbox_ready(timeout_s: float = 90) -> bool:
+    # `sandbox get` can report Phase: Provisioning even for a working sandbox,
+    # so readiness is probed with a trivial exec instead of the phase string.
+    # A sandbox in phase Error is never going to become ready: return False so
+    # the caller can recreate it.
+    import time
+
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        probe = run_openshell(
+            "sandbox", "exec", "-n", SANDBOX_NAME, "--", "true", check=False, timeout=30
+        )
+        if probe.returncode == 0:
+            return True
+        if "phase: error" in (probe.stdout + probe.stderr).lower():
+            return False
+        time.sleep(3)
+    return False
+
+
+def ensure_sandbox(plan: BootstrapPlan, args: argparse.Namespace, retry: bool = True) -> None:
+    policy = render_sandbox_policy(plan, ROOT / ".runtime" / "pi" / "openshell-policy.yaml")
+    print("sandbox: checking for an existing OpenShell sandbox ...", flush=True)
+    probe = run_openshell("sandbox", "get", SANDBOX_NAME, check=False, timeout=30)
+    if probe.returncode != 0:
+        print(f"sandbox: creating {SANDBOX_NAME} (first run takes ~a minute) ...", flush=True)
+        created = run_openshell(
+            "sandbox", "create", "--name", SANDBOX_NAME, "--policy", str(policy), timeout=180
+        )
+        if created.returncode != 0:
+            error = BootstrapError(f"sandbox create failed: {created.stderr.strip() or created.stdout.strip()}")
+            error.hint = "inspect the gateway with: openshell doctor"
+            raise error
+    else:
+        print("sandbox: refreshing policy ...", flush=True)
+        # Network rules are live-updatable; keep them in sync with the policy.
+        run_openshell("policy", "set", SANDBOX_NAME, "--policy", str(policy), "--wait", timeout=90)
+    print("sandbox: waiting for readiness ...", flush=True)
+    if not wait_sandbox_ready():
+        if not retry:
+            raise BootstrapError(f"sandbox {SANDBOX_NAME} is in phase Error and did not recover")
+        # A wedged sandbox (e.g. an interrupted upload, restart policy never)
+        # only recovers by recreation; the workspace is rebuilt from the host.
+        print("sandbox: wedged; recreating ...", flush=True)
+        run_openshell("sandbox", "delete", SANDBOX_NAME, check=False)
+        return ensure_sandbox(plan, args, retry=False)
+
+    workspace = Path.cwd()
+    print("sandbox: syncing workspace, Pi install, and agent config ...", flush=True)
+    pi_provisioned = run_openshell(
+        "sandbox", "exec", "-n", SANDBOX_NAME, "--",
+        "bash", "-c", "[ -x /sandbox/support/pi/node_modules/.bin/pi ]", check=False, timeout=30,
+    ).returncode == 0
+    # Upload nests <source basename> under <dest>: support/pi lands at
+    # /sandbox/support/pi, the workspace at /sandbox/<launch-dir-name>.
+    uploads = [
+        # (source, dest, no_git_ignore): the workspace honors .gitignore (it
+        # excludes model binaries and runs/); only the agent dir lives under a
+        # gitignored path and needs the override.
+        (workspace, "/sandbox", False),
+        (ROOT / "support" / "pi", "/sandbox/support", True),
+        (sandbox_agent_dir(args, plan), "/sandbox", True),
+    ]
+    for source, dest, no_ignore in uploads:
+        print(f"sandbox: uploading {source} -> {dest} ...", flush=True)
+        args_extra = ["--no-git-ignore"] if no_ignore else []
+        result = run_openshell(
+            "sandbox", "upload", SANDBOX_NAME, str(source), dest, *args_extra,
+            timeout=600,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or "").strip() or (result.stdout or "").strip() or "(see streamed output above)"
+            error = BootstrapError(f"sandbox upload of {source} failed: {detail}")
+            error.hint = "check the sandbox is running: openshell sandbox list"
+            raise error
+
+    pi_provisioned = run_openshell(
+        "sandbox", "exec", "-n", SANDBOX_NAME, "--",
+        "bash", "-c", "[ -x /sandbox/support/pi/node_modules/.bin/pi ]", check=False, timeout=30,
+    ).returncode == 0
+    node_ready = run_openshell(
+        "sandbox", "exec", "-n", SANDBOX_NAME, "--",
+        "bash", "-c", f"[ -x {SANDBOX_NODE_BIN} ]", check=False, timeout=30,
+    )
+    if node_ready.returncode != 0:
+        print(f"sandbox: installing node {SANDBOX_NODE_VERSION} ...", flush=True)
+        tar_path = ROOT / ".runtime" / "pi" / f"node-{SANDBOX_NODE_VERSION}-linux-arm64.tar.gz"
+        if not tar_path.is_file():
+            url = f"https://nodejs.org/dist/{SANDBOX_NODE_VERSION}/node-{SANDBOX_NODE_VERSION}-linux-arm64.tar.gz"
+            tar_path.parent.mkdir(parents=True, exist_ok=True)
+            urllib.request.urlretrieve(url, tar_path)
+        run_openshell("sandbox", "upload", SANDBOX_NAME, str(tar_path), "/sandbox/node.tgz", "--no-git-ignore", timeout=300)
+        extract = run_openshell(
+            "sandbox", "exec", "-n", SANDBOX_NAME, "--",
+            "bash", "-c",
+            "mkdir -p ~/.local && tar -xz -C ~/.local -f /sandbox/node.tgz", timeout=120,
+        )
+        if extract.returncode != 0:
+            error = BootstrapError(f"node extract failed in sandbox: {extract.stderr.strip()}")
+            error.hint = "inspect with: openshell logs " + SANDBOX_NAME
+            raise error
+    if not pi_provisioned:
+        # support/pi uploads without node_modules (gitignored); install the
+        # pinned tree in-sandbox against the lockfile. npm runs as node, so
+        # the setup-npm network rule keys on the node binary path.
+        print("sandbox: npm ci for the pinned Pi (one-time per sandbox) ...", flush=True)
+        npm_ci = run_openshell(
+            "sandbox", "exec", "-n", SANDBOX_NAME, "--workdir", "/sandbox/support/pi",
+            "--", "bash", "-c",
+            f"export PATH=$HOME/.local/node-{SANDBOX_NODE_VERSION}-linux-arm64/bin:$PATH && "
+            "npm ci --no-fund --no-audit",
+            timeout=600, capture=False,
+        )
+        if npm_ci.returncode != 0:
+            error = BootstrapError("npm ci failed inside the sandbox")
+            error.hint = "inspect with: openshell logs " + SANDBOX_NAME
+            raise error
+
+
+def sandbox_command(plan: BootstrapPlan, pi_args: list[str]) -> list[str]:
+    port = urlparse(plan.endpoint).port or 8081
+    workspace = Path.cwd()
+    inner = shlex.join([
+        "/sandbox/support/pi/node_modules/.bin/pi",
+        "--provider", plan.provider,
+        "--model", plan.selected_model,
+        *pi_args,
+    ])
+    script = (
+        f"export PATH=$HOME/.local/node-{SANDBOX_NODE_VERSION}-linux-arm64/bin:$PATH "
+        f"PI_CODING_AGENT_DIR=/sandbox/agent-sandbox PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0 "
+        f"LM_BASED_SWAP_URL=http://{sandbox_gateway()}:{port} "
+        f"LM_BASED_PROVIDER={shlex.quote(plan.provider)} && "
+        f"cd /sandbox/{workspace.name} 2>/dev/null || cd /sandbox; "
+        f"exec node {inner}"
+    )
+    return [
+        "sandbox", "exec", "-n", SANDBOX_NAME,
+        "--workdir", "/sandbox",
+        "--", "bash", "-c", script,
+    ]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args, pi_args = parser.parse_known_args(argv)
@@ -664,6 +896,9 @@ def main(argv: list[str] | None = None) -> int:
         print_swap_states(plan)
         if args.configure_only:
             return 0
+        if args.sandbox:
+            ensure_sandbox(plan, args)
+            os.execvp("openshell", ["openshell", *sandbox_command(plan, pi_args)])
         command = [str(PI_CLI), "--provider", plan.provider, "--model", plan.selected_model, *pi_args]
         os.execve(command[0], command, pi_environment(args.agent_dir, plan=plan))
     except BootstrapError as exc:
