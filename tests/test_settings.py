@@ -42,6 +42,18 @@ class ServerSettingsModelIndexTests(unittest.TestCase):
 
         self.assertEqual(settings.llama_server_bin, "/tmp/custom-llama-server")
 
+    def test_profile_context_is_capped_at_native_context(self) -> None:
+        # Mistral-7B v0.3 runs on the generic profile (262144) but was trained on 32768.
+        settings = ServerSettings(model_slug="mistral-7b-instruct-v03-q4km", enable_run_capture=False)
+        self.assertEqual(settings.model_context_length, 32768)
+        self.assertEqual(settings.ctx_size, 32768)
+
+    def test_explicit_context_is_not_capped(self) -> None:
+        settings = ServerSettings(
+            model_slug="mistral-7b-instruct-v03-q4km", ctx_size=65536, enable_run_capture=False
+        )
+        self.assertEqual(settings.ctx_size, 65536)
+
     def test_model_slug_applies_recommended_mmproj(self) -> None:
         settings = ServerSettings(
             model_slug="glm-ocr-q8_0",
