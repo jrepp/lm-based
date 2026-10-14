@@ -37,6 +37,24 @@ book-check:
 book-list:
     @ls -lh pdf-releases/*.pdf 2>/dev/null || echo "No PDFs yet — run: just book"
 
+# ─── pi ───────────────────────────────────────────────────────────────────────
+
+# Install the repo-pinned Pi and its extensions (support/pi/package-lock.json)
+pi-install:
+    @cd support/pi && npm ci --no-fund --no-audit
+
+# Symlink pi-local onto PATH; it uses the launching directory as Pi's workspace
+pi-link dir="~/.local/bin":
+    @mkdir -p {{dir}} && ln -sfn "{{justfile_directory()}}/pi-local" {{dir}}/pi-local && ls -l {{dir}}/pi-local
+
+# Test the repo Pi extensions' pure modules
+pi-test:
+    @node --test support/pi/extensions/decide/records.test.ts
+
+# Show the Pi provider ./pi-local would configure
+pi-plan:
+    @./pi-local --dry-run
+
 # ─── llama-swap ───────────────────────────────────────────────────────────────
 
 # Download/install llama-swap binary

@@ -1,0 +1,17 @@
+{
+  "name": "lm-based-pi",
+  "private": true,
+  "description": "Repo-pinned Pi coding agent and extensions launched by ./pi-local",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "1.2.0",
+    "@earendil-works/pi-ai": "1.2.0",
+    "@earendil-works/pi-coding-agent": "1.2.0",
+    "@earendil-works/pi-tui": "1.2.0",
+    "@narumitw/pi-goal": "0.54.11",
+    "pi-subagents": "0.78.0",
+    "typebox": "1.3.27"
+  }
+}

@@ -19,13 +19,37 @@ from lm_launcher.service_endpoints import swap_api_base
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNTIME_SERVICES = ROOT / ".runtime" / "tmux" / "services"
-DEFAULT_AGENT_DIR = Path.home() / ".pi" / "agent"
+PI_DIR = ROOT / "support" / "pi"
+PI_CLI = PI_DIR / "node_modules" / ".bin" / "pi"
+DEFAULT_AGENT_DIR = ROOT / ".runtime" / "pi" / "agent"
+# Extensions pinned in support/pi/package.json and loaded from that install.
+PI_PACKAGES = (
+    PI_DIR / "node_modules" / "@narumitw" / "pi-goal",
+    PI_DIR / "node_modules" / "pi-subagents",
+)
+# Repo-local extensions loaded by file path (not npm packages).
+PI_EXTENSIONS = (
+    PI_DIR / "extensions" / "llama-swap" / "index.ts",
+    PI_DIR / "extensions" / "decide" / "index.ts",
+)
+# Keep the repo-managed Pi quiet: no version checks or install telemetry.
+PI_ENV = {"PI_SKIP_VERSION_CHECK": "1", "PI_TELEMETRY": "0"}
 DEFAULT_PROVIDER = "lm-based"
+# Decision/classifier models (kev.serve) answer typed questions, not chat; keep them out of /model.
+DECISION_PROFILES = frozenset({"mlx-kev"})
 ZERO_COST = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}
 
 
 class BootstrapError(RuntimeError):
     """A user-actionable bootstrap failure."""
+
+    hint = "start llama-swap with ./up swap (or a single model with ./up <model-slug>), then rerun ./pi-local"
+
+
+class PiInstallError(BootstrapError):
+    """The repo-pinned Pi install is missing or incomplete."""
+
+    hint = "install the pinned Pi with: just pi-install"
 
 
 @dataclass(frozen=True)
@@ -51,19 +75,28 @@ class BootstrapPlan:
     endpoint: str
     models: tuple[dict[str, Any], ...]
     selected_model: str
+    # llama-swap only: model id -> process state ("ready", "starting", ...) or "unloaded".
+    swap_states: dict[str, str] | None = None
+    # Decision models for the decide extension. models.json cannot declare classifier
+    # models (Pi treats every entry as chat), so they travel in LM_BASED_CLASSIFIERS and
+    # support/pi/extensions/decide registers them as their own provider.
+    classifiers: tuple[dict[str, Any], ...] = ()
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Bootstrap Pi against the verified, running lm-based service.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        # Unknown flags pass through to Pi; prefix matching would turn Pi's --mode into --model.
+        allow_abbrev=False,
         epilog=(
             "The bootstrap reads tmux shim ownership, verifies /v1/models, merges an\n"
-            "lm-based provider into ~/.pi/agent/models.json, and then launches Pi.\n"
+            "lm-based provider into .runtime/pi/agent/models.json, and then launches the\n"
+            "Pi pinned in support/pi with the goal and subagent extensions.\n"
             "Arguments it does not recognize are forwarded to Pi.\n"
             "\n"
             "Examples:\n"
-            "  ./pi-local\n"
+            "  ./pi-local                  # llama-swap if it is up, else the tmux service\n"
             "  ./pi-local -p 'Summarize this repository'\n"
             "  ./pi-local --configure-only\n"
             "  ./pi-local --dry-run\n"
@@ -74,6 +107,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-default", action="store_true", help="do not change Pi's default provider and model")
     parser.add_argument("--provider", default=DEFAULT_PROVIDER, help=f"Pi provider name (default: {DEFAULT_PROVIDER})")
     parser.add_argument("--model", help="select one model when the running endpoint exposes several")
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument(
+        "--swap",
+        action="store_true",
+        help="require the llama-swap proxy (default: use it when /running answers, else tmux discovery)",
+    )
+    source.add_argument(
+        "--tmux",
+        action="store_true",
+        help="skip llama-swap and use the service registered in the tmux session",
+    )
     parser.add_argument("--session", default="lm-based", help="tmux session name (default: lm-based)")
     parser.add_argument("--timeout", type=float, default=3.0, help="health-check timeout in seconds (default: 3)")
     parser.add_argument("--agent-dir", type=Path, default=DEFAULT_AGENT_DIR, help=argparse.SUPPRESS)
@@ -204,6 +248,34 @@ def endpoint_model_ids(
     return [model_id for model_id in model_ids if isinstance(model_id, str) and model_id]
 
 
+def swap_root(endpoint: str) -> str:
+    return endpoint.rstrip("/").removesuffix("/v1")
+
+
+def swap_model_states(
+    endpoint: str,
+    api_ids: list[str],
+    timeout: float,
+    *,
+    opener: Callable[..., object] = urllib.request.urlopen,
+) -> dict[str, str]:
+    """Join llama-swap /v1/models with /running: every model gets its load state."""
+    url = f"{swap_root(endpoint)}/running"
+    try:
+        with opener(urllib.request.Request(url, headers={"Accept": "application/json"}), timeout=timeout) as response:  # type: ignore[attr-defined]
+            payload = json.load(response)
+    except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        raise BootstrapError(f"{url} is not a healthy llama-swap endpoint: {exc}") from exc
+    running = payload.get("running") if isinstance(payload, dict) else None
+    if not isinstance(running, list):
+        raise BootstrapError(f"{url} returned an invalid llama-swap response")
+    states = {model_id: "unloaded" for model_id in api_ids}
+    for entry in running:
+        if isinstance(entry, dict) and isinstance(entry.get("model"), str):
+            states[entry["model"]] = str(entry.get("state") or "unknown")
+    return states
+
+
 def api_id_matches_sidecar(api_id: str, sidecar: Sidecar) -> bool:
     defaults = profile_defaults(sidecar.profile, sidecar.name)
     aliases = {sidecar.slug, sidecar.name, str(defaults.get("alias") or "")}
@@ -238,11 +310,34 @@ def resolve_sidecars(
     resolved: list[Sidecar] = []
     for api_id in api_ids:
         match = next((sidecar for sidecar in sidecars.values() if api_id_matches_sidecar(api_id, sidecar)), None)
-        if match is not None and match not in resolved:
+        if match is not None and match not in resolved and match.profile not in DECISION_PROFILES:
             resolved.append(match)
     if not resolved:
-        raise BootstrapError("none of the endpoint models match local sidecar metadata")
+        raise BootstrapError("none of the endpoint models match local chat-model sidecar metadata")
     return tuple(resolved)
+
+
+def resolve_classifiers(api_ids: list[str], sidecars: dict[str, Sidecar]) -> tuple[Sidecar, ...]:
+    resolved: list[Sidecar] = []
+    for api_id in api_ids:
+        match = next((sidecar for sidecar in sidecars.values() if api_id_matches_sidecar(api_id, sidecar)), None)
+        if match is not None and match not in resolved and match.profile in DECISION_PROFILES:
+            resolved.append(match)
+    return tuple(resolved)
+
+
+def pi_classifier(sidecar: Sidecar, swap_endpoint: str) -> dict[str, Any]:
+    # llama-swap only routes OpenAI paths by model; /upstream/<slug> passes /v1/systemone through.
+    return {
+        "id": sidecar.slug,
+        "name": f"{sidecar.name} (lm-based decision)",
+        "type": "classifier",
+        "api": "typesafe-system-one",
+        "baseUrl": f"{swap_root(swap_endpoint)}/upstream/{sidecar.slug}/v1",
+        "input": ["text"],
+        "contextWindow": sidecar.context_window,
+        "cost": dict(ZERO_COST),
+    }
 
 
 def model_supports_reasoning(sidecar: Sidecar) -> bool:
@@ -272,15 +367,25 @@ def build_plan(
     requested_model: str | None,
     state: ServiceState,
     sidecars: tuple[Sidecar, ...],
+    swap_states: dict[str, str] | None = None,
+    previous_model: str | None = None,
+    classifiers: tuple[Sidecar, ...] = (),
 ) -> BootstrapPlan:
     models = tuple(pi_model(sidecar) for sidecar in sidecars)
     model_ids = [model["id"] for model in models]
+    loaded = [model_id for model_id in model_ids if (swap_states or {}).get(model_id) == "ready"]
     if requested_model:
         if requested_model not in model_ids:
             raise BootstrapError(f"model {requested_model!r} is not exposed by the running service")
         selected = requested_model
     elif len(model_ids) == 1:
         selected = model_ids[0]
+    elif loaded:
+        # Start on whatever llama-swap already holds rather than forcing a swap.
+        selected = loaded[0]
+    elif swap_states is not None:
+        # Nothing loaded: llama-swap loads on demand, so resume the last model or take the first.
+        selected = previous_model if previous_model in model_ids else model_ids[0]
     else:
         raise BootstrapError(f"choose a running model with --model ({', '.join(model_ids)})")
     return BootstrapPlan(
@@ -288,6 +393,8 @@ def build_plan(
         endpoint=state.endpoint,
         models=models,
         selected_model=selected,
+        swap_states=swap_states,
+        classifiers=tuple(pi_classifier(sidecar, state.endpoint) for sidecar in classifiers),
     )
 
 
@@ -336,7 +443,22 @@ def atomic_write_json(path: Path, value: dict[str, Any]) -> bool:
     return True
 
 
-def configure_pi(plan: BootstrapPlan, agent_dir: Path, *, set_default: bool) -> tuple[bool, bool]:
+def merge_packages(existing: object, managed: tuple[Path, ...]) -> list[Any]:
+    packages = list(existing) if isinstance(existing, list) else []
+    for package in managed:
+        if str(package) not in packages:
+            packages.append(str(package))
+    return packages
+
+
+def configure_pi(
+    plan: BootstrapPlan,
+    agent_dir: Path,
+    *,
+    set_default: bool,
+    packages: tuple[Path, ...] = PI_PACKAGES,
+    extensions: tuple[Path, ...] = PI_EXTENSIONS,
+) -> tuple[bool, bool]:
     models_path = agent_dir / "models.json"
     models_config = read_json_object(models_path)
     providers = models_config.setdefault("providers", {})
@@ -345,30 +467,110 @@ def configure_pi(plan: BootstrapPlan, agent_dir: Path, *, set_default: bool) -> 
     providers[plan.provider] = provider_config(plan)
     models_changed = atomic_write_json(models_path, models_config)
 
-    settings_changed = False
+    settings_path = agent_dir / "settings.json"
+    settings = read_json_object(settings_path)
+    settings["packages"] = merge_packages(settings.get("packages"), packages)
+    settings["extensions"] = merge_packages(settings.get("extensions"), extensions)
+    settings["enableInstallTelemetry"] = False
     if set_default:
-        settings_path = agent_dir / "settings.json"
-        settings = read_json_object(settings_path)
         settings["defaultProvider"] = plan.provider
         settings["defaultModel"] = plan.selected_model
-        settings_changed = atomic_write_json(settings_path, settings)
+    settings_changed = atomic_write_json(settings_path, settings)
     return models_changed, settings_changed
+
+
+def check_pi_install(
+    cli: Path = PI_CLI,
+    packages: tuple[Path, ...] = PI_PACKAGES + PI_EXTENSIONS,
+) -> None:
+    missing = [path for path in (cli, *packages) if not path.exists()]
+    if missing:
+        names = ", ".join(str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else str(path) for path in missing)
+        raise PiInstallError(f"pinned Pi install is incomplete (missing {names})")
+
+
+def pi_environment(
+    agent_dir: Path,
+    base: dict[str, str] | None = None,
+    plan: BootstrapPlan | None = None,
+) -> dict[str, str]:
+    env = dict(os.environ if base is None else base)
+    env.update(PI_ENV)
+    env["PI_CODING_AGENT_DIR"] = str(agent_dir.resolve())
+    if plan is not None and plan.swap_states is not None:
+        # Enables the llama-swap status extension (support/pi/extensions/llama-swap).
+        env["LM_BASED_SWAP_URL"] = swap_root(plan.endpoint)
+        env["LM_BASED_PROVIDER"] = plan.provider
+    if plan is not None and plan.classifiers:
+        env["LM_BASED_CLASSIFIERS"] = json.dumps(list(plan.classifiers))
+    return env
+
+
+def previous_default_model(agent_dir: Path, provider: str) -> str | None:
+    try:
+        settings = read_json_object(agent_dir / "settings.json")
+    except BootstrapError:
+        return None
+    model = settings.get("defaultModel")
+    return model if settings.get("defaultProvider") == provider and isinstance(model, str) else None
+
+
+def swap_service(timeout: float) -> tuple[ServiceState, list[str], dict[str, str]]:
+    state = ServiceState(services=frozenset({"llama-swap"}), model_slugs=(), endpoint=swap_api_base())
+    api_ids = endpoint_model_ids(state.endpoint, timeout)
+    return state, api_ids, swap_model_states(state.endpoint, api_ids, timeout)
 
 
 def derive_plan(args: argparse.Namespace) -> BootstrapPlan:
     sidecars = load_sidecars()
-    services = running_services(args.session)
-    state = service_state(args.session, services)
-    api_ids = endpoint_model_ids(state.endpoint, args.timeout)
+    swap_states = None
+    if args.swap:
+        state, api_ids, swap_states = swap_service(args.timeout)
+    else:
+        try:
+            if args.tmux:
+                raise BootstrapError("llama-swap skipped")
+            # llama-swap answering /running is positive identification, not a port guess.
+            state, api_ids, swap_states = swap_service(args.timeout)
+        except BootstrapError:
+            state = service_state(args.session, running_services(args.session))
+            api_ids = endpoint_model_ids(state.endpoint, args.timeout)
+            if "llama-swap" in state.services and not state.model_slugs:
+                swap_states = swap_model_states(state.endpoint, api_ids, args.timeout)
     resolved = resolve_sidecars(state, api_ids, sidecars)
-    return build_plan(args.provider, args.model, state, resolved)
+    classifiers = resolve_classifiers(api_ids, sidecars) if swap_states is not None else ()
+    previous = previous_default_model(args.agent_dir, args.provider)
+    return build_plan(args.provider, args.model, state, resolved, swap_states, previous, classifiers)
+
+
+def print_swap_states(plan: BootstrapPlan) -> None:
+    if plan.swap_states is None:
+        return
+    registered = {model["id"] for model in plan.models}
+    classifiers = {model["id"] for model in plan.classifiers}
+    sidecars = load_sidecars()
+    print("llama-swap models:")
+    for model_id, state in plan.swap_states.items():
+        mark = "●" if state == "ready" else "○" if state == "unloaded" else "◐"
+        note = ""
+        if model_id in classifiers:
+            note = "  (decision model; classifier for decide_records)"
+        elif model_id not in registered:
+            decision = model_id in sidecars and sidecars[model_id].profile in DECISION_PROFILES
+            note = "  (decision model; not in /model)" if decision else "  (no sidecar; not in /model)"
+        current = "  <- selected" if model_id == plan.selected_model else ""
+        print(f"  {mark} {model_id:<32} {state}{current}{note}")
 
 
 def print_plan(plan: BootstrapPlan) -> None:
     print(f"service:  {plan.endpoint}")
     print(f"provider: {plan.provider}")
     print(f"model:    {plan.selected_model}")
+    print_swap_states(plan)
     print(json.dumps(provider_config(plan), indent=2))
+    if plan.classifiers:
+        print("classifiers (LM_BASED_CLASSIFIERS):")
+        print(json.dumps(list(plan.classifiers), indent=2))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -377,6 +579,8 @@ def main(argv: list[str] | None = None) -> int:
     if pi_args[:1] == ["--"]:
         pi_args = pi_args[1:]
     try:
+        if not args.dry_run:
+            check_pi_install()
         plan = derive_plan(args)
         if args.dry_run:
             print_plan(plan)
@@ -391,14 +595,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"lm-based service: {plan.endpoint}")
         print(f"Pi provider:      {plan.provider}/{plan.selected_model}")
         print(f"Pi configuration: models {models_state}, settings {settings_state}")
+        print(f"Pi agent dir:     {args.agent_dir}")
+        print_swap_states(plan)
         if args.configure_only:
             return 0
-        if shutil.which("pi") is None:
-            raise BootstrapError("pi is not installed or not on PATH")
-        command = ["pi", "--provider", plan.provider, "--model", plan.selected_model, *pi_args]
-        os.execvp(command[0], command)
+        command = [str(PI_CLI), "--provider", plan.provider, "--model", plan.selected_model, *pi_args]
+        os.execve(command[0], command, pi_environment(args.agent_dir, plan=plan))
     except BootstrapError as exc:
         print(f"error: {exc}", file=sys.stderr)
-        print("start a model with ./up <model-slug>, then rerun ./pi-local", file=sys.stderr)
+        print(exc.hint, file=sys.stderr)
         return 1
     return 0
