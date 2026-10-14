@@ -51,6 +51,10 @@ pi-link dir="~/.local/bin":
 install dir="$HOME/.local/bin":
     @mkdir -p {{dir}} && for entry in pi-local opencode-local up; do ln -sfn "{{justfile_directory()}}/$entry" "{{dir}}/$entry"; done && ls -l {{dir}}/pi-local {{dir}}/opencode-local {{dir}}/up
 
+# Audit the host: model servers outside llama-swap, wired memory, sidecar context vs GGUF headers
+host-doctor:
+    @uv run --frozen python -m lm_launcher.host_doctor
+
 # Test the repo Pi extensions, including tool execution regressions
 pi-test:
     @node --test support/pi/extensions/*.test.ts support/pi/extensions/*/*.test.ts
