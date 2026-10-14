@@ -174,7 +174,7 @@ class SidecarValidationTests(unittest.TestCase):
             "_index_path": "models/Example.gguf.json",
             "schema_version": 1,
             "artifact": {"filename": "Example.gguf"},
-            "model": {"slug": "example"},
+            "model": {"slug": "example", "kind": "chat", "context_length": 32768},
             "launcher": {"profile": "generic", "script": script},
         }
 
@@ -194,6 +194,24 @@ class SidecarValidationTests(unittest.TestCase):
         issues = self.route_config.validate_records([record])
         self.assertTrue(any(i.severity == "error" and "launcher.script" in i.message for i in issues))
 
+
+    def test_model_kind_and_native_context_are_required(self) -> None:
+        record = self.record("run-server.py")
+        del record["model"]["kind"]
+        record["model"]["context_length"] = None
+        messages = [i.message for i in self.route_config.validate_records([record]) if i.severity == "error"]
+        self.assertTrue(any("model.kind" in m for m in messages))
+        self.assertTrue(any("model.context_length" in m for m in messages))
+
+    def test_profile_may_not_request_more_than_native_context(self) -> None:
+        record = self.record("run-server.py")
+        record["launcher"]["profile"] = "qwen3.5"  # requests 262144
+        record["model"]["context_length"] = 32768
+        messages = [i.message for i in self.route_config.validate_records([record]) if i.severity == "error"]
+        self.assertTrue(any("above the native 32768" in m for m in messages))
+        # The generic profile is capped by the launcher instead.
+        record["launcher"]["profile"] = "generic"
+        self.assertEqual([i for i in self.route_config.validate_records([record]) if i.severity == "error"], [])
 
 if __name__ == "__main__":
     unittest.main()

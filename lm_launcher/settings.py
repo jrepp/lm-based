@@ -87,6 +87,8 @@ class ServerSettings(BaseSettings):
     additional_hosts: str = ""
     port: int = 8001
     ctx_size: int | None = None
+    # Native (training) context from the sidecar's model.context_length.
+    model_context_length: int | None = None
     gpu_layers: str = "all"
     parallel: int | None = None
     threads: int | None = None
@@ -182,6 +184,9 @@ class ServerSettings(BaseSettings):
                 self.profile = launcher.get("profile", self.profile)
             if self.alias is None:
                 self.alias = record.get("model", {}).get("slug")
+            native = record.get("model", {}).get("context_length")
+            if self.model_context_length is None and isinstance(native, int) and native > 0:
+                self.model_context_length = native
 
             if self.model_file == artifact.get("filename"):
                 model_file_env = recommended_env.get("MODEL_FILE")
@@ -222,9 +227,21 @@ class ServerSettings(BaseSettings):
         self.profile = infer_profile(self.model_path.name, self.profile)
         defaults = profile_defaults(self.profile, self.model_path.name)
 
+        # Read before applying defaults: setattr below also marks fields as set.
+        explicit_ctx = "ctx_size" in self.model_fields_set
         for field_name, default_value in defaults.items():
             if getattr(self, field_name) is None:
                 setattr(self, field_name, default_value)
+
+        # llama-server caps the slot at the training context anyway; asking for more only
+        # allocates KV cache that can never be used. An explicit CTX_SIZE is left alone.
+        if (
+            not explicit_ctx
+            and self.model_context_length
+            and self.ctx_size
+            and self.ctx_size > self.model_context_length
+        ):
+            self.ctx_size = self.model_context_length
 
         if self.enable_repetition_guard and self.presence_penalty is None:
             self.presence_penalty = self.repetition_guard_presence_penalty

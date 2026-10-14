@@ -11,6 +11,8 @@
   },
   "model": {
     "slug": "ternary-bonsai-27b-mlx-2bit",
+    "kind": "chat",
+    "context_length": 262144,
     "family": "Qwen3.6",
     "name": "Ternary-Bonsai-27B-MLX-2bit",
     "canonical_model_card": "https://huggingface.co/prism-ml/Ternary-Bonsai-27B-mlx-2bit"

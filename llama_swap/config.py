@@ -119,12 +119,19 @@ def _sidecar_to_model_config(sidecar_path: Path) -> ModelConfig | None:
     # liveness endpoint. mlx_lm.server keeps the default /health.
     check_endpoint = "/v1/models" if profile == "mlx-kev" else "/health"
 
+    # llama-swap returns metadata in /v1/models under meta.llamaswap, so clients can
+    # tell chat models from decision/OCR models without reading the sidecars.
+    metadata = {"kind": model.get("kind", "chat")}
+    if isinstance(model.get("context_length"), int):
+        metadata["context_length"] = model["context_length"]
+
     return ModelConfig(
         model_id=slug,
         cmd=cmd,
         name=name,
         check_endpoint=check_endpoint,
         send_loading_state=True,
+        metadata=metadata,
     )
 
 

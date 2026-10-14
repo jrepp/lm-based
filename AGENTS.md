@@ -93,7 +93,8 @@ Several agents often work in this checkout at once, and the host runs real model
 - Do not stop, restart, or reconfigure services you did not start: llama-swap
   (`127.0.0.1:8081`), its workers (`10001`–`10100`), tmux services (`./up --status`), or
   ad-hoc `run-server.py` processes. Ask first; a restart unloads models other sessions use.
-- Before loading a large model, check memory (`memory_pressure`, `/running` on llama-swap).
+- Before loading a large model, run `just host-doctor` (wired memory against the limit, and model
+  servers running outside llama-swap) or check `/running` on llama-swap.
   Model weights plus KV cache must fit the GPU wired limit (about 96 GB by default on a
   128 GB host), including servers running outside llama-swap.
 - Prefer read-only probes (`curl /v1/models`, `/running`, `/health`) when validating.
@@ -109,7 +110,15 @@ Several agents often work in this checkout at once, and the host runs real model
 5. Regenerate: ./route-config.py  and  ./llama-swap-runner.py config
 6. Verify:     ./download_model.py --list   (slug appears)
                ./route-config.py --validate
+               just host-doctor             (sidecar context vs the GGUF header, if downloaded)
 ```
+
+`model.kind` (`chat`, `decision`, `ocr`, `embedding`) decides where the model appears: only
+`chat` models are offered by Pi and OpenCode; llama-swap publishes the kind in `/v1/models`
+under `meta.llamaswap`. `model.context_length` is the native training window (GGUF
+`<arch>.context_length`, or `max_position_embeddings` in `config.json`). The launcher caps a
+profile's `ctx_size` at it, and `--validate` rejects a model-specific profile that asks for
+more.
 
 Sidecar file names follow the artifact: `<Artifact-QUANT>.gguf.json`,
 `<Artifact>.safetensors.json`, or `<artifact-dir>.json` for MLX directories.
@@ -130,6 +139,8 @@ Sidecar file names follow the artifact: `<Artifact-QUANT>.gguf.json`,
   },
   "model": {
     "slug": "<lowercase-hyphen-slug>",
+    "kind": "chat",
+    "context_length": 262144,
     "family": "<ModelFamily>",
     "name": "<ModelName>",
     "canonical_model_card": "https://huggingface.co/<org>/<repo>"

@@ -76,6 +76,15 @@ class MlxSidecarConfigTests(unittest.TestCase):
         self.assertEqual(cfg.models["bonsai-mlx"].check_endpoint, "/health")
 
 
+class ModelMetadataTests(unittest.TestCase):
+    def test_real_sidecars_publish_kind_and_context(self) -> None:
+        # llama-swap v264 returns metadata under meta.llamaswap in /v1/models.
+        cfg = build_config(hot_slugs=None)
+        self.assertEqual(cfg.models["kev-4b-mlx-8bit"].metadata, {"kind": "decision", "context_length": 262144})
+        self.assertEqual(cfg.models["glm-ocr-q8_0"].metadata["kind"], "ocr")
+        self.assertEqual(cfg.models["qwen3-coder-next-q6k"].metadata["kind"], "chat")
+
+
 class RoutingPolicyTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()

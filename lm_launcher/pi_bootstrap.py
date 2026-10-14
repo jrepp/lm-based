@@ -42,11 +42,10 @@ PI_EXTENSIONS = (
 # Keep the repo-managed Pi quiet: no version checks or install telemetry.
 PI_ENV = {"PI_SKIP_VERSION_CHECK": "1", "PI_TELEMETRY": "0"}
 DEFAULT_PROVIDER = "lm-based"
-# Decision/classifier models (kev.serve) answer typed questions, not chat; keep them out of /model.
-DECISION_PROFILES = frozenset({"mlx-kev"})
-# Document OCR models take page images with fixed task prompts; they are not general chat models.
-OCR_PROFILES = frozenset({"glm-ocr"})
-NON_CHAT_PROFILES = DECISION_PROFILES | OCR_PROFILES
+# Sidecar model.kind. Only chat models belong in /model: decision models (kev.serve) answer
+# typed questions through decide_records, and OCR models take page images with fixed task
+# prompts through pdf_extract.
+KIND_LABELS = {"decision": "decision model", "ocr": "OCR model", "embedding": "embedding model"}
 
 # OpenShell sandboxed launch (pi-local --sandbox): a microVM with default-deny
 # egress whose only permitted destination is the host gateway address that
@@ -89,6 +88,9 @@ class Sidecar:
     context_window: int
     artifact_path: Path
     notes: tuple[str, ...]
+    kind: str = "chat"
+
+
 
 
 @dataclass(frozen=True)
@@ -110,6 +112,8 @@ class BootstrapPlan:
     # models (Pi treats every entry as chat), so they travel in LM_BASED_CLASSIFIERS and
     # support/pi/extensions/decide registers them as their own provider.
     classifiers: tuple[dict[str, Any], ...] = ()
+    # OCR model for the pdf-extract extension (LM_BASED_OCR_MODEL), from sidecar kind "ocr".
+    ocr_model: str | None = None
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -190,6 +194,10 @@ def load_sidecars(models_dir: Path = ROOT / "models") -> dict[str, Sidecar]:
         profile = launcher.get("profile") or "generic"
         defaults = profile_defaults(str(profile), name)
         context_window = int(defaults.get("ctx_size") or 128000)
+        native = model.get("context_length")
+        if isinstance(native, int) and native > 0:
+            # The launcher caps the served context at the model's native window too.
+            context_window = min(context_window, native)
         local_path = Path(str(artifact.get("local_path") or ""))
         artifact_path = (ROOT / local_path).resolve()
         notes = tuple(note for note in data.get("notes", []) if isinstance(note, str))
@@ -200,6 +208,7 @@ def load_sidecars(models_dir: Path = ROOT / "models") -> dict[str, Sidecar]:
             context_window=context_window,
             artifact_path=artifact_path,
             notes=notes,
+            kind=str(model.get("kind") or "chat"),
         )
     return sidecars
 
@@ -412,20 +421,24 @@ def resolve_sidecars(
     resolved: list[Sidecar] = []
     for api_id in api_ids:
         match = next((sidecar for sidecar in sidecars.values() if api_id_matches_sidecar(api_id, sidecar)), None)
-        if match is not None and match not in resolved and match.profile not in NON_CHAT_PROFILES:
+        if match is not None and match not in resolved and match.kind == "chat":
             resolved.append(match)
     if not resolved:
         raise BootstrapError("none of the endpoint models match local chat-model sidecar metadata")
     return tuple(resolved)
 
 
-def resolve_classifiers(api_ids: list[str], sidecars: dict[str, Sidecar]) -> tuple[Sidecar, ...]:
+def resolve_kind(api_ids: list[str], sidecars: dict[str, Sidecar], kind: str) -> tuple[Sidecar, ...]:
     resolved: list[Sidecar] = []
     for api_id in api_ids:
         match = next((sidecar for sidecar in sidecars.values() if api_id_matches_sidecar(api_id, sidecar)), None)
-        if match is not None and match not in resolved and match.profile in DECISION_PROFILES:
+        if match is not None and match not in resolved and match.kind == kind:
             resolved.append(match)
     return tuple(resolved)
+
+
+def resolve_classifiers(api_ids: list[str], sidecars: dict[str, Sidecar]) -> tuple[Sidecar, ...]:
+    return resolve_kind(api_ids, sidecars, "decision")
 
 
 def pi_classifier(sidecar: Sidecar, swap_endpoint: str) -> dict[str, Any]:
@@ -612,6 +625,8 @@ def pi_environment(
         env["LM_BASED_PROVIDER"] = plan.provider
     if plan is not None and plan.classifiers:
         env["LM_BASED_CLASSIFIERS"] = json.dumps(list(plan.classifiers))
+    if plan is not None and plan.ocr_model and "LM_BASED_OCR_MODEL" not in env:
+        env["LM_BASED_OCR_MODEL"] = plan.ocr_model
     return env
 
 
@@ -648,8 +663,10 @@ def derive_plan(args: argparse.Namespace) -> BootstrapPlan:
                 swap_states = swap_model_states(state.endpoint, api_ids, args.timeout)
     resolved = apply_live_context(state, resolve_sidecars(state, api_ids, sidecars), swap_states, args.timeout)
     classifiers = resolve_classifiers(api_ids, sidecars) if swap_states is not None else ()
+    ocr = resolve_kind(api_ids, sidecars, "ocr") if swap_states is not None else ()
     previous = previous_default_model(args.agent_dir, args.provider)
-    return build_plan(args.provider, args.model, state, resolved, swap_states, previous, classifiers)
+    plan = build_plan(args.provider, args.model, state, resolved, swap_states, previous, classifiers)
+    return replace(plan, ocr_model=ocr[0].slug) if ocr else plan
 
 
 def print_swap_states(plan: BootstrapPlan) -> None:
@@ -665,8 +682,8 @@ def print_swap_states(plan: BootstrapPlan) -> None:
         if model_id in classifiers:
             note = "  (decision model; classifier for decide_records)"
         elif model_id not in registered:
-            profile = sidecars[model_id].profile if model_id in sidecars else None
-            kind = "decision model" if profile in DECISION_PROFILES else "OCR model" if profile in OCR_PROFILES else "no sidecar"
+            sidecar = sidecars.get(model_id)
+            kind = KIND_LABELS.get(sidecar.kind, f"{sidecar.kind} model") if sidecar else "no sidecar"
             note = f"  ({kind}; not in /model)"
         current = "  <- selected" if model_id == plan.selected_model else ""
         print(f"  {mark} {model_id:<32} {state}{current}{note}")

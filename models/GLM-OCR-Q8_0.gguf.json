@@ -11,6 +11,8 @@
   },
   "model": {
     "slug": "glm-ocr-q8_0",
+    "kind": "ocr",
+    "context_length": 131072,
     "family": "GLM-OCR",
     "name": "GLM-OCR",
     "canonical_model_card": "https://huggingface.co/zai-org/GLM-OCR"
@@ -37,7 +39,7 @@
   },
   "notes": [
     "OCR model for Pi pdf_extract; excluded from the general chat picker.",
-    "Download both the language model and multimodal projector before serving. Context is conservatively set to 16384 until local OCR validation.",
+    "Download both the language model and multimodal projector before serving. Context is conservatively set to 32768 (of 131072 native) until local OCR validation.",
     "Needs a llama-server build with mtmd/mmproj support (set LLAMA_SERVER_BIN in .env).",
     "Artifact names checked against the ggml-org catalog; local size and SHA256 have not been verified."
   ]

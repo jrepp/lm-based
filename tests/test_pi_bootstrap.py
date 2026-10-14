@@ -302,6 +302,30 @@ class PiBootstrapTests(unittest.TestCase):
         env = pi_bootstrap.pi_environment(Path("/tmp/agent"), {}, plan)
         self.assertEqual(json.loads(env["LM_BASED_CLASSIFIERS"])[0]["id"], "kev-4b-mlx-8bit")
 
+    def test_model_kind_comes_from_the_sidecar(self) -> None:
+        sidecars = pi_bootstrap.load_sidecars()
+        self.assertEqual(sidecars["kev-4b-mlx-8bit"].kind, "decision")
+        self.assertEqual(sidecars["glm-ocr-q8_0"].kind, "ocr")
+        self.assertEqual(sidecars["qwen3-coder-next-q6k"].kind, "chat")
+        # Context offered to Pi never exceeds the model's native window.
+        self.assertEqual(sidecars["mistral-7b-instruct-v03-q4km"].context_window, 32768)
+
+    def test_ocr_model_is_handed_to_pdf_extract(self) -> None:
+        sidecars = pi_bootstrap.load_sidecars()
+        (ocr,) = pi_bootstrap.resolve_kind(["glm-ocr-q8_0", "qwen36-27b-q6k"], sidecars, "ocr")
+        state = pi_bootstrap.ServiceState(
+            services=frozenset({"llama-swap"}), model_slugs=(), endpoint="http://127.0.0.1:8081/v1"
+        )
+        plan = pi_bootstrap.build_plan(
+            "lm-based", None, state, (sidecars["qwen36-27b-q6k"],), {"qwen36-27b-q6k": "ready"}
+        )
+        plan = pi_bootstrap.replace(plan, ocr_model=ocr.slug)
+        env = pi_bootstrap.pi_environment(Path("/tmp/agent"), {}, plan)
+        self.assertEqual(env["LM_BASED_OCR_MODEL"], "glm-ocr-q8_0")
+        # An explicit override in the caller's environment wins.
+        env = pi_bootstrap.pi_environment(Path("/tmp/agent"), {"LM_BASED_OCR_MODEL": "other"}, plan)
+        self.assertEqual(env["LM_BASED_OCR_MODEL"], "other")
+
     def test_pi_flags_are_not_abbreviated_into_bootstrap_options(self) -> None:
         args, rest = pi_bootstrap.build_parser().parse_known_args(["--mode", "json", "-p", "hi"])
         self.assertIsNone(args.model)

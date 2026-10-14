@@ -11,6 +11,8 @@
   },
   "model": {
     "slug": "qwen3-coder-next-iq4xs",
+    "kind": "chat",
+    "context_length": 262144,
     "family": "Qwen3-Coder-Next",
     "name": "Qwen3-Coder-Next",
     "canonical_model_card": "https://huggingface.co/Qwen/Qwen3-Coder-Next"

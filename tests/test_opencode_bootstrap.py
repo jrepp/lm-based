@@ -31,6 +31,25 @@ class OpenCodeBootstrapTests(unittest.TestCase):
         self.assertTrue(provider["models"]["qwen36-27b-q6k"]["reasoning"])
         self.assertEqual(provider["models"]["qwen36-27b-q6k"]["limit"]["context"], 262144)
 
+    def test_decision_and_ocr_models_are_not_offered_as_chat(self) -> None:
+        # llama-swap lists every hot model; kev (decision) and GLM-OCR must not become
+        # OpenCode chat models, let alone the default.
+        plan = opencode_bootstrap.build_plan(
+            "lm-based",
+            "http://127.0.0.1:8081/v1",
+            None,
+            ["kev-4b-mlx-8bit", "glm-ocr-q8_0", "qwen3-coder-next-q6k"],
+            load_sidecars(),
+        )
+        self.assertEqual([model_id for model_id, _ in plan.models], ["qwen3-coder-next-q6k"])
+        self.assertEqual(plan.selected_model, "qwen3-coder-next-q6k")
+
+    def test_only_non_chat_models_is_an_error(self) -> None:
+        with self.assertRaises(opencode_bootstrap.OpenCodeBootstrapError):
+            opencode_bootstrap.build_plan(
+                "lm-based", "http://127.0.0.1:8081/v1", None, ["kev-4b-mlx-8bit"], load_sidecars()
+            )
+
     def test_explicit_model_must_be_in_hot_set(self) -> None:
         with self.assertRaisesRegex(opencode_bootstrap.OpenCodeBootstrapError, "is not hot"):
             opencode_bootstrap.build_plan(

@@ -64,14 +64,6 @@ def profile_defaults(profile: str, model_name: str) -> dict[str, object]:
         "slot_prompt_similarity": 0.10,
     }
 
-    if profile == "glm-ocr":
-        defaults.update({
-            "ctx_size": 16384,
-            "cache_type_k": "f16",
-            "cache_type_v": "f16",
-            "temperature": 0.0,
-        })
-
     if profile == "gemma4":
         # Gemma 4 uses hybrid attention (local sliding-window + global layers).
         # 2B models fit in a modest context; keep ctx_size conservative until
@@ -95,13 +87,15 @@ def profile_defaults(profile: str, model_name: str) -> dict[str, object]:
         # Their llama.cpp guide also uses min_p=0 and recommends
         # --no-context-shift for fixed-window behavior:
         # https://qwen.readthedocs.io/en/latest/run_locally/llama.cpp.html
+        #
+        # Serve the native 262144 window. A 1M YaRN profile (rope_scale 4) only
+        # cost memory: llama-server caps the slot at the training context, so
+        # the extra KV was allocated but never usable (see
+        # docs/llama-server-stats-faq.md).
         defaults.update(
             {
-                "ctx_size": 1048576,
-                "alias": "qwen3-coder-next-1m",
-                "yarn_orig_ctx": 262144,
-                "rope_scaling": "yarn",
-                "rope_scale": 4.0,
+                "ctx_size": 262144,
+                "alias": "qwen3-coder-next",
                 "batch_size": 1024,
                 "ubatch_size": 256,
                 "temperature": 1.0,
@@ -117,10 +111,12 @@ def profile_defaults(profile: str, model_name: str) -> dict[str, object]:
         # GLM-OCR (0.9B vision document parser, glm4 arch + mmproj). Greedy
         # decode is the standard for OCR; prompts are task strings like
         # "Text Recognition:" sent with a page image. ctx held well below the
-        # 131072 native ceiling until measured.
+        # 131072 native ceiling until measured. Unquantized (f16) KV cache.
         defaults.update(
             {
                 "ctx_size": 32768,
+                "cache_type_k": "f16",
+                "cache_type_v": "f16",
                 "temperature": 0.0,
                 "batch_size": 1024,
                 "ubatch_size": 256,
@@ -213,9 +209,10 @@ def profile_defaults(profile: str, model_name: str) -> dict[str, object]:
         )
 
     if profile == "qwen2.5-coder-transformers":
+        # 32768 is the native window (config.json max_position_embeddings).
         defaults.update(
             {
-                "ctx_size": 131072,
+                "ctx_size": 32768,
                 "alias": slugify_model_alias(model_name),
                 "batch_size": 1024,
                 "ubatch_size": 256,
