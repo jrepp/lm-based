@@ -190,8 +190,8 @@ def validate_records(records: list[dict[str, Any]]) -> list[Issue]:
         if not launcher.get("profile"):
             issues.append(Issue("warning", f"{src}: missing launcher.profile"))
         # Repo-relative so sidecars survive clones and renames (absolute paths went stale twice).
-        if launcher.get("script") and launcher["script"] != "run-server.py":
-            issues.append(Issue("error", f"{src}: launcher.script must be \"run-server.py\", got {launcher['script']!r}"))
+        if launcher.get("script") != "run-server.py":
+            issues.append(Issue("error", f"{src}: launcher.script must be \"run-server.py\", got {launcher.get('script')!r}"))
 
         local_path = artifact.get("local_path")
         artifact_format = artifact.get("format", "gguf")

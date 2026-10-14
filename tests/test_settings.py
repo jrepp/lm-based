@@ -15,6 +15,10 @@ except ModuleNotFoundError as exc:
 
 @unittest.skipIf(ServerSettings is None, "pydantic launcher dependencies are not installed")
 class ServerSettingsModelIndexTests(unittest.TestCase):
+    def test_expands_explicit_binary_override(self) -> None:
+        settings = ServerSettings(_env_file=None, llama_server_bin="~/custom/llama-server")
+        self.assertEqual(settings.llama_server_bin, os.path.expanduser("~/custom/llama-server"))
+
     def test_model_slug_applies_recommended_llama_server_binary(self) -> None:
         settings = ServerSettings(
             model_slug="qwen36-27b-mtp-ud-q5k-xl",

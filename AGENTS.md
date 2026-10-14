@@ -60,8 +60,11 @@ just pi-install && just pi-test                        # Pi extensions load + re
 pre-commit run --all-files                             # markdownlint + whitespace
 ```
 
-Run `pre-commit install` once per clone; it also installs a pre-push hook that refuses to
-push to a branch whose PR is already merged (squash merges drop later commits).
+Run `./scripts/install-hooks.sh` once per clone to install pre-commit and a native
+pre-push guard. The guard checks every pushed destination branch against its remote
+repository and refuses updates whose PR is already merged. It skips deletions and tags,
+and fails open when `gh` is unavailable or GitHub cannot be queried. The installer
+refuses to overwrite an existing pre-push hook; preserve or remove it explicitly first.
 `tests/test_repo_hygiene.py` holds repo-wide guards for past regressions: absolute home
 paths, uv scripts drifting off the project Python, bash 4+ syntax in shell scripts
 (macOS `/bin/bash` is 3.2), and generated files missing from `.gitignore`.

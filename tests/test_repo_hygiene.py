@@ -145,9 +145,10 @@ class RepoHygieneTests(unittest.TestCase):
         # that no longer exists) only shows up as a missing tool in a session.
         from lm_launcher.pi_bootstrap import PI_DIR, PI_EXTENSIONS
 
-        on_disk = {path.parent.name for path in (PI_DIR / "extensions").glob("*/index.ts")}
-        loaded = {path.parent.name for path in PI_EXTENSIONS}
-        self.assertEqual(loaded, on_disk)
+        on_disk = {path.resolve() for path in (PI_DIR / "extensions").glob("*/index.ts")}
+        loaded = [path.resolve() for path in PI_EXTENSIONS]
+        self.assertEqual(len(loaded), len(set(loaded)), "duplicate extension registrations")
+        self.assertEqual(set(loaded), on_disk)
 
 class SidecarValidationTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -156,7 +157,7 @@ class SidecarValidationTests(unittest.TestCase):
         sys.modules[spec.name] = self.route_config  # dataclasses look up their module
         spec.loader.exec_module(self.route_config)
 
-    def record(self, script: str) -> dict:
+    def record(self, script: str | None) -> dict:
         return {
             "_index_path": "models/Example.gguf.json",
             "schema_version": 1,
@@ -170,6 +171,16 @@ class SidecarValidationTests(unittest.TestCase):
         self.assertIn("error", [issue.severity for issue in issues])
         issues = self.route_config.validate_records([self.record("run-server.py")])
         self.assertNotIn("error", [issue.severity for issue in issues])
+
+    def test_launcher_script_is_required(self) -> None:
+        for value in (None, "", False):
+            with self.subTest(script=value):
+                issues = self.route_config.validate_records([self.record(value)])
+                self.assertTrue(any(i.severity == "error" and "launcher.script" in i.message for i in issues))
+        record = self.record(None)
+        del record["launcher"]["script"]
+        issues = self.route_config.validate_records([record])
+        self.assertTrue(any(i.severity == "error" and "launcher.script" in i.message for i in issues))
 
 
 if __name__ == "__main__":
