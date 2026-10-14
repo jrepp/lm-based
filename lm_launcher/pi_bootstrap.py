@@ -53,11 +53,14 @@ SANDBOX_NODE_VERSION = "v22.21.1"
 DEFAULT_SANDBOX_GATEWAY = "192.168.127.254"
 SANDBOX_NODE_BIN = f"/sandbox/.local/node-{SANDBOX_NODE_VERSION}-linux-arm64/bin/node"
 # Provisioning timeouts, keyed by operation class (the interactive Pi session
-# itself is never timed). One wall-clock budget bounds the whole launch.
-SANDBOX_TIMEOUT_PROBE = 30     # readiness and marker probes: fast-fail
-SANDBOX_TIMEOUT_STATE = 180    # create/policy/extract/npm-ci state changes
-SANDBOX_TIMEOUT_TRANSFER = 600  # workspace and node-tarball uploads
-SANDBOX_LAUNCH_BUDGET = 900    # wall clock for all provisioning combined
+# itself is never timed). Tuned to interactive speeds on a healthy system:
+# a sandbox boots in ~10-20s, filtered uploads are tens of MB. npm ci is the
+# one network-bound step and rides the transfer class. One wall-clock budget
+# bounds the whole launch; reruns reuse completed steps.
+SANDBOX_TIMEOUT_PROBE = 10     # readiness and marker probes: fast-fail
+SANDBOX_TIMEOUT_STATE = 60     # create/policy/extract state changes
+SANDBOX_TIMEOUT_TRANSFER = 120  # uploads and cold npm ci
+SANDBOX_LAUNCH_BUDGET = 300    # wall clock for all provisioning combined
 ZERO_COST = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}
 
 
@@ -868,7 +871,7 @@ def ensure_sandbox(
             "--", "bash", "-c",
             f"export PATH=$HOME/.local/node-{SANDBOX_NODE_VERSION}-linux-arm64/bin:$PATH && "
             "npm ci --no-fund --no-audit",
-            timeout=SANDBOX_TIMEOUT_STATE, capture=False,
+            timeout=SANDBOX_TIMEOUT_TRANSFER, capture=False,
         )
         if npm_ci.returncode != 0:
             error = BootstrapError("npm ci failed inside the sandbox")
