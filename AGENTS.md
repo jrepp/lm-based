@@ -56,9 +56,15 @@ uv sync --frozen
 uv run --frozen python -m unittest discover -s tests   # Python tests
 go test ./...                                          # serve-manager
 ./route-config.py --validate                           # sidecar lint
-just pi-test                                           # Pi extension modules (node --test)
+just pi-install && just pi-test                        # Pi extensions load + record tests
 pre-commit run --all-files                             # markdownlint + whitespace
 ```
+
+Run `pre-commit install` once per clone; it also installs a pre-push hook that refuses to
+push to a branch whose PR is already merged (squash merges drop later commits).
+`tests/test_repo_hygiene.py` holds repo-wide guards for past regressions: absolute home
+paths, uv scripts drifting off the project Python, bash 4+ syntax in shell scripts
+(macOS `/bin/bash` is 3.2), and generated files missing from `.gitignore`.
 
 `.venv` has no pytest; use `unittest` as above. Tests must not depend on live services.
 
@@ -137,7 +143,7 @@ Sidecar file names follow the artifact: `<Artifact-QUANT>.gguf.json`,
     "revision": null
   },
   "launcher": {
-    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "script": "run-server.py",
     "profile": "<profile-name>",
     "recommended_env": {
       "MODEL_FILE": "<stem>.gguf",
@@ -152,6 +158,9 @@ Sidecar file names follow the artifact: `<Artifact-QUANT>.gguf.json`,
   model directory's `config.json`.
 - Leave `size_bytes` and `sha256` null until the artifact is downloaded and checksummed.
 - `provenance_status`: `user_reported` | `planned_download` | `verified`.
+- No absolute home paths (`/Users/<name>/...`) anywhere in tracked files: `launcher.script`
+  is exactly `run-server.py`, `LLAMA_SERVER_BIN` may use `~/`, and docs link repo-relative.
+  `tests/test_repo_hygiene.py` and `./route-config.py --validate` enforce this.
 
 ## Profile guidelines
 
