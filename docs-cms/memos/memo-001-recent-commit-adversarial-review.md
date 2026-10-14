@@ -11,9 +11,9 @@ doc_uuid: 1798c2d5-0a5f-4410-a2b0-2e5c480f74fc
 # Overview
 
 Reviewed the four implementation commits from `fa773f4` through `872a61b`.
-Found five actionable issues. The user requested fixes and regression tests;
-the working tree now contains those changes. No commits or remote issues were
-created by this review.
+Found five actionable issues. The user requested fixes and regression tests,
+which are recorded in commit `69f12c0`. This memo records the findings and
+subsequent live OCR validation.
 
 # Context
 
@@ -83,11 +83,10 @@ chat picker, projector arguments, and rejection of a missing projector.
 
 # Recommendations
 
-The five code follow-ups are implemented in the working tree. Before deploying
-the OCR worker, download its artifacts and run a one-page image/PDF smoke test
-on the target llama.cpp build. This review did not download weights, start
-inference workers, or verify local model hashes. OCR quality and live coexistence
-with a chat worker therefore remain untested.
+The five code follow-ups were implemented during the review. The subsequent
+live OCR smoke test below passed against the existing warm worker. Cold startup,
+concurrent inference, and OCR quality on difficult scans remain follow-ups.
+No weights were downloaded and local model hashes were not verified.
 
 # References
 
@@ -109,3 +108,30 @@ The docs CMS validator passes. Routing configs were regenerated and the download
 catalog lists the OCR slug. Repository-wide pre-commit found pre-existing
 whitespace issues in unrelated files; its unrelated formatting edits were
 reverted. Markdown lint passed in that run.
+
+## Live OCR smoke test (2026-10-13 Pacific)
+
+Invoked the actual `pdf_extract` extension against llama-swap at
+`http://127.0.0.1:8081`, using its default `glm-ocr-q8_0` model. The worker was
+already ready and advertised a 32768-token context. No service was restarted.
+This validates the running worker and extension, not a cold launch of the
+newly generated configuration.
+
+Used a synthetic two-page PDF and a PNG rendering of its first page at 150 DPI.
+Fixtures and raw OCR output remained outside the repository. This report retains
+only test outcomes and timings, with no sample text or machine-specific paths.
+
+| Request | Wall time | Result |
+| --- | --- | --- |
+| PNG image | 2.27 s | All five expected text fields found |
+| Full two-page PDF | 2.17 s | Both pages recognized in order with page headings |
+| PDF with `pages: "2"` | 0.15 s | Page 2 recognized; page 1 content absent |
+
+Every expected string matched; only whitespace layout differed from the source.
+The PDF requests exercised Ghostscript conversion and the extension's OCR HTTP
+path. Repeated content may benefit from caching, so these timings are smoke-test
+observations, not a throughput benchmark.
+
+Before and after the requests, `/running` showed `glm-ocr-q8_0`,
+`kev-4b-mlx-8bit`, and `qwen36-27b-q6k` all ready. OCR did not evict the other
+workers. No simultaneous chat/classifier request was issued.
