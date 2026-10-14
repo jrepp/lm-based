@@ -23,11 +23,8 @@
   "download": {
     "provider": "huggingface",
     "repo_id": "ggml-org/GLM-OCR-GGUF",
-    "filenames": [
-      "GLM-OCR-Q8_0.gguf",
-      "mmproj-GLM-OCR-Q8_0.gguf"
-    ],
-    "revision": null
+    "filenames": ["GLM-OCR-Q8_0.gguf", "mmproj-GLM-OCR-Q8_0.gguf"],
+    "revision": "964d28c9e3c3330b0f322235abefdcdd29116eb7"
   },
   "launcher": {
     "script": "run-server.py",
@@ -39,12 +36,9 @@
     }
   },
   "notes": [
-    "0.9B document-parsing vision model (CogViT encoder + GLM-0.5B decoder, glm4 arch); MIT license; OmniDocBench V1.5 94.62 (#1 at release), olmOCR-Bench 75.2.",
-    "Served via llama-server --mmproj (ggml-org official Q8_0 weights + Q8_0 mmproj projector, ~1.8GB total); needs a llama-server build with mtmd/mmproj support (set LLAMA_SERVER_BIN in .env).",
-    "Task prompts are plain strings sent with a page image: 'Text Recognition:', 'Formula Recognition:', 'Table Recognition:'. Information extraction uses user-supplied JSON-schema prompts.",
-    "The upstream SDK wraps the model with PP-DocLayoutV3 layout analysis (Apache-2.0); the raw llama-server path serves page-level parsing without that pipeline.",
-    "Greedy decode (temperature 0.0) via the glm-ocr profile; ctx 32768 conservative under the 131072 native ceiling.",
-    "Selection rationale: reports/Best small PDF parsing model.md (benchmarks: olmOCR-Bench + OmniDocBench v1.6).",
-    "Verify size and sha256 locally before flipping provenance_status to verified."
+    "OCR model for Pi pdf_extract; excluded from the general chat picker.",
+    "Download both the language model and multimodal projector before serving. Context is conservatively set to 16384 until local OCR validation.",
+    "Needs a llama-server build with mtmd/mmproj support (set LLAMA_SERVER_BIN in .env).",
+    "Artifact names checked against the ggml-org catalog; local size and SHA256 have not been verified."
   ]
 }

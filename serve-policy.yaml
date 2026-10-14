@@ -22,8 +22,8 @@
       "qwen35-122b-ud-q4k-xl",
       "qwen38-27b-ud-q6k",
       "qwen38-27b-mtp-q4_0",
-      "kev-4b-mlx-8bit",
-      "glm-ocr-q8_0"
+      "glm-ocr-q8_0",
+      "kev-4b-mlx-8bit"
     ],
     "disabled": [],
     "warm": [

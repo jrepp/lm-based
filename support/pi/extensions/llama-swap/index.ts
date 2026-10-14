@@ -71,16 +71,20 @@ export default function llamaSwapStatus(pi: ExtensionAPI) {
 		}
 	};
 
-	pi.on("session_start", async (_event, ctx) => {
-		if (!ctx.hasUI) return;
-		await refresh(ctx);
-		timer ??= setInterval(() => void refresh(ctx), POLL_MS);
-	});
-
-	pi.on("session_shutdown", async () => {
+	const stop = () => {
 		if (timer) clearInterval(timer);
 		timer = undefined;
+	};
+
+	pi.on("session_start", async (_event, ctx) => {
+		// A new, resumed, or forked session hands out a new ctx; the old one goes stale.
+		stop();
+		if (!ctx.hasUI) return;
+		await refresh(ctx);
+		timer = setInterval(() => void refresh(ctx).catch(stop), POLL_MS);
 	});
+
+	pi.on("session_shutdown", async () => stop());
 
 	pi.on("model_select", async (event, ctx) => {
 		if (event.model.provider !== provider || event.source === "restore" || !ctx.hasUI) return;
