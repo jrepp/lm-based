@@ -5,6 +5,7 @@ import json
 import subprocess
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from lm_launcher import pi_bootstrap
@@ -145,10 +146,20 @@ class PiBootstrapTests(unittest.TestCase):
         self.assertFalse(settings["enableInstallTelemetry"])
 
     def test_managed_packages_merge_without_duplicates(self) -> None:
-        managed = (Path("/repo/support/pi/node_modules/pi-subagents"),)
-        merged = pi_bootstrap.merge_packages(["npm:other", str(managed[0])], managed)
+        root = Path("/repo/support/pi")
+        managed = (root / "node_modules" / "pi-subagents",)
+        merged = pi_bootstrap.merge_packages(["npm:other", str(managed[0])], managed, root)
         self.assertEqual(merged, ["npm:other", str(managed[0])])
-        self.assertEqual(pi_bootstrap.merge_packages(None, managed), [str(managed[0])])
+        self.assertEqual(pi_bootstrap.merge_packages(None, managed, root), [str(managed[0])])
+
+    def test_removed_repo_extensions_are_dropped_but_user_entries_kept(self) -> None:
+        root = Path("/repo/support/pi")
+        current = (root / "extensions" / "decide" / "index.ts",)
+        existing = [str(root / "extensions" / "gone" / "index.ts"), "/home/me/my-ext.ts", str(current[0])]
+        self.assertEqual(
+            pi_bootstrap.merge_packages(existing, current, root),
+            ["/home/me/my-ext.ts", str(current[0])],
+        )
 
     def test_no_default_still_registers_packages(self) -> None:
         sidecar = pi_bootstrap.load_sidecars()["ternary-bonsai-27b-mlx-2bit"]
@@ -229,7 +240,8 @@ class PiBootstrapTests(unittest.TestCase):
         state = pi_bootstrap.ServiceState(
             services=frozenset({"llama-swap"}), model_slugs=(), endpoint="http://127.0.0.1:8081/v1"
         )
-        resolved = pi_bootstrap.resolve_sidecars(state, ["kev-4b-mlx-8bit", "qwen36-27b-q6k"], sidecars)
+        api_ids = ["kev-4b-mlx-8bit", "qwen36-27b-q6k"] + (["glm-ocr-q8_0"] if "glm-ocr-q8_0" in sidecars else [])
+        resolved = pi_bootstrap.resolve_sidecars(state, api_ids, sidecars)
         self.assertEqual([sidecar.slug for sidecar in resolved], ["qwen36-27b-q6k"])
 
     def test_no_arguments_prefers_llama_swap_then_falls_back_to_tmux(self) -> None:
@@ -294,6 +306,42 @@ class PiBootstrapTests(unittest.TestCase):
         args, rest = pi_bootstrap.build_parser().parse_known_args(["--mode", "json", "-p", "hi"])
         self.assertIsNone(args.model)
         self.assertEqual(rest, ["--mode", "json", "-p", "hi"])
+
+    def test_live_context_lowers_overstated_profile_for_loaded_models_only(self) -> None:
+        sidecars = pi_bootstrap.load_sidecars()
+        state = pi_bootstrap.ServiceState(
+            services=frozenset({"llama-swap"}), model_slugs=(), endpoint="http://127.0.0.1:8081/v1"
+        )
+        coder, qwen36 = sidecars["qwen3-coder-next-q6k"], sidecars["qwen36-27b-q6k"]
+        probed: list[str] = []
+
+        def probe(url, timeout):
+            probed.append(url)
+            return 262144
+
+        with unittest.mock.patch("sys.stderr", new_callable=io.StringIO):
+            adjusted = pi_bootstrap.apply_live_context(
+                state,
+                (coder, qwen36),
+                {"qwen3-coder-next-q6k": "ready", "qwen36-27b-q6k": "unloaded"},
+                1.0,
+                probe=probe,
+            )
+        self.assertEqual(probed, ["http://127.0.0.1:8081/upstream/qwen3-coder-next-q6k/props"])
+        self.assertEqual(adjusted[0].context_window, min(262144, coder.context_window))
+        self.assertEqual(adjusted[1].context_window, qwen36.context_window)
+
+    def test_live_context_reads_llama_server_props(self) -> None:
+        body = json.dumps({"default_generation_settings": {"n_ctx": 262144}}).encode()
+        self.assertEqual(
+            pi_bootstrap.live_context_window("http://x/props", 1.0, opener=lambda r, timeout: io.BytesIO(body)),
+            262144,
+        )
+
+        def refuse(request, timeout):
+            raise OSError("refused")
+
+        self.assertIsNone(pi_bootstrap.live_context_window("http://x/props", 1.0, opener=refuse))
 
 
 if __name__ == "__main__":

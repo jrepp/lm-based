@@ -164,7 +164,8 @@ export default function decideExtension(pi: ExtensionAPI) {
 					const known = classifiers.map((m) => m.id).join(", ") || "none";
 					throw new Error(
 						`no ${provider} classifier model${modelId ? ` named ${modelId}` : ""} (registered: ${known}); ` +
-							"start Pi with ./pi-local while llama-swap serves a decision model",
+							"start Pi with ./pi-local while llama-swap serves a decision model. " +
+							"Tell the user the decision model is unavailable; do not substitute your own classification.",
 					);
 				}
 
@@ -229,7 +230,12 @@ export default function decideExtension(pi: ExtensionAPI) {
 				const concurrency = Math.min(params.concurrency ?? DEFAULT_CONCURRENCY, selected.length);
 				await Promise.all(Array.from({ length: concurrency }, worker));
 
-				if (fatal) throw new Error(`decision model ${model.id} failed on every request: ${fatal}`);
+				if (fatal) {
+					throw new Error(
+						`decision model ${model.id} failed on every request: ${fatal}. ` +
+							"Report this to the user; do not substitute your own classification.",
+					);
+				}
 				const finished = results.filter(Boolean);
 				const questionIds = Object.keys(questions);
 

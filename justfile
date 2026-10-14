@@ -47,6 +47,10 @@ pi-install:
 pi-link dir="~/.local/bin":
     @mkdir -p {{dir}} && ln -sfn "{{justfile_directory()}}/pi-local" {{dir}}/pi-local && ls -l {{dir}}/pi-local
 
+# Symlink the repo's user-facing entry points onto PATH
+install dir="$HOME/.local/bin":
+    @mkdir -p {{dir}} && for entry in pi-local opencode-local up; do ln -sfn "{{justfile_directory()}}/$entry" "{{dir}}/$entry"; done && ls -l {{dir}}/pi-local {{dir}}/opencode-local {{dir}}/up
+
 # Test the repo Pi extensions' pure modules
 pi-test:
     @node --test support/pi/extensions/decide/records.test.ts
