@@ -206,9 +206,11 @@ class ServerSettings(BaseSettings):
                 projector = Path(recommended_env["MMPROJ"])
                 if not projector.is_absolute():
                     project_relative = _PROJECT_ROOT / projector
+                    artifacts_relative = self.model_dir / projector
                     projector = (
-                        project_relative if project_relative.exists()
-                        else self.model_dir / projector
+                        artifacts_relative
+                        if not project_relative.exists() and artifacts_relative.exists()
+                        else project_relative
                     )
                 self.mmproj = projector
 

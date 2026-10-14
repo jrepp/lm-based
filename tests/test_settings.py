@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 try:
     from lm_launcher.settings import ServerSettings
@@ -65,6 +66,29 @@ class ServerSettingsModelIndexTests(unittest.TestCase):
         # config.json is the directory anchor; mlx_lm serves its parent.
         self.assertEqual(settings.model_path.name, "config.json")
         self.assertEqual(settings.model_path.parent.name, "Ternary-Bonsai-27B-MLX-2bit")
+
+    def test_projector_path_with_and_without_local_artifacts(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        filename = "mmproj-GLM-OCR-Q8_0.gguf"
+        project_path = root / filename
+        artifact_path = root / "artifacts" / filename
+        original_exists = Path.exists
+        for existing, expected in [
+            (set(), project_path),
+            ({project_path}, project_path),
+            ({artifact_path}, artifact_path),
+            ({project_path, artifact_path}, project_path),
+        ]:
+            with self.subTest(existing=existing):
+                def exists(path):
+                    return path in existing if path.name == filename else original_exists(path)
+
+                with patch.object(Path, "exists", exists), patch.dict("os.environ", {}, clear=True):
+                    settings = ServerSettings(
+                        _env_file=None, model_slug="glm-ocr-q8_0",
+                        model_dir=root / "artifacts", enable_run_capture=False,
+                    )
+                self.assertEqual(settings.mmproj, expected)
 
 
 if __name__ == "__main__":
