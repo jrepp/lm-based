@@ -1,4 +1,6 @@
 default_install_hook_types: [pre-commit, pre-push]
+# Hooks run at commit time unless they opt into another stage (branch-not-merged).
+default_stages: [pre-commit]
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
