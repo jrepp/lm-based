@@ -14,6 +14,8 @@ def infer_profile(model_name: str, requested: str) -> str:
     lowered = model_name.lower()
     if "qwen3-coder-next" in lowered:
         return "qwen3-coder-next"
+    if "glm-ocr" in lowered:
+        return "glm-ocr"
     if "kev" in lowered:
         return "mlx-kev"
     if "qwen3-coder-480b" in lowered:
@@ -98,6 +100,20 @@ def profile_defaults(profile: str, model_name: str) -> dict[str, object]:
                 "min_p": 0.0,
                 "cache_type_k": "q4_0",
                 "cache_type_v": "q4_0",
+            }
+        )
+
+    if profile == "glm-ocr":
+        # GLM-OCR (0.9B vision document parser, glm4 arch + mmproj). Greedy
+        # decode is the standard for OCR; prompts are task strings like
+        # "Text Recognition:" sent with a page image. ctx held well below the
+        # 131072 native ceiling until measured.
+        defaults.update(
+            {
+                "ctx_size": 32768,
+                "temperature": 0.0,
+                "batch_size": 1024,
+                "ubatch_size": 256,
             }
         )
 

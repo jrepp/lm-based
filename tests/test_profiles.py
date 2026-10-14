@@ -5,6 +5,16 @@ import unittest
 from lm_launcher.profiles import infer_profile, profile_defaults
 
 
+class GlmOcrProfileTests(unittest.TestCase):
+    def test_infer_profile_from_model_name(self) -> None:
+        self.assertEqual(infer_profile("GLM-OCR-Q8_0.gguf", "auto"), "glm-ocr")
+
+    def test_profile_defaults_greedy_and_conservative_context(self) -> None:
+        defaults = profile_defaults("glm-ocr", "GLM-OCR-Q8_0.gguf")
+        self.assertEqual(defaults["ctx_size"], 32768)
+        self.assertEqual(defaults["temperature"], 0.0)
+
+
 class MlxBonsaiProfileTests(unittest.TestCase):
     def test_infer_profile_from_model_name(self) -> None:
         self.assertEqual(

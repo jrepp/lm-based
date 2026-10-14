@@ -63,6 +63,7 @@ def build_args(settings: ServerSettings) -> list[str]:
     add_arg(args, "--min-p", settings.min_p)
     add_arg(args, "--presence-penalty", settings.presence_penalty)
     add_arg(args, "--repeat-penalty", settings.repetition_penalty)
+    add_arg(args, "--mmproj", settings.mmproj)
     add_arg(args, "--rope-scaling", settings.rope_scaling)
     add_arg(args, "--rope-scale", settings.rope_scale)
     add_arg(args, "--rope-freq-base", settings.rope_freq_base)
@@ -128,6 +129,7 @@ def print_startup(settings: ServerSettings) -> None:
         f"rep_guard={'on' if settings.enable_repetition_guard else 'off'}"
     )
     print(f"  kv:    {settings.cache_type_k}/{settings.cache_type_v}")
+    print(f"  vis:   mmproj={settings.mmproj or 'none'}")
     print(f"  ngl:   {settings.gpu_layers}")
     print(f"  moe:   cpu={'on' if settings.cpu_moe else 'off'} first_n={settings.n_cpu_moe or '0'}")
     print(

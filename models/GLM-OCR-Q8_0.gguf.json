@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-10-13",
+  "artifact": {
+    "filename": "GLM-OCR-Q8_0.gguf",
+    "local_path": "GLM-OCR-Q8_0.gguf",
+    "format": "gguf",
+    "quantization": "Q8_0",
+    "size_bytes": null,
+    "sha256": null
+  },
+  "model": {
+    "slug": "glm-ocr-q8_0",
+    "family": "GLM-OCR",
+    "name": "GLM-OCR",
+    "canonical_model_card": "https://huggingface.co/zai-org/GLM-OCR"
+  },
+  "source": {
+    "gguf_model_card": "https://huggingface.co/ggml-org/GLM-OCR-GGUF",
+    "publisher": "ggml-org",
+    "provenance_status": "planned_download"
+  },
+  "download": {
+    "provider": "huggingface",
+    "repo_id": "ggml-org/GLM-OCR-GGUF",
+    "filenames": [
+      "GLM-OCR-Q8_0.gguf",
+      "mmproj-GLM-OCR-Q8_0.gguf"
+    ],
+    "revision": null
+  },
+  "launcher": {
+    "script": "/Users/jrepp/d/lm-based/run-server.py",
+    "profile": "glm-ocr",
+    "recommended_env": {
+      "MODEL_FILE": "GLM-OCR-Q8_0.gguf",
+      "MMPROJ": "mmproj-GLM-OCR-Q8_0.gguf",
+      "PROFILE": "glm-ocr",
+      "LLAMA_SERVER_BIN": "/Users/jrepp/d/llama.cpp/build/bin/llama-server"
+    }
+  },
+  "notes": [
+    "0.9B document-parsing vision model (CogViT encoder + GLM-0.5B decoder, glm4 arch); MIT license; OmniDocBench V1.5 94.62 (#1 at release), olmOCR-Bench 75.2.",
+    "Served via llama-server --mmproj (ggml-org official Q8_0 weights + Q8_0 mmproj projector, ~1.8GB total); LLAMA_SERVER_BIN pinned to the local build verified for mtmd/mmproj support.",
+    "Task prompts are plain strings sent with a page image: 'Text Recognition:', 'Formula Recognition:', 'Table Recognition:'. Information extraction uses user-supplied JSON-schema prompts.",
+    "The upstream SDK wraps the model with PP-DocLayoutV3 layout analysis (Apache-2.0); the raw llama-server path serves page-level parsing without that pipeline.",
+    "Greedy decode (temperature 0.0) via the glm-ocr profile; ctx 32768 conservative under the 131072 native ceiling.",
+    "Selection rationale: reports/Best small PDF parsing model.md (benchmarks: olmOCR-Bench + OmniDocBench v1.6).",
+    "Verify size and sha256 locally before flipping provenance_status to verified."
+  ]
+}
