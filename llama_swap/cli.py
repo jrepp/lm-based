@@ -33,6 +33,14 @@ def cmd_config(argv: list[str]) -> int:
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     cfg = build_config(PROJECT_ROOT / "models")
+    if cfg.skipped:
+        print(
+            f"note: skipping enabled models that are not downloaded: {', '.join(cfg.skipped)}\n"
+            "      fetch them with: ./up pull",
+            file=sys.stderr,
+        )
+    if not cfg.models:
+        print("warning: no enabled model is downloaded; llama-swap will serve nothing", file=sys.stderr)
     if args.yaml:
         print(config_to_yaml(cfg))
     else:

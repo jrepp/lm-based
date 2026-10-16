@@ -9,6 +9,9 @@ from pathlib import Path
 
 from huggingface_hub import hf_hub_download, snapshot_download
 
+from lm_launcher.artifacts import artifact_present, artifacts_dir
+from lm_launcher.policy import enabled_slugs, load_policy
+
 
 ROOT = Path(__file__).resolve().parent
 INDEX_DIR = ROOT / "models"
@@ -48,11 +51,15 @@ def resolve_record(records: list[dict], selector: str) -> dict:
 
 
 def list_models(records: list[dict]) -> None:
+    enabled = set(enabled_slugs(load_policy()))
     for record in records:
         artifact = record["artifact"]
         model = record["model"]
         download = record.get("download", {})
-        print(record_slug(record) or record_id(record))
+        state = "downloaded" if artifact_present(record, ROOT) else "not downloaded"
+        if record_slug(record) in enabled:
+            state += ", enabled"
+        print(f"{record_slug(record) or record_id(record)}  [{state}]")
         print(f"  model:      {model.get('name')}")
         print(f"  selector:   {record_slug(record) or 'n/a'}")
         print(f"  repo:       {download.get('repo_id', 'n/a')}")
@@ -82,20 +89,20 @@ def download_record(record: dict, output_dir: Path | None, token: str | None) ->
     elif explicit_local_dir:
         local_dir = Path(explicit_local_dir)
         if not local_dir.is_absolute():
-            local_dir = ROOT / local_dir
+            local_dir = artifacts_dir(ROOT) / local_dir
+    elif local_path.is_absolute():
+        local_dir = local_path.parent
     elif is_snapshot and artifact.get("format") != "gguf":
         # Snapshot anchors (config.json / weight index) live at the Hub repo
         # root, inside a dedicated local model directory. Never download their
-        # README, tokenizer and config into the project root.
-        local_dir = (ROOT / local_path).parent
-    elif local_path.is_absolute():
-        local_dir = local_path.parent
+        # README, tokenizer and config into the artifacts root.
+        local_dir = (artifacts_dir(ROOT) / local_path).parent
     else:
-        # local_path is project-root-relative. hf_hub_download/snapshot_download
+        # local_path is relative to artifacts/. hf_hub_download/snapshot_download
         # recreate the repo-relative filename (including subfolders such as
         # Q6_K/ or MTP/) underneath local_dir, so the destination must be the
-        # project root for the artifact to land at local_path.
-        local_dir = ROOT
+        # artifacts root for the artifact to land at local_path.
+        local_dir = artifacts_dir(ROOT)
 
     if is_snapshot:
         allow_patterns = download.get("allow_patterns")
@@ -126,6 +133,20 @@ def download_record(record: dict, output_dir: Path | None, token: str | None) ->
     return paths
 
 
+def download_enabled(records: list[dict], token: str | None) -> None:
+    slugs = enabled_slugs(load_policy())
+    if not slugs:
+        raise SystemExit("serve-policy enables no models; run ./up init first.")
+    for slug in slugs:
+        record = resolve_record(records, slug)
+        if artifact_present(record, ROOT):
+            print(f"{slug}: already downloaded")
+            continue
+        print(f"{slug}: downloading from {record.get('download', {}).get('repo_id', '?')}", flush=True)
+        for path in download_record(record, None, token):
+            print(f"  {path}")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Download a model selectively from the local model index."
@@ -138,6 +159,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model",
         help="Model selector. Accepts slug, indexed filename, local path, or model name.",
+    )
+    parser.add_argument(
+        "--enabled",
+        action="store_true",
+        help="Download every model enabled in serve-policy that is not on disk yet.",
     )
     parser.add_argument(
         "--output-dir",
@@ -155,11 +181,15 @@ def main() -> None:
         list_models(records)
         return
 
+    token = os.getenv("HF_TOKEN")
+    if args.enabled:
+        download_enabled(records, token)
+        return
+
     selector = args.model or os.getenv("MODEL_SELECTOR")
     if not selector:
-        raise SystemExit("Pass --model <selector> or use --list to inspect available entries.")
+        raise SystemExit("Pass --model <selector>, --enabled, or --list to inspect available entries.")
 
-    token = os.getenv("HF_TOKEN")
     record = resolve_record(records, selector)
     paths = download_record(record, args.output_dir, token)
     for path in paths:

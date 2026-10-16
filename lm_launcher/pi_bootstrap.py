@@ -16,6 +16,8 @@ from urllib.parse import urlparse
 from typing import Any, Callable
 
 from lm_launcher import pi_run, taxdesk_broker
+from lm_launcher.artifacts import resolve_artifact
+from lm_launcher.model_identity import acceptable_model_ids
 from lm_launcher.pi_run import RUN_DIR_NAME, RunContext
 from lm_launcher.profiles import profile_defaults
 from lm_launcher.service_endpoints import swap_api_base
@@ -199,7 +201,7 @@ def load_sidecars(models_dir: Path = ROOT / "models") -> dict[str, Sidecar]:
             # The launcher caps the served context at the model's native window too.
             context_window = min(context_window, native)
         local_path = Path(str(artifact.get("local_path") or ""))
-        artifact_path = (ROOT / local_path).resolve()
+        artifact_path = resolve_artifact(local_path, ROOT).resolve()
         notes = tuple(note for note in data.get("notes", []) if isinstance(note, str))
         sidecars[slug] = Sidecar(
             slug=slug,
@@ -391,6 +393,9 @@ def api_id_matches_sidecar(api_id: str, sidecar: Sidecar) -> bool:
     defaults = profile_defaults(sidecar.profile, sidecar.name)
     aliases = {sidecar.slug, sidecar.name, str(defaults.get("alias") or "")}
     if api_id in aliases:
+        return True
+    # mlx_lm reports the model directory it was started with: project root or artifacts/.
+    if api_id in acceptable_model_ids(ROOT / "models", sidecar.slug, ROOT):
         return True
     api_path = Path(api_id).expanduser()
     artifact_root = sidecar.artifact_path if sidecar.artifact_path.is_dir() else sidecar.artifact_path.parent

@@ -17,16 +17,23 @@ import json
 import os
 from pathlib import Path
 
+from lm_launcher.artifacts import artifacts_dir
 
-def _model_dir_abs(repo_root: str, local_path: str) -> str:
-    """Absolute path of the model directory a backend is pointed at.
+
+def _model_dirs_abs(repo_root: str, local_path: str) -> list[str]:
+    """Absolute paths a backend may have been pointed at for this model directory.
 
     ``local_path`` is the sidecar's artifact anchor (a file inside the model
     dir, e.g. ``.../config.json`` or ``.../model.safetensors.index.json``); the
-    served directory is its parent.
+    served directory is its parent, under the project root (older downloads)
+    or ``artifacts/``.
     """
     model_dir = os.path.dirname(local_path) or "."
-    return os.path.normpath(os.path.join(repo_root, model_dir))
+    root = Path(repo_root)
+    return [
+        os.path.normpath(os.path.join(repo_root, model_dir)),
+        os.path.normpath(os.path.join(str(artifacts_dir(root)), model_dir)),
+    ]
 
 
 def acceptable_model_ids(
@@ -53,9 +60,9 @@ def acceptable_model_ids(
             continue
         local_path = record.get("artifact", {}).get("local_path") or ""
         if local_path:
-            abs_dir = _model_dir_abs(root, local_path)
-            ids.append(abs_dir)
-            ids.append(os.path.basename(abs_dir))
+            for abs_dir in _model_dirs_abs(root, local_path):
+                ids.append(abs_dir)
+                ids.append(os.path.basename(abs_dir))
         break
 
     # de-duplicate while preserving order

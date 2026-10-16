@@ -109,7 +109,7 @@ backend's filesystem identity. The internal llama-swap address comes from
 
 ## Refresh the hot set
 
-After changing `models.enabled` in `serve-policy.yaml`, reconcile or restart the routed
+After changing `models.enabled` in `serve-policy.local.yaml` (or the tracked default), reconcile or restart the routed
 service and rerun the bootstrap:
 
 ```bash

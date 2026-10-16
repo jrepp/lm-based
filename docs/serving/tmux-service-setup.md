@@ -56,7 +56,10 @@ started outside the tmux session.
 
 ## Target Types
 
-`./up` accepts three kinds of target.
+`./up` accepts three kinds of target; with none it starts `swap`. The setup commands
+`./up init`, `./up doctor`, and `./up pull` are not targets (see the README quickstart).
+Without tmux, `./up <target> --foreground` runs the target's main service (llama-swap or
+the model worker) in the current terminal.
 
 ### Service sets
 
@@ -64,12 +67,12 @@ Service sets expand to multiple services and their dependencies:
 
 | Set | Services |
 | --- | --- |
-| `core` | stats poller, dashboard, status window |
-| `direct` | direct default model worker, stats poller, dashboard, status window |
-| `observability` | stats poller, dashboard |
-| `manager` | stats poller, dashboard, status window |
-| `swap` | llama-swap, stats poller, dashboard, status window |
-| `all` | same as `swap` for now |
+| `swap` | llama-swap (the default target; needs no Go) |
+| `direct` | direct worker for `MODEL_SLUG` from the environment or `.env` |
+| `observability` | stats poller, dashboard, status window (Go) |
+| `all` | `swap` plus `observability` |
+
+Add observability beside a running target with `./up observability --add`.
 
 ### Service names
 
@@ -98,15 +101,9 @@ Any slug found in `models/*.json` can be used as a target:
 ./up qwen36-27b-mtp-ud-q5k-xl
 ```
 
-The supporting windows are backend-aware:
-
-- GGUF models start the llama-server stats poller and dashboard.
-- MLX models start the sampler-defaults proxy.
-- Other non-GGUF backends start only their direct worker unless they expose a supported
-  observability API.
-
-The stats poller is intentionally limited to llama-server because it consumes the
-llama.cpp-specific `/metrics` and `/slots` endpoints.
+MLX models also start the sampler-defaults proxy. For a GGUF worker, add the stats poller
+and dashboard with `./up observability --add`. The poller only works with llama-server,
+because it reads the llama.cpp-specific `/metrics` and `/slots` endpoints.
 
 ## Window Model
 

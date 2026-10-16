@@ -14,7 +14,7 @@ Current design direction:
 | [architecture-overview.md](architecture-overview.md) | High-level target architecture and ASCII diagram: supervisor, `llama-swap`, `run-server.py`, sidecars, stats, and routing layers |
 | [edge-proxy-haproxy.md](edge-proxy-haproxy.md) | HAProxy as the stable edge proxy in front of `llama-swap` |
 | [observability-architecture.md](observability-architecture.md) | Vector + Prometheus telemetry model for supervisor, proxy, swap layer, and workers |
-| [config-schema-v1.md](config-schema-v1.md) | Initial schemas for `serve-policy.yaml` and `host-capabilities.yaml` |
+| [config-schema-v1.md](config-schema-v1.md) | Initial schemas for `serve-policy.yaml` and the planned (not implemented) `host-capabilities.yaml` |
 | [lifecycle-sequences.md](lifecycle-sequences.md) | Startup, plan, apply, reload, drain, and stop sequence flows |
 | [porting-map-v1.md](porting-map-v1.md) | Responsibility-by-responsibility migration map from Python control paths to Go supervision |
 | [implementation-backlog-v1.md](implementation-backlog-v1.md) | Milestones, epics, rollback points, and completion criteria for the migration |

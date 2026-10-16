@@ -154,11 +154,16 @@ Fields:
 - `allow_non_gguf`
   whether non-GGUF models are allowed into the managed serving plane
 - `require_local_artifact`
-  whether models without a local artifact must fail validation
+  whether models without a local artifact must fail validation. The llama-swap
+  config generator also uses it to leave undownloaded models out.
 - `fail_apply_on_missing_model`
   whether apply should fail if an enabled slug cannot be materialized
 
 ## File 2: `host-capabilities.yaml`
+
+> Not implemented. serve-manager never used it, so the tracked file was removed.
+> Host checks live in `./up doctor` and `just host-doctor`, and host-specific
+> serving choices go in `serve-policy.local.yaml`.
 
 ### Host Purpose
 

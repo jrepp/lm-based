@@ -13,7 +13,7 @@ from lm_launcher.settings import ServerSettings
 
 class OcrServingTests(unittest.TestCase):
     def test_default_ocr_is_configured_and_group_members_exist(self):
-        cfg = build_config()
+        cfg = build_config(require_artifacts=False)  # CI has no weights
         self.assertIn("glm-ocr-q8_0", cfg.models)
         for group in cfg.routing["router"]["settings"]["groups"].values():
             for member in group["members"]:

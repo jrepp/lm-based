@@ -73,28 +73,6 @@ type RuntimePolicy struct {
 	FailApplyOnMissingModel bool `json:"fail_apply_on_missing_model"`
 }
 
-type HostCapabilities struct {
-	APIVersion string `json:"api_version"`
-	Host       struct {
-		ID    string `json:"id"`
-		Class string `json:"class"`
-	} `json:"host"`
-	Backends struct {
-		Supported []string          `json:"supported"`
-		Preferred map[string]string `json:"preferred"`
-	} `json:"backends"`
-	Limits struct {
-		MemoryClass                    string `json:"memory_class"`
-		Accelerator                    string `json:"accelerator"`
-		SupportsLargeBF16              bool   `json:"supports_large_bf16"`
-		SupportsLongContextHeavyModels string `json:"supports_long_context_heavy_models"`
-	} `json:"limits"`
-	Profiles struct {
-		Excluded  []string `json:"excluded"`
-		Preferred []string `json:"preferred"`
-	} `json:"profiles"`
-}
-
 type ModelRecord struct {
 	Artifact struct {
 		Filename     string `json:"filename"`
@@ -266,7 +244,6 @@ func runDoctor(paths runtimePaths, args []string) int {
 		note string
 	}{
 		{"serve-policy", true, filepath.Join(paths.projectRoot, "serve-policy.yaml")},
-		{"host-capabilities", true, filepath.Join(paths.projectRoot, "host-capabilities.yaml")},
 		{"run-server", fileExists(filepath.Join(paths.projectRoot, "run-server.py")), filepath.Join(paths.projectRoot, "run-server.py")},
 		{"haproxy", lookPath("haproxy") != "", "required for apply"},
 	}
@@ -576,11 +553,6 @@ func buildAndWritePlan(paths runtimePaths, mode string) (GenerationPlan, Validat
 	if err != nil {
 		return GenerationPlan{}, ValidationResult{}, "", err
 	}
-	capabilities, err := loadHostCapabilities(filepath.Join(paths.projectRoot, "host-capabilities.yaml"))
-	if err != nil {
-		return GenerationPlan{}, ValidationResult{}, "", err
-	}
-	_ = capabilities
 	records, err := loadModelRecords(filepath.Join(paths.projectRoot, "models"))
 	if err != nil {
 		return GenerationPlan{}, ValidationResult{}, "", err
@@ -611,9 +583,9 @@ func buildAndWritePlan(paths runtimePaths, mode string) (GenerationPlan, Validat
 	}); err != nil {
 		return GenerationPlan{}, ValidationResult{}, "", err
 	}
+	hostID, _ := os.Hostname()
 	if err := writeJSON(filepath.Join(paths.runtimeRoot, "observed.json"), map[string]any{
-		"host_id":     capabilities.Host.ID,
-		"host_class":  capabilities.Host.Class,
+		"host_id":     hostID,
 		"planned_at":  time.Now().UTC().Format(time.RFC3339),
 		"models_seen": len(records),
 		"mode":        mode,
@@ -705,20 +677,48 @@ func resolvePlan(paths runtimePaths, policy ServePolicy, records []ModelRecord, 
 	}, validation
 }
 
+// loadServePolicy reads serve-policy.yaml and merges serve-policy.local.yaml over it
+// when present: objects merge key by key, other values (lists included) replace.
+// This matches lm_launcher/policy.py.
 func loadServePolicy(path string) (ServePolicy, error) {
+	var base map[string]any
+	if err := loadJSON(path, &base); err != nil {
+		return ServePolicy{}, err
+	}
+	localPath := strings.TrimSuffix(path, filepath.Ext(path)) + ".local" + filepath.Ext(path)
+	if fileExists(localPath) {
+		var overlay map[string]any
+		if err := loadJSON(localPath, &overlay); err != nil {
+			return ServePolicy{}, fmt.Errorf("%s: %w", localPath, err)
+		}
+		base = mergePolicy(base, overlay)
+	}
+	data, err := json.Marshal(base)
+	if err != nil {
+		return ServePolicy{}, err
+	}
 	var policy ServePolicy
-	if err := loadJSON(path, &policy); err != nil {
+	if err := json.Unmarshal(data, &policy); err != nil {
 		return ServePolicy{}, err
 	}
 	return policy, nil
 }
 
-func loadHostCapabilities(path string) (HostCapabilities, error) {
-	var capabilities HostCapabilities
-	if err := loadJSON(path, &capabilities); err != nil {
-		return HostCapabilities{}, err
+func mergePolicy(base, overlay map[string]any) map[string]any {
+	merged := make(map[string]any, len(base))
+	for key, value := range base {
+		merged[key] = value
 	}
-	return capabilities, nil
+	for key, value := range overlay {
+		baseChild, baseIsMap := merged[key].(map[string]any)
+		overlayChild, overlayIsMap := value.(map[string]any)
+		if baseIsMap && overlayIsMap {
+			merged[key] = mergePolicy(baseChild, overlayChild)
+		} else {
+			merged[key] = value
+		}
+	}
+	return merged
 }
 
 func loadJSON(path string, out any) error {

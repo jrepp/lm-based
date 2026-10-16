@@ -12,6 +12,9 @@
 clawrouter.json
 llama-swap.yaml
 
+# Host-local serving policy (written by ./up init, merged over serve-policy.yaml)
+serve-policy.local.yaml
+
 # Runtime artifacts
 artifacts/
 runs/
@@ -19,7 +22,7 @@ runs/
 /serve-manager
 /-
 
-# Local Hugging Face snapshots (large model directories)
+# Model files downloaded to the project root before downloads moved to artifacts/
 /Qwen2.5-Coder-7B-Instruct/
 /Qwen3.6-27B/
 /Ternary-Bonsai-27B-MLX-2bit/

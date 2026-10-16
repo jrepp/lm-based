@@ -1,41 +1,19 @@
-# qwen — local LLM infrastructure
+# lm-based — local LLM infrastructure
 # Run `just` to see available targets
 
-# ─── book ─────────────────────────────────────────────────────────────────────
+# ─── setup ────────────────────────────────────────────────────────────────────
 
-# Build the Practical Embeddings PDF book
-book:
-    @./scripts/build_book.sh
+# Size a starter model set to this host (writes serve-policy.local.yaml)
+init:
+    @./up init
 
-# Build book with a specific version
-book-version VERSION:
-    @./scripts/build_book.sh {{ VERSION }}
+# Check prerequisites, downloaded models, and memory
+doctor:
+    @./up doctor
 
-# Bump patch version and build
-book-patch:
-    @./scripts/build_book.sh bump-patch
-
-# Bump minor version and build
-book-minor:
-    @./scripts/build_book.sh bump-minor
-
-# Build book and open the PDF
-book-open: book
-    @open pdf-releases/Practical-Embeddings-latest.pdf 2>/dev/null || \
-     xdg-open pdf-releases/Practical-Embeddings-latest.pdf 2>/dev/null || \
-     echo "PDF ready: pdf-releases/Practical-Embeddings-latest.pdf"
-
-# Remove LaTeX build artifacts
-book-clean:
-    @./scripts/build_book.sh --clean
-
-# Check that LaTeX (xelatex) is installed
-book-check:
-    @./scripts/build_book.sh --check
-
-# List built PDFs
-book-list:
-    @ls -lh pdf-releases/*.pdf 2>/dev/null || echo "No PDFs yet — run: just book"
+# Download the enabled models that are missing
+pull:
+    @./up pull
 
 # ─── pi ───────────────────────────────────────────────────────────────────────
 
@@ -77,13 +55,13 @@ swap-config:
 swap-config-yaml:
     @uv run --script llama-swap-runner.py config --yaml
 
-# Start llama-swap proxy (background)
+# Start llama-swap in the lm-based tmux session (./up --foreground runs it in this terminal)
 swap-start:
-    @uv run --script llama-swap-runner.py start &
+    @./up swap
 
-# Stop llama-swap proxy
+# Stop the lm-based tmux session
 swap-stop:
-    @pkill -f "llama-swap" || true
+    @./up --down
 
 # Show running models
 swap-status:

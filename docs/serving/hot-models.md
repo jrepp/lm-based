@@ -34,10 +34,13 @@ llama-swap.yaml                      <-- only hot models present
 llama-swap :8081/v1/models           <-- clients dynamically query hot models
 ```
 
-`llama_swap/config.py:build_config` reads `serve-policy.yaml` and includes only
-the `enabled` slugs when generating `llama-swap.yaml`. If there is no policy or
-no `enabled` list, no filter is applied (every model is included) — so the hot
-filter is opt-in via the policy.
+`llama_swap/config.py:build_config` reads the effective policy
+(`serve-policy.yaml` with `serve-policy.local.yaml` merged over it) and includes
+only the `enabled` slugs when generating `llama-swap.yaml`. If there is no policy
+or no `enabled` list, no filter is applied (every model is included), so the hot
+filter is opt-in through the policy. With `policy.require_local_artifact`,
+enabled models whose weights are not downloaded are left out too, and dropped
+from routing groups.
 
 Because `llama-swap.yaml` contains only hot models, the proxy's
 `/v1/models` endpoint returns exactly the hot set. That is the **dynamic
@@ -46,7 +49,8 @@ with no hardcoded list.
 
 ## Declaring the hot set
 
-Edit `serve-policy.yaml`:
+Edit `serve-policy.local.yaml` (gitignored, written by `./up init`). Lists replace
+the tracked default's lists, so give the whole set:
 
 ```json
 {
@@ -66,7 +70,7 @@ Then regenerate and restart the proxy:
 
 ```bash
 ./llama-swap-runner.py config     # rewrite llama-swap.yaml from the hot set
-./llama-swap-runner.py start      # (or ./up swap to bring up the whole set)
+./llama-swap-runner.py start      # (or ./up swap --restart in the tmux session)
 ```
 
 Only slugs that resolve to a real sidecar are emitted; an enabled slug with no
