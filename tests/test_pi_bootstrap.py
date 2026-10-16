@@ -352,8 +352,26 @@ class PiBootstrapTests(unittest.TestCase):
                 probe=probe,
             )
         self.assertEqual(probed, ["http://127.0.0.1:8081/upstream/qwen3-coder-next-q6k/props"])
-        self.assertEqual(adjusted[0].context_window, min(262144, coder.context_window))
+        self.assertEqual(
+            adjusted[0].context_window,
+            min(262144 - pi_bootstrap.CONTEXT_HEADROOM_TOKENS, coder.context_window),
+        )
         self.assertEqual(adjusted[1].context_window, qwen36.context_window)
+
+    def test_live_context_reserves_headroom_even_when_live_matches_profile(self) -> None:
+        sidecar = pi_bootstrap.load_sidecars()["qwen3-coder-next-q6k"]
+        state = pi_bootstrap.ServiceState(
+            services=frozenset({"llama-swap"}), model_slugs=(), endpoint="http://127.0.0.1:8081/v1"
+        )
+        with unittest.mock.patch("sys.stderr", new_callable=io.StringIO):
+            (adjusted,) = pi_bootstrap.apply_live_context(
+                state,
+                (sidecar,),
+                {sidecar.slug: "ready"},
+                1.0,
+                probe=lambda url, timeout: sidecar.context_window,
+            )
+        self.assertEqual(adjusted.context_window, sidecar.context_window - pi_bootstrap.CONTEXT_HEADROOM_TOKENS)
 
     def test_live_context_reads_llama_server_props(self) -> None:
         body = json.dumps({"default_generation_settings": {"n_ctx": 262144}}).encode()
@@ -368,15 +386,18 @@ class PiBootstrapTests(unittest.TestCase):
         self.assertIsNone(pi_bootstrap.live_context_window("http://x/props", 1.0, opener=refuse))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class SandboxLaunchTests(unittest.TestCase):
     def _plan(self, endpoint: str = "http://127.0.0.1:8081/v1") -> pi_bootstrap.BootstrapPlan:
         return pi_bootstrap.BootstrapPlan(
             provider="lm-based", endpoint=endpoint, models=(), selected_model="qwen36-27b-q6k",
         )
+
+    def setUp(self) -> None:
+        self._gateway = pi_bootstrap.os.environ.pop("LM_BASED_SANDBOX_GATEWAY", None)
+
+    def tearDown(self) -> None:
+        if self._gateway is not None:
+            pi_bootstrap.os.environ["LM_BASED_SANDBOX_GATEWAY"] = self._gateway
 
     def test_render_sandbox_policy_targets_gateway_for_node_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -389,23 +410,30 @@ class SandboxLaunchTests(unittest.TestCase):
             self.assertIn(pi_bootstrap.SANDBOX_NODE_BIN, text)
             self.assertNotIn("host.openshell.internal", text)
 
-    def test_sandbox_agent_dir_rewrites_loopback_to_gateway(self) -> None:
+    def test_sandbox_agent_dir_rewrites_loopback_and_repo_paths_for_the_vm(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "agent"
             source.mkdir()
             (source / "models.json").write_text(json.dumps({
                 "providers": {"lm-based": {"baseUrl": "http://127.0.0.1:8081/v1"}}
             }))
-            args = unittest.mock.Mock()
-            args.agent_dir = source
-            import os as _os
-            _os.environ.pop("LM_BASED_SANDBOX_GATEWAY", None)
+            (source / "settings.json").write_text(json.dumps({
+                "packages": [str(pi_bootstrap.PI_PACKAGES[0])],
+                "extensions": [str(pi_bootstrap.PI_EXTENSIONS[2])],
+            }))
+            args = unittest.mock.Mock(agent_dir=source)
             dest = pi_bootstrap.sandbox_agent_dir(args, self._plan())
             models = json.loads((dest / "models.json").read_text())
             self.assertEqual(
                 models["providers"]["lm-based"]["baseUrl"],
                 f"http://{pi_bootstrap.DEFAULT_SANDBOX_GATEWAY}:8081/v1",
             )
+            settings = json.loads((dest / "settings.json").read_text())
+            self.assertEqual(settings["extensions"], ["/sandbox/support/pi/extensions/decide/index.ts"])
+            self.assertEqual(
+                settings["packages"], ["/sandbox/support/pi/node_modules/@narumitw/pi-goal"]
+            )
+            self.assertNotIn(str(pi_bootstrap.ROOT), (dest / "settings.json").read_text())
 
 
 class SandboxTaxdeskTests(unittest.TestCase):
@@ -485,3 +513,7 @@ class SandboxTaxdeskTests(unittest.TestCase):
         self.assertIsNone(pi_bootstrap.start_taxdesk_broker(unittest.mock.Mock(no_taxdesk=True), run))
         with unittest.mock.patch.object(pi_bootstrap.taxdesk_broker, "find_binary", return_value=None):
             self.assertIsNone(pi_bootstrap.start_taxdesk_broker(unittest.mock.Mock(no_taxdesk=False), run))
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -68,6 +68,10 @@ SANDBOX_TIMEOUT_STATE = 180    # create/policy/extract/npm-ci state changes
 SANDBOX_TIMEOUT_TRANSFER = 600  # workspace and node-tarball uploads
 SANDBOX_LAUNCH_BUDGET = 900    # wall clock for all provisioning combined
 ZERO_COST = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}
+# Pi estimates prompt tokens with its own tokenizer and llama-server counts the same
+# prompt slightly higher, so reserve headroom under the server's hard n_ctx; otherwise
+# a request can land a few tokens over and llama-server rejects it with 400.
+CONTEXT_HEADROOM_TOKENS = 2048
 
 
 class BootstrapError(RuntimeError):
@@ -368,7 +372,9 @@ def apply_live_context(
     Profiles state the requested --ctx-size; llama-server can allocate less (for example
     when it caps at the model's training context). Pi compacts based on contextWindow, so
     an overstated value lets requests overflow. Only loaded models are probed: asking
-    llama-swap about an unloaded one would start it.
+    llama-swap about an unloaded one would start it. The live value keeps
+    CONTEXT_HEADROOM_TOKENS of slack because Pi's token estimate can trail llama-server's
+    count by a few tokens on a full window.
     """
     adjusted: list[Sidecar] = []
     for sidecar in sidecars:
@@ -378,13 +384,15 @@ def apply_live_context(
         elif swap_states is None and state.model_slugs == (sidecar.slug,):
             url = f"{swap_root(state.endpoint)}/props"
         live = probe(url, timeout) if url else None
-        if live is not None and live < sidecar.context_window:
+        effective = None if live is None else max(1, live - CONTEXT_HEADROOM_TOKENS)
+        if effective is not None and effective < sidecar.context_window:
             print(
                 f"note: {sidecar.slug} serves {live} tokens of context "
-                f"(profile requests {sidecar.context_window}); Pi will use {live}",
+                f"(profile requests {sidecar.context_window}); Pi will use {effective} "
+                f"({CONTEXT_HEADROOM_TOKENS} held back so requests stay under n_ctx)",
                 file=sys.stderr,
             )
-            sidecar = replace(sidecar, context_window=live)
+            sidecar = replace(sidecar, context_window=effective)
         adjusted.append(sidecar)
     return tuple(adjusted)
 
@@ -727,7 +735,6 @@ def render_sandbox_policy(plan: BootstrapPlan, dest: Path, broker_port: int | No
         "    endpoints:\n"
         "      - {host: registry.npmjs.org, ports: [443]}\n"
         f"      - {{host: {gateway}, port: {port}, allowed_ips: [\"{gateway}/32\"]}}\n"
-        f"      - {{host: {gateway}, port: {port}, allowed_ips: [\"{gateway}/32\"]}}\n"
     )
     if broker_port is not None:
         # The host taxdesk-docs broker: same gateway address, its own port, node only
@@ -749,25 +756,26 @@ def sandbox_agent_dir(
 ) -> Path:
     """Copy the configured agent dir, pointing providers at the sandbox gateway.
 
+    Repo-absolute paths in the copied config (the pinned packages and extensions under
+    support/pi) are remapped into the VM's layout: the workspace upload plus the
+    support/pi upload put ROOT at /sandbox, so support/pi resolves at /sandbox/support/pi.
     With a taxdesk broker, also writes the shim's config (broker URL and per-launch token)."""
-    import shutil as _shutil
-
     port = urlparse(plan.endpoint).port or 8081
     source, dest = args.agent_dir, ROOT / ".runtime" / "pi" / "agent-sandbox"
     if dest.exists():
-        _shutil.rmtree(dest)
-    _shutil.copytree(source, dest)
+        shutil.rmtree(dest)
+    shutil.copytree(source, dest)
+    gateway = sandbox_gateway()
     for file in dest.rglob("*"):
         if file.is_file() and file.suffix in {".json", ".jsonc", ".toml", ".yaml"}:
             text = file.read_text(encoding="utf-8")
-            if f"http://127.0.0.1:{port}" in text:
-                file.write_text(
-                    text.replace(f"http://127.0.0.1:{port}", f"http://{sandbox_gateway()}:{port}"),
-                    encoding="utf-8",
-                )
+            updated = text.replace(f"http://127.0.0.1:{port}", f"http://{gateway}:{port}")
+            updated = updated.replace(f"{ROOT}/", "/sandbox/")
+            if updated != text:
+                file.write_text(updated, encoding="utf-8")
     if broker is not None:
         taxdesk_broker.write_shim_config(
-            dest / TAXDESK_SHIM_CONFIG, f"http://{sandbox_gateway()}:{broker.port}", broker.broker.token
+            dest / TAXDESK_SHIM_CONFIG, f"http://{gateway}:{broker.port}", broker.broker.token
         )
     return dest
 
@@ -869,11 +877,6 @@ def ensure_sandbox(
 
     workspace = Path.cwd()
     print("sandbox: syncing workspace, Pi install, and agent config ...", flush=True)
-    pi_provisioned = run_openshell(
-        "sandbox", "exec", "-n", SANDBOX_NAME, "--",
-        "bash", "-c", "[ -x /sandbox/support/pi/node_modules/.bin/pi ]", check=False,
-        timeout=SANDBOX_TIMEOUT_PROBE,
-    ).returncode == 0
     # Upload nests <source basename> under <dest>: support/pi lands at
     # /sandbox/support/pi, the workspace at /sandbox/<launch-dir-name>.
     uploads = [
