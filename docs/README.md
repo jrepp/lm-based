@@ -41,6 +41,9 @@ Reference documentation for the lm-based local LLM stack.
 | [research/reports/](research/reports/) | Model-selection research: most capable model for a 128 GB Mac, best small PDF parser |
 | [research/notes/](research/notes/) | Sources and benchmark notes behind those reports |
 
+See also [Ouro research](ouro-research.md) and the
+[experimental FlashLoop MLX implementation](flashloop-mlx.md).
+
 ## llama-server
 
 | Document | Contents |
