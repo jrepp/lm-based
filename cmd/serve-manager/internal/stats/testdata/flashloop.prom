@@ -1,0 +1,6 @@
+# Captured from the MLX service smoke test on 2026-10-20.
+llamacpp:prompt_tokens_total 90.0
+llamacpp:tokens_predicted_total 11.0
+llamacpp:prompt_seconds_total 1.8045820817351341
+llamacpp:tokens_predicted_seconds_total 1.5721069583669305
+llamacpp:requests_processing 0.0

@@ -132,3 +132,72 @@ route-doctor:
 # Show credential status
 route-providers:
     @./route-config.py --providers
+
+# Validate durable model research docs and investigation records.
+research-docs-check:
+    @pre-commit run --files docs/README.md docs/ouro-research.md docs/flashloop-mlx.md docs-cms/memos/memo-002-flashloop-ouro-investigation.md
+    @uv run --no-project --python 3.11 --with docuchango==1.17.1 docuchango validate
+
+# Small Metal correctness tests only; no model downloads or service changes.
+flashloop-mlx-test:
+    @uv run --no-project --python 3.11 --with mlx==0.32.4 --with numpy==2.4.4 python -m unittest discover -s experimental/flashloop_mlx/tests -v
+
+# Compare against a locally reviewed checkout at the pinned upstream revision.
+flashloop-mlx-parity checkout:
+    @uv run --no-project --python 3.11 --with mlx==0.32.4 --with numpy==2.4.4 --with torch==2.8.0 python -m experimental.flashloop_mlx.verify_upstream "{{checkout}}"
+
+# Report actual stored-array and MLX allocator bytes for a tiny synthetic cache.
+flashloop-mlx-smoke:
+    @uv run --no-project --python 3.11 --with mlx==0.32.4 python -m experimental.flashloop_mlx.smoke
+
+# Tiny random model; validates four-loop logits without loading checkpoint weights.
+flashloop-mlx-engine-parity model checkout device="metal" *flags:
+    @uv run --no-project --python 3.11 --with mlx==0.32.4 --with numpy==2.4.4 --with torch==2.8.0 --with transformers==4.54.1 python -m experimental.flashloop_mlx.verify_engine "{{model}}" "{{checkout}}" --device "{{device}}" {{flags}}
+
+# Requires memory/headroom review first. Loads local weights; no swap reload.
+flashloop-mlx-thinking model output mode="flash" *flags:
+    @uv run --no-project --python 3.11 --with mlx==0.32.4 --with transformers==4.54.1 --with jinja2==3.1.6 python -m experimental.flashloop_mlx.generate "{{model}}" --output "{{output}}" --mode "{{mode}}" {{flags}}
+
+# Independently recheck saved runtime receipts without MLX or model loading.
+flashloop-mlx-audit receipt:
+    @uv run --no-project --python 3.11 python -m experimental.flashloop_mlx.audit_run "{{receipt}}"
+
+# Export an annotated runtime trajectory figure from a saved generation receipt.
+flashloop-mlx-plot receipt output:
+    @uv run --no-project --python 3.11 --with matplotlib==3.10.7 python -m experimental.flashloop_mlx.plot_run "{{receipt}}" "{{output}}"
+
+# Serve the experimental MLX backend on loopback; weights load on first request.
+flashloop-mlx-serve model port="19095":
+    @uv run --no-project --python 3.11 --with mlx==0.32.4 --with transformers==4.54.1 --with jinja2==3.1.6 --with fastapi==0.115.12 --with uvicorn==0.34.2 --with prometheus-client==0.21.1 python -m experimental.flashloop_mlx.service "{{model}}" --port "{{port}}"
+
+# HTTP/metrics lifecycle tests with a fake runtime, without loading model weights.
+flashloop-mlx-service-test:
+    @uv run --no-project --python 3.11 --with fastapi==0.115.12 --with prometheus-client==0.21.1 --with httpx==0.28.1 python -m unittest discover -s experimental/flashloop_mlx/service_tests -v
+
+# Fixed-prompt repeated decode benchmark; retains token IDs and actual loop receipts.
+flashloop-mlx-benchmark model output:
+    @uv run --no-project --python 3.11 --with mlx==0.32.4 --with transformers==4.54.1 --with jinja2==3.1.6 python -m experimental.flashloop_mlx.benchmark "{{model}}" "{{output}}"
+
+# Explicit real-model smoke checks; target a fresh, otherwise idle experimental service.
+flashloop-mlx-service-smoke output url="http://127.0.0.1:19095":
+    @uv run --no-project --python 3.11 python -m experimental.flashloop_mlx.service_smoke --url "{{url}}" --output "{{output}}"
+
+# Verify captured FlashLoop service metrics through the dashboard's actual poller.
+flashloop-mlx-dashboard-test:
+    @env -u GOROOT go test ./cmd/serve-manager/internal/stats -run TestFlashLoopCapturedMetrics -v
+
+# Interleave dense-history and selected Metal reads; require exact trajectories.
+flashloop-mlx-selected-benchmark model output prompt_repeats="1" steps="64" repeats="2":
+    @uv run --no-project --python 3.11 --with mlx==0.32.4 --with transformers==4.54.1 --with jinja2==3.1.6 python -m experimental.flashloop_mlx.benchmark "{{model}}" "{{output}}" --compare-selected --prompt-repeats "{{prompt_repeats}}" --steps "{{steps}}" --repeats "{{repeats}}"
+
+# Isolate the selected-reader kernel; synthetic timings are not model throughput.
+flashloop-mlx-selected-microbench:
+    @uv run --no-project --python 3.11 --with mlx==0.32.4 python -m experimental.flashloop_mlx.benchmark_selected_kv
+
+# Real service checks with a prompt that exercises packed late-loop cache reads.
+flashloop-mlx-service-packed-smoke output url="http://127.0.0.1:19095":
+    @uv run --no-project --python 3.11 python -m experimental.flashloop_mlx.service_smoke --url "{{url}}" --output "{{output}}" --packed-prompt
+
+# Compare scheduling/fusion against selected-reader baseline, with trajectory checks.
+flashloop-mlx-execution-benchmark model output eval_every="8" steps="64" repeats="2" *flags:
+    @uv run --no-project --python 3.11 --with mlx==0.32.4 --with transformers==4.54.1 --with jinja2==3.1.6 python -m experimental.flashloop_mlx.benchmark "{{model}}" "{{output}}" --compare-execution --eval-every "{{eval_every}}" --steps "{{steps}}" --repeats "{{repeats}}" {{flags}}
