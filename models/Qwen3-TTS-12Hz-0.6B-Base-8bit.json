@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-11-17",
+  "artifact": {
+    "filename": "config.json",
+    "local_path": "Qwen3-TTS-12Hz-0.6B-Base-8bit/config.json",
+    "format": "mlx",
+    "quantization": "MLX 8-bit",
+    "size_bytes": null,
+    "sha256": null
+  },
+  "model": {
+    "slug": "qwen3-tts-0.6b-base-8bit",
+    "family": "Qwen3-TTS",
+    "name": "Qwen3-TTS-12Hz-0.6B-Base-8bit",
+    "canonical_model_card": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+    "kind": "speech",
+    "context_length": 32768
+  },
+  "source": {
+    "gguf_model_card": "https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-0.6B-Base-8bit",
+    "publisher": "mlx-community",
+    "provenance_status": "planned_download"
+  },
+  "download": {
+    "provider": "huggingface",
+    "repo_id": "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-8bit",
+    "snapshot": true,
+    "revision": null,
+    "local_dir": "Qwen3-TTS-12Hz-0.6B-Base-8bit"
+  },
+  "launcher": {
+    "script": "run-server.py",
+    "profile": "mlx-qwen3-tts",
+    "recommended_env": {
+      "MODEL_FILE": "Qwen3-TTS-12Hz-0.6B-Base-8bit/config.json",
+      "PROFILE": "mlx-qwen3-tts"
+    }
+  },
+  "notes": [
+    "Speech model, not chat. Served by mlx-audio 0.6.6 on Apple Silicon with a dedicated Python 3.13 environment.",
+    "Base supports reference WAV plus transcript voice cloning; CustomVoice supports named preset speakers.",
+    "See docs/qwen3-tts.md. Local synthesis and muted native playback smoke-tested 2026-11-17; checksums not yet verified."
+  ]
+}

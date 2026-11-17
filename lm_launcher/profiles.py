@@ -12,6 +12,8 @@ def infer_profile(model_name: str, requested: str) -> str:
         return requested
 
     lowered = model_name.lower()
+    if "qwen3-tts" in lowered:
+        return "mlx-qwen3-tts"
     if "glm-ocr" in lowered:
         return "glm-ocr"
     if "qwen3-coder-next" in lowered:
@@ -148,6 +150,9 @@ def profile_defaults(profile: str, model_name: str) -> dict[str, object]:
                 "ubatch_size": 256,
             }
         )
+
+    if profile == "mlx-qwen3-tts":
+        defaults.update({"ctx_size": 4096})
 
     if profile == "mlx-kev":
         # kev decision models (kev.serve): prefill-only, served through the

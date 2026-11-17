@@ -233,16 +233,24 @@ def build_registry() -> dict[str, Service | tuple[str, ...]]:
             },
             command="./support/sampler-proxy",
         ),
+        "voice-jobs": Service(
+            name="voice-jobs",
+            window="voice-jobs",
+            description="durable local task queue, progress, voice index, and retention",
+            command="exec env -u VIRTUAL_ENV uv run --frozen python -m lm_launcher.job_service",
+        ),
+        "jobs": ("voice-jobs",),
+        "voice": ("voice-jobs",),
         "swap": ("llama-swap",),
         "observability": ("stats-poll", "dashboard", "serve-manager-status"),
-        "all": ("llama-swap", "stats-poll", "dashboard", "serve-manager-status"),
+        "all": ("llama-swap", "stats-poll", "dashboard", "serve-manager-status", "voice-jobs"),
     }
     direct_slug = onboard.setting("MODEL_SLUG")
     if direct_slug:
         services["direct"] = (direct_slug,)
     for slug in model_slugs():
         members: list[str] = [f"model:{slug}"]
-        if is_mlx_model(slug):
+        if is_mlx_model(slug) and not is_speech_model(slug):
             members.append("sampler-proxy")
         services[slug] = tuple(members)
     return services
@@ -259,6 +267,17 @@ def model_slugs() -> list[str]:
         if isinstance(slug, str) and slug:
             slugs.append(slug)
     return slugs
+
+
+def is_speech_model(slug: str) -> bool:
+    for path in sorted((ROOT / "models").glob("*.json")):
+        try:
+            data = json.loads(path.read_text())
+        except json.JSONDecodeError:
+            continue
+        if data.get("model", {}).get("slug") == slug:
+            return data.get("launcher", {}).get("profile") == "mlx-qwen3-tts"
+    return False
 
 
 def is_mlx_model(slug: str) -> bool:
@@ -445,14 +464,18 @@ def service_command(service: Service) -> str:
 
 def service_set_description(name: str) -> str:
     return {
+        "jobs": "shared background task queue and progress service",
+        "voice": "voice tools through the shared task service",
         "direct": "direct worker for MODEL_SLUG (.env) on :8001",
         "observability": "stats poller, dashboard, and serve-manager status (needs Go)",
         "swap": "llama-swap hot-swap proxy (the default)",
-        "all": "llama-swap plus observability",
+        "all": "llama-swap plus observability and voice jobs",
     }.get(name, "")
 
 
 def model_target_description(slug: str) -> str:
+    if is_speech_model(slug):
+        return "direct Qwen3-TTS speech worker (MLX)"
     if is_mlx_model(slug):
         return "direct MLX worker plus sampler proxy"
     return "direct model worker on :8001"
@@ -510,6 +533,10 @@ def start_service(session: str, service: Service, restart: bool) -> str:
         f"bash -lc {shell_quote(command)}"
     )
     if state is not None:
+        if not state.dead:
+            # Replacing a pane alone can leave its service pipeline alive.
+            # Give managed services time to stop their owned workers first.
+            terminate_process_group(state.pid, timeout=10.0)
         run_tmux(["set-window-option", "-t", target, "remain-on-exit", "on"])
         run_tmux(["respawn-window", "-k", "-t", target, shim_command])
         return "restarted"

@@ -178,3 +178,14 @@ class LocalOverlayAndArtifactTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OuroConfigTests(unittest.TestCase):
+    def test_ouro_has_bounded_concurrency_and_idle_ttl(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            models=Path(directory)
+            _write_sidecar(models, "ouro-2.6b-thinking", "ouro.json", fmt="safetensors", profile="ouro")
+            model=build_config(models_dir=models, hot_slugs=None, require_artifacts=False).models["ouro-2.6b-thinking"]
+            self.assertEqual(model.concurrency_limit,1)
+            self.assertEqual(model.ttl,120)
+            self.assertEqual(model.check_endpoint,"/health")

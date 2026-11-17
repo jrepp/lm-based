@@ -133,6 +133,23 @@ route-doctor:
 route-providers:
     @./route-config.py --providers
 
+# Serve live llama-swap model status and per-worker performance
+serve-dashboard listen="127.0.0.1:9094":
+    @env -u GOROOT go run ./cmd/serve-manager dashboard --listen {{listen}}
+
+# Validate dashboard discovery and rolling metric histories
+serve-dashboard-test:
+    @node --test cmd/serve-manager/internal/dashboard/app.test.mjs
+    @env -u GOROOT go test -race ./cmd/serve-manager/internal/dashboard ./cmd/serve-manager/internal/stats
+
+# Stage a reviewable swap config without triggering live model reloads.
+swap-config-stage output="/tmp/lm-based-llama-swap-staged.yaml":
+    @uv run --script llama-swap-runner.py config --output {{output}}
+
+# Validate Ouro launch routing and llama-swap model configuration.
+swap-ouro-test:
+    @uv run --frozen python -m unittest tests.test_ouro_server tests.test_llama_swap_config
+
 # Validate durable model research docs and investigation records.
 research-docs-check:
     @pre-commit run --files docs/README.md docs/ouro-research.md docs/flashloop-mlx.md docs-cms/memos/memo-002-flashloop-ouro-investigation.md

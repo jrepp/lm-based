@@ -38,6 +38,9 @@ PI_EXTENSIONS = (
     PI_DIR / "extensions" / "llama-swap" / "index.ts",
     PI_DIR / "extensions" / "pdf-extract" / "index.ts",
     PI_DIR / "extensions" / "decide" / "index.ts",
+    PI_DIR / "extensions" / "speech" / "index.ts",
+    PI_DIR / "extensions" / "voice-workbench" / "index.ts",
+    PI_DIR / "extensions" / "jobs" / "index.ts",
     PI_DIR / "extensions" / "run-record" / "index.ts",
 )
 
@@ -47,7 +50,7 @@ DEFAULT_PROVIDER = "lm-based"
 # Sidecar model.kind. Only chat models belong in /model: decision models (kev.serve) answer
 # typed questions through decide_records, and OCR models take page images with fixed task
 # prompts through pdf_extract.
-KIND_LABELS = {"decision": "decision model", "ocr": "OCR model", "embedding": "embedding model"}
+KIND_LABELS = {"decision": "decision model", "ocr": "OCR model", "embedding": "embedding model", "speech": "speech model; use /speech-model"}
 
 # OpenShell sandboxed launch (pi-local --sandbox): a microVM with default-deny
 # egress whose only permitted destination is the host gateway address that

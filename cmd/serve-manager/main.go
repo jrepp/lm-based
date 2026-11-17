@@ -432,6 +432,7 @@ func runStatsPoll(paths runtimePaths, args []string) int {
 
 func runDashboard(paths runtimePaths, args []string) int {
 	fs := flag.NewFlagSet("dashboard", flag.ContinueOnError)
+	swapURL := fs.String("swap-url", "http://127.0.0.1:8081", "llama-swap discovery URL (empty disables fleet view)")
 	listen := fs.String("listen", "127.0.0.1:9092", "dashboard listen address")
 	statsPath := fs.String("stats", filepath.Join(paths.runtimeRoot, "stats", "llama-server.json"), "rolling stats JSON file")
 	if err := fs.Parse(args); err != nil {
@@ -439,6 +440,7 @@ func runDashboard(paths runtimePaths, args []string) int {
 	}
 	handler, err := managerdashboard.NewHandler(managerdashboard.Config{
 		StatsPath: *statsPath,
+		SwapURL:   *swapURL,
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)

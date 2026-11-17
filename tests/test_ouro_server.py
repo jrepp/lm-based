@@ -25,12 +25,16 @@ from unittest.mock import patch
 from lm_launcher import ouro_server as server
 with patch.object(server.os, "execv") as execute:
     root = server.ouro_repo_root()
+    server.os.environ.update(HOST="127.0.0.1", PORT="10101", OURO_PORT="8000")
     server.main()
+    assert server.os.environ["OURO_HOST"] == "127.0.0.1"
+    assert server.os.environ["OURO_PORT"] == "10101"
+    assert server.os.environ["OURO_MODEL_ID"] == str(root / "models/Ouro-2.6B-Thinking")
     binary, argv = execute.call_args.args
     assert binary == str(root / ".venv/bin/python")
     assert server.Path(binary).is_absolute()
     assert server.Path(argv[1]).is_file(), argv[1]
 '''], cwd=root, capture_output=True, text=True,
-                        env={**os.environ, "HOME": str(root), "PYTHONPATH": str(ROOT), "OURO_REPO_ROOT": override},
+                        env={**os.environ, "HOME": str(root), "PYTHONPATH": str(ROOT), "OURO_REPO_ROOT": override, "OURO_MODEL_ID": str(checkout / "models/Ouro-2.6B-Thinking")},
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)

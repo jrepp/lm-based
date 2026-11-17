@@ -160,7 +160,7 @@ def _docker_base(port: int) -> str:
 # Validation
 # ---------------------------------------------------------------------------
 
-MODEL_KINDS = ("chat", "decision", "ocr", "embedding")
+MODEL_KINDS = ("chat", "decision", "ocr", "embedding", "speech")
 
 
 @dataclass
