@@ -416,3 +416,10 @@ The direct path serves one model at a time and is the simplest way to drive a
 single local model from pi. To expose **multiple** models through one pi
 provider with model-name routing, use the llama-swap path described in
 [serving/hot-models.md](serving/hot-models.md).
+
+## Background tasks and progress
+
+Use `./up jobs --add` to start the shared durable task queue. Pi loads `job_start`,
+`job_status`, and `jobs` alongside the voice tools, and displays active progress in
+its footer. See [local task queue and Pi progress](job-service.md) for command
+submission, cancellation, monitoring, and resource limits.

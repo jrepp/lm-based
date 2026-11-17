@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"time"
 )
 
 //go:embed assets/*
@@ -12,6 +13,7 @@ var embeddedAssets embed.FS
 
 type Config struct {
 	StatsPath string
+	SwapURL   string
 }
 
 func NewHandler(config Config) (http.Handler, error) {
@@ -21,6 +23,9 @@ func NewHandler(config Config) (http.Handler, error) {
 	}
 
 	mux := http.NewServeMux()
+	if config.SwapURL != "" {
+		mux.Handle("/api/models", &fleet{url: config.SwapURL, client: &http.Client{Timeout: 2 * time.Second}, histories: make(map[string]*modelHistory)})
+	}
 	mux.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			w.Header().Set("Allow", http.MethodGet)

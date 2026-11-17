@@ -122,7 +122,7 @@ Several agents often work in this checkout at once, and the host runs real model
                just host-doctor             (sidecar context vs the GGUF header, if downloaded)
 ```
 
-`model.kind` (`chat`, `decision`, `ocr`, `embedding`) decides where the model appears: only
+`model.kind` (`chat`, `decision`, `ocr`, `embedding`, `speech`) decides where the model appears: only
 `chat` models are offered by Pi and OpenCode; llama-swap publishes the kind in `/v1/models`
 under `meta.llamaswap`. `model.context_length` is the native training window (GGUF
 `<arch>.context_length`, or `max_position_embeddings` in `config.json`). The launcher caps a

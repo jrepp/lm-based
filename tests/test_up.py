@@ -25,6 +25,22 @@ class UpResolverTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.up = load_up_module()
 
+    def test_speech_worker_has_no_chat_sampler_proxy(self) -> None:
+        registry = self.up.build_registry()
+        for slug in ("qwen3-tts-0.6b-base-8bit", "qwen3-tts-0.6b-customvoice-8bit"):
+            plan = self.up.resolve_target(slug, registry)
+            self.assertEqual([service.name for service in plan.services], [f"model:{slug}"])
+            self.assertIn("speech", self.up.model_target_description(slug))
+
+    def test_voice_jobs_is_a_managed_service_without_model_dependencies(self) -> None:
+        registry = self.up.build_registry()
+        plan = self.up.resolve_target("voice", registry)
+        self.assertEqual([s.name for s in plan.services], ["voice-jobs"])
+        self.assertIn("lm_launcher.job_service", plan.services[0].command)
+        jobs = self.up.resolve_target("jobs", registry)
+        self.assertEqual([s.name for s in jobs.services], ["voice-jobs"])
+        self.assertIn("voice-jobs", registry["all"])
+
     def test_dashboard_depends_on_stats_poll(self) -> None:
         registry = self.up.build_registry()
         plan = self.up.resolve_target("dashboard", registry)
@@ -144,6 +160,19 @@ class UpResolverTests(unittest.TestCase):
         self.assertEqual(run_tmux.call_count, 2)
         args = run_tmux.call_args_list[1].args[0]
         self.assertEqual(args[:4], ["respawn-window", "-k", "-t", "test-session:demo"])
+
+    def test_live_restart_terminates_managed_group_before_replacing_pane(self) -> None:
+        service = self.up.Service(name="demo", command="sleep 10", description="demo")
+        state = self.up.WindowState(name="demo", dead=False, pid=123)
+        calls = []
+        with (
+            mock.patch.object(self.up, "window_states", return_value={"demo": state}),
+            mock.patch.object(self.up, "terminate_process_group", side_effect=lambda *a, **k: calls.append((a, k))),
+            mock.patch.object(self.up, "run_tmux", side_effect=lambda args: calls.append(args)),
+        ):
+            self.assertEqual(self.up.start_service("test-session", service, restart=True), "restarted")
+        self.assertEqual(calls[0], ((123,), {"timeout": 10.0}))
+        self.assertEqual(calls[-1][:2], ["respawn-window", "-k"])
 
     def test_window_state_ignores_malformed_tmux_rows(self) -> None:
         completed = subprocess.CompletedProcess(

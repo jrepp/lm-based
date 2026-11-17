@@ -48,6 +48,8 @@ def _is_mlx_model() -> bool:
 
 
 def select_backend() -> str:
+    if PROFILE == "mlx-qwen3-tts" or "qwen3-tts" in (MODEL_SLUG or os.getenv("MODEL_FILE", "")).lower():
+        return "tts"
     if _is_ouro_model():
         return "ouro"
     if _is_mlx_model():
@@ -59,7 +61,9 @@ def select_backend() -> str:
 
 def main() -> None:
     backend = select_backend()
-    if backend == "ouro":
+    if backend == "tts":
+        from lm_launcher.tts_server import main as backend_main
+    elif backend == "ouro":
         from lm_launcher.ouro_server import main as backend_main
     elif backend == "mlx":
         from lm_launcher.mlx_server import main as backend_main

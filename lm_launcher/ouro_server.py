@@ -11,9 +11,7 @@ def fail(message: str) -> None:
 def ouro_repo_root() -> Path:
     # Machine-specific: where this host keeps its Ouro checkout.
     root = os.environ.get("OURO_REPO_ROOT")
-    if not root:
-        fail("OURO_REPO_ROOT is not set; export it as the path to your Ouro checkout")
-    return Path(root).expanduser().resolve()
+    return Path(root).expanduser().resolve() if root else Path(__file__).resolve().parents[2] / "ouro"
 
 
 def validate_runtime(root: Path) -> None:
@@ -31,9 +29,10 @@ def main() -> None:
     root = ouro_repo_root()
     validate_runtime(root)
 
-    model_id = os.getenv("OURO_MODEL_ID", "ByteDance/Ouro-2.6B-Thinking")
-    host = os.getenv("OURO_HOST", "0.0.0.0")
-    port = int(os.getenv("OURO_PORT", "8000"))
+    model_id = os.getenv("OURO_MODEL_ID", str(root / "models" / "Ouro-2.6B-Thinking"))
+    host = os.getenv("HOST", os.getenv("OURO_HOST", "127.0.0.1"))
+    port = int(os.getenv("PORT", os.getenv("OURO_PORT", "8000")))
+    os.environ.update(OURO_MODEL_ID=model_id, OURO_HOST=host, OURO_PORT=str(port))
 
     print_startup(model_id, host, port)
 

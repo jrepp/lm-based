@@ -17,6 +17,8 @@ type Sample struct {
 }
 
 type SlotSample struct {
+	ContextMissing         bool `json:"-"`
+	CacheMissing           bool `json:"-"`
 	ID                     int  `json:"id"`
 	NCtx                   int  `json:"n_ctx"`
 	Speculative            bool `json:"speculative"`
@@ -29,6 +31,26 @@ type SlotSample struct {
 		NDecoded int `json:"n_decoded"`
 	} `json:"next_token"`
 	Params SlotParams `json:"params"`
+}
+
+// Some llama-server versions omit prompt/cache counts while a slot is busy.
+// Preserve absence so dashboards do not turn unknown usage into zero usage.
+func (s *SlotSample) UnmarshalJSON(data []byte) error {
+	type plain SlotSample
+	var decoded plain
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	*s = SlotSample(decoded)
+	value, ok := fields["n_prompt_tokens"]
+	s.ContextMissing = !ok || string(value) == "null"
+	value, ok = fields["n_prompt_tokens_cache"]
+	s.CacheMissing = !ok || string(value) == "null"
+	return nil
 }
 
 type SlotParams struct {
@@ -52,6 +74,8 @@ type Snapshot struct {
 }
 
 type SlotStats struct {
+	ContextMissing         bool     `json:"context_missing,omitempty"`
+	CacheMissing           bool     `json:"cache_missing,omitempty"`
 	ID                     int      `json:"id"`
 	NCtx                   int      `json:"n_ctx"`
 	Speculative            bool     `json:"speculative"`
@@ -787,6 +811,8 @@ func summarizeSlots(slots []SlotSample) []SlotStats {
 	out := make([]SlotStats, 0, len(slots))
 	for _, slot := range slots {
 		stats := SlotStats{
+			ContextMissing:         slot.ContextMissing,
+			CacheMissing:           slot.CacheMissing,
 			ID:                     slot.ID,
 			NCtx:                   slot.NCtx,
 			Speculative:            slot.Speculative,

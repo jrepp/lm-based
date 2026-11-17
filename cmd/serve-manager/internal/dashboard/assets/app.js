@@ -61,7 +61,7 @@ function summaryLast(group, name) {
     : undefined;
 }
 
-function updateCards(snapshot) {
+function updateCards(snapshot, rolling, updateSummary = true) {
   const slot = primarySlot(snapshot);
   const history = snapshot.history || {};
   const historyRates = history.rates || {};
@@ -77,10 +77,18 @@ function updateCards(snapshot) {
     "llamacpp:prompt_tokens_seconds",
   );
 
-  els.decodeRate.textContent = number(decode, 1);
-  els.promptRate.textContent = number(prompt, 1);
-  els.contextUsed.textContent = number(slot.n_prompt_tokens);
-  els.cacheUsed.textContent = number(slot.n_prompt_tokens_cache);
+  if (updateSummary) {
+    els.decodeRate.textContent = number(snapshot.rates?.predicted_tokens_per_second, 1);
+    els.promptRate.textContent = number(snapshot.rates?.prompt_tokens_per_second, 1);
+    els.contextUsed.textContent = number(rolling ? (rolling.context_available ? rolling.context : undefined) : slot.context_missing ? undefined : slot.n_prompt_tokens);
+    els.cacheUsed.textContent = number(rolling ? (rolling.cache_available ? rolling.cache : undefined) : slot.cache_missing ? undefined : slot.n_prompt_tokens_cache);
+    for (const metric of ["decode", "prompt", "context", "cache"]) updateBoxPlot(metric, rolling?.distributions?.[metric]);
+    const observed = number(rolling?.observed_seconds, 0);
+    document.getElementById("decode-bottom").textContent = rolling?.distributions?.decode ? `${number(rolling.generated)} tokens generated / ${observed}s observed` : "Collecting samples…";
+    document.getElementById("prompt-bottom").textContent = rolling?.distributions?.prompt ? `${number(rolling.processed)} tokens processed / ${observed}s observed` : "Collecting samples…";
+    document.getElementById("context-bottom").textContent = slot.context_missing ? "Context count not reported by worker" : `${number(slot.n_prompt_tokens)} tokens in latest primary slot`;
+    document.getElementById("cache-bottom").textContent = slot.cache_missing ? "Cache count not reported by worker" : `${number(slot.n_prompt_tokens_cache)} cached tokens in latest primary slot`;
+  }
   els.modelSource.textContent = snapshot.source || "--";
   els.bucketSummary.textContent = snapshot.bucket_seconds
     ? `${number(history.bucket_count)} buckets, ${number((snapshot.trend || {}).point_count)} compact points`
@@ -99,6 +107,24 @@ function updateCards(snapshot) {
   els.observedAt.textContent = snapshot.observed_at
     ? new Date(snapshot.observed_at).toLocaleTimeString()
     : "--";
+}
+
+function updateBoxPlot(name, distribution) {
+  const plot = document.getElementById(`${name}-plot`);
+  plot.style.visibility = distribution?.count ? "visible" : "hidden";
+  document.getElementById(`${name}-min`).textContent = distribution ? `min ${number(distribution.min, 1)}` : "--";
+  document.getElementById(`${name}-max`).textContent = distribution ? `max ${number(distribution.max, 1)}` : "--";
+  document.getElementById(`${name}-summary`).textContent = distribution ? `Median ${number(distribution.median, 1)} · ${distribution.count} samples` : "Collecting samples…";
+  if (!distribution) return;
+  const {min, q1, median, q3, max} = distribution;
+  document.getElementById(`${name}-plot-title`).textContent = `Min ${number(min,1)} · Q1 ${number(q1,1)} · Median ${number(median,1)} · Q3 ${number(q3,1)} · Max ${number(max,1)}`;
+  const x = value => max > min ? 12 + 176 * (value - min) / (max - min) : 100;
+  plot.setAttribute("aria-label", `Minimum ${number(min,1)}, lower quartile ${number(q1,1)}, median ${number(median,1)}, upper quartile ${number(q3,1)}, maximum ${number(max,1)}. Each plot uses its own scale.`);
+  const attrs = (id, values) => { for (const [key, value] of Object.entries(values)) document.getElementById(`${name}-${id}`).setAttribute(key, value); };
+  attrs("whisker", {x1:x(min), x2:x(max)});
+  attrs("low", {x1:x(min), x2:x(min)}); attrs("high", {x1:x(max), x2:x(max)});
+  attrs("box", {x:x(q1), width:Math.max(1,x(q3)-x(q1))});
+  attrs("median", {x1:x(median), x2:x(median)});
 }
 
 function pushPoint(snapshot) {
@@ -250,24 +276,102 @@ function drawXAxis(pad, plotW, height) {
   }
 }
 
+let selectedModel = null;
+try { selectedModel = localStorage.getItem("dashboard-model"); } catch {}
+let fleetModels = [];
+const lastGood = new Map();
+const modelButtons = new Map();
+let lastCardsAt = 0;
+let renderedModel = null;
+let discoveryError = "";
+
+function selectModel(id) {
+  selectedModel = id;
+  try { localStorage.setItem("dashboard-model", id); } catch {}
+  renderSelected();
+  for (const [key, button] of modelButtons) button.setAttribute("aria-pressed", String(key === id));
+}
+function renderSelected() {
+  const model = fleetModels.find(m => m.id === selectedModel);
+  const previous = lastGood.get(selectedModel);
+  const snapshot = model?.snapshot || previous?.snapshot;
+  const rolling = model?.rolling || previous?.rolling;
+  const age = snapshot ? Math.max(0, Math.floor((Date.now() - Date.parse(snapshot.observed_at)) / 1000)) : 0;
+  const stale = !!discoveryError || !model || !!model.stale || !model.snapshot || age > 15;
+  document.getElementById("selected-model").textContent = selectedModel || "Choose a model";
+  document.getElementById("model-detail").hidden = !snapshot;
+  els.status.classList.toggle("is-live", !!snapshot && !stale);
+  els.statusText.textContent = snapshot ? (stale ? "Showing last known data" : "Live") : "Waiting for metrics";
+  const notice = document.getElementById("model-notice");
+  notice.classList.toggle("is-stale", stale);
+  notice.textContent = snapshot
+    ? stale ? `Last sample ${age}s ago · ${discoveryError || (model?.state === "unloaded" ? "model unloaded" : "poll delayed; retrying automatically")}. History retained.`
+      : snapshot.sample_count < 2 ? "Collecting samples for rolling rates…" : `Last sample ${age}s ago · ${Math.round(snapshot.window_seconds)}s rolling window`
+    : model?.state === "unloaded" ? "This model is not loaded. Selecting it does not load it."
+      : model?.metrics_error ? "This worker has no usable metrics yet. Retrying automatically."
+      : "Waiting for the first sample…";
+  notice.title = model?.metrics_error || discoveryError;
+  if (snapshot) {
+    const changed = renderedModel !== selectedModel;
+    const updateSummary = changed || Date.now() - lastCardsAt >= 5000;
+    if (changed) points.length = 0;
+    updateCards(snapshot, rolling, updateSummary);
+    if (updateSummary) lastCardsAt = Date.now();
+    if (changed || !points.length || points.at(-1)?.at.getTime() !== Date.parse(snapshot.observed_at)) pushPoint(snapshot);
+    drawTimeline();
+    renderedModel = selectedModel;
+  }
+}
+function renderModels() {
+  const list = document.getElementById("model-list");
+  const displayed = new Set(fleetModels.map(m => m.id));
+  for (const [id, button] of modelButtons) {
+    if (!displayed.has(id) && id !== selectedModel) { button.remove(); modelButtons.delete(id); }
+  }
+  for (const model of fleetModels) {
+    let button = modelButtons.get(model.id);
+    if (!button) {
+      button = document.createElement("button"); button.type = "button";
+      const name = document.createElement("span"); name.className = "model-name";
+      const state = document.createElement("span"); state.className = "model-state";
+      button.append(name, state);
+      button.onclick = () => selectModel(model.id);
+      modelButtons.set(model.id, button); list.append(button);
+    }
+    button.firstChild.textContent = model.id;
+    button.lastChild.textContent = model.state === "unloaded" ? "Unloaded" : model.stale ? "Loaded · sample delayed" : model.snapshot ? "Loaded · metrics available" : "Loaded · metrics unavailable";
+    button.setAttribute("aria-pressed", String(model.id === selectedModel));
+    button.title = model.metrics_error || model.id;
+  }
+}
 async function refresh() {
   try {
-    const response = await fetch("/api/stats", { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error(response.statusText);
+    const response = await fetch("/api/models", { cache: "no-store" });
+    if (response.status === 404) {
+      const legacy = await fetch("/api/stats", {cache:"no-store"});
+      if (!legacy.ok) throw new Error("Stats unavailable");
+      const snapshot = await legacy.json();
+      document.getElementById("model-detail").hidden = false;
+      document.getElementById("fleet-status").textContent = "Single-server mode";
+      updateCards(snapshot); pushPoint(snapshot); drawTimeline();
+      els.statusText.textContent = "single server";
+      return;
     }
-    const snapshot = await response.json();
-    els.status.classList.add("is-live");
-    els.statusText.textContent = "live";
-    updateCards(snapshot);
-    pushPoint(snapshot);
-    drawTimeline();
+    if (!response.ok) throw new Error("Model discovery unavailable");
+    const data = await response.json();
+    fleetModels = data.models || [];
+    discoveryError = "";
+    for (const model of fleetModels) if (model.snapshot) lastGood.set(model.id, model);
+    // A temporarily missing model must never change the user's selection.
+    if (!selectedModel) selectedModel = fleetModels.find(m => m.snapshot)?.id || fleetModels[0]?.id;
+    document.getElementById("fleet-status").textContent = `${fleetModels.filter(m => m.state !== "unloaded").length} loaded / ${fleetModels.length} configured`;
+    renderModels(); renderSelected();
   } catch (error) {
-    els.status.classList.remove("is-live");
-    els.statusText.textContent = "offline";
-  }
+    discoveryError = error.message;
+    document.getElementById("fleet-status").textContent = "Discovery delayed · retrying";
+    renderSelected();
+  } finally { window.setTimeout(refresh, 1000); }
 }
 
 window.addEventListener("resize", drawTimeline);
 void refresh();
-window.setInterval(refresh, 1000);

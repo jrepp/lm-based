@@ -259,3 +259,42 @@ canvas {
     grid-template-columns: 1fr;
   }
 }
+
+#model-list { display: grid; gap: 8px; margin-top: 16px; }
+#model-list button { text-align: left; color: inherit; background: transparent; border: 1px solid #526358; border-radius: 8px; padding: 12px; cursor: pointer; font: inherit; }
+#model-list button[aria-pressed="true"] { border-color: #8ee6af; background: #203b2b; }
+[hidden] { display: none !important; }
+
+.dashboard-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 20px; align-items: start; }
+.model-panel { padding: 14px; }
+#fleet-status { color: var(--muted); font-size: 12px; margin-top: 6px; }
+.model-name { display: block; font-size: 13px; overflow-wrap: anywhere; }
+.model-state { display: block; font-size: 11px; margin-top: 5px; color: var(--muted); }
+#model-list button { padding: 10px; min-height: 58px; }
+button:focus-visible { outline: 2px solid var(--decode); outline-offset: 3px; }
+.selection-header { margin: 0 0 16px; min-height: 88px; }
+.selection-header h2 { font-size: 23px; overflow-wrap: anywhere; }
+.selection-header p { color: var(--muted); font-size: 12px; margin-top: 7px; }
+.selection-header #model-notice.is-stale { color: #e4b449; }
+.metric strong, .details-grid strong { font-variant-numeric: tabular-nums; }
+.metrics-strip { gap: 8px; }
+.metric { padding: 12px; }
+.metric strong { font-size: 26px; }
+.details-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.status { flex-shrink: 0; }
+@media (max-width: 900px) {
+ .dashboard-layout { grid-template-columns: minmax(0,1fr); }
+ #model-list { grid-template-columns: repeat(2,minmax(0,1fr)); max-height: 230px; overflow-y: auto; padding: 4px; }
+ .selection-header { min-height: 0; }
+ .metrics-strip { grid-template-columns: repeat(2,minmax(0,1fr)); }
+ .details-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+
+.box-plot { display: block; width: 100%; height: 40px; margin-top: 8px; overflow: visible; }
+.box-plot line { stroke: var(--decode); stroke-width: 1.5; }
+.box-plot rect { fill: #294b45; stroke: var(--decode); stroke-width: 1.5; }
+.box-plot line[id$="median"] { stroke: var(--text); stroke-width: 2; }
+.box-range { display: flex; justify-content: space-between; width: 100%; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.box-summary { color: var(--muted); font-size: 11px; margin-top: 8px; }
+.metric-bottom { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 8px; width: 100%; min-height: 38px; font-size: 11px; line-height: 1.45; }
+.metric { justify-content: flex-start; }

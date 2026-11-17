@@ -42,7 +42,7 @@ func TestFlashLoopCapturedMetrics(t *testing.T) {
 		t.Fatalf("slots = %v", sample.Slots)
 	}
 	slot := sample.Slots[0]
-	if slot.IsProcessing || slot.NCtx != 3072 {
+	if slot.IsProcessing || slot.ContextMissing || slot.CacheMissing || slot.NCtx != 3072 {
 		t.Fatalf("incorrect idle MLX slot: %+v", slot)
 	}
 	snapshot := BuildSnapshot(server.URL, time.Second, []Sample{sample})

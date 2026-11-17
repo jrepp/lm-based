@@ -133,6 +133,8 @@ def _sidecar_to_model_config(sidecar_path: Path) -> ModelConfig | None:
         cmd=cmd,
         name=name,
         check_endpoint=check_endpoint,
+        ttl=120 if profile == "ouro" else 0,
+        concurrency_limit=1 if profile == "ouro" else 0,
         send_loading_state=True,
         metadata=metadata,
     )

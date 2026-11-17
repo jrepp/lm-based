@@ -19,33 +19,82 @@
         </div>
       </header>
 
+      <div class="dashboard-layout">
+      <section class="timeline-panel model-panel" aria-label="llama-swap models"><h2>Local models</h2><p id="fleet-status">Discovering workers…</p><div id="model-list"></div></section>
+      <div class="performance-panel">
+      <header class="selection-header"><h2 id="selected-model">Choose a model</h2><p>30-second rolling summaries · updates every 5 seconds. Boxes: middle 50%; line: median; whiskers: min/max. Each plot uses its own scale.</p><p id="model-notice" role="status"></p></header>
+      <div id="model-detail" hidden>
       <section class="metrics-strip" aria-label="current model performance">
         <article class="metric">
-          <span class="metric-label">Decode</span>
+          <span class="metric-label">Mean generation rate</span>
           <strong id="decode-rate">--</strong>
           <span class="metric-unit">tok/s</span>
+        <svg class="box-plot" id="decode-plot" viewBox="0 0 200 40" role="img" aria-label="Waiting for distribution samples">
+            <title id="decode-plot-title">Collecting samples</title>
+            <line id="decode-whisker" x1="12" x2="188" y1="20" y2="20" />
+            <line id="decode-low" x1="12" x2="12" y1="13" y2="27" />
+            <line id="decode-high" x1="188" x2="188" y1="13" y2="27" />
+            <rect id="decode-box" x="12" y="9" width="0" height="22" />
+            <line id="decode-median" x1="100" x2="100" y1="7" y2="33" />
+          </svg>
+          <div class="box-range"><span id="decode-min">--</span><span id="decode-max">--</span></div>
+          <p class="box-summary" id="decode-summary">Collecting samples…</p>
+          <p class="metric-bottom" id="decode-bottom">--</p>
         </article>
         <article class="metric">
-          <span class="metric-label">Prompt</span>
+          <span class="metric-label">Mean prompt rate</span>
           <strong id="prompt-rate">--</strong>
           <span class="metric-unit">tok/s</span>
+        <svg class="box-plot" id="prompt-plot" viewBox="0 0 200 40" role="img" aria-label="Waiting for distribution samples">
+            <title id="prompt-plot-title">Collecting samples</title>
+            <line id="prompt-whisker" x1="12" x2="188" y1="20" y2="20" />
+            <line id="prompt-low" x1="12" x2="12" y1="13" y2="27" />
+            <line id="prompt-high" x1="188" x2="188" y1="13" y2="27" />
+            <rect id="prompt-box" x="12" y="9" width="0" height="22" />
+            <line id="prompt-median" x1="100" x2="100" y1="7" y2="33" />
+          </svg>
+          <div class="box-range"><span id="prompt-min">--</span><span id="prompt-max">--</span></div>
+          <p class="box-summary" id="prompt-summary">Collecting samples…</p>
+          <p class="metric-bottom" id="prompt-bottom">--</p>
         </article>
         <article class="metric">
-          <span class="metric-label">Context</span>
+          <span class="metric-label">Mean context</span>
           <strong id="context-used">--</strong>
           <span class="metric-unit">tokens</span>
+        <svg class="box-plot" id="context-plot" viewBox="0 0 200 40" role="img" aria-label="Waiting for distribution samples">
+            <title id="context-plot-title">Collecting samples</title>
+            <line id="context-whisker" x1="12" x2="188" y1="20" y2="20" />
+            <line id="context-low" x1="12" x2="12" y1="13" y2="27" />
+            <line id="context-high" x1="188" x2="188" y1="13" y2="27" />
+            <rect id="context-box" x="12" y="9" width="0" height="22" />
+            <line id="context-median" x1="100" x2="100" y1="7" y2="33" />
+          </svg>
+          <div class="box-range"><span id="context-min">--</span><span id="context-max">--</span></div>
+          <p class="box-summary" id="context-summary">Collecting samples…</p>
+          <p class="metric-bottom" id="context-bottom">--</p>
         </article>
         <article class="metric">
-          <span class="metric-label">Cache</span>
+          <span class="metric-label">Mean cached tokens</span>
           <strong id="cache-used">--</strong>
           <span class="metric-unit">tokens</span>
+        <svg class="box-plot" id="cache-plot" viewBox="0 0 200 40" role="img" aria-label="Waiting for distribution samples">
+            <title id="cache-plot-title">Collecting samples</title>
+            <line id="cache-whisker" x1="12" x2="188" y1="20" y2="20" />
+            <line id="cache-low" x1="12" x2="12" y1="13" y2="27" />
+            <line id="cache-high" x1="188" x2="188" y1="13" y2="27" />
+            <rect id="cache-box" x="12" y="9" width="0" height="22" />
+            <line id="cache-median" x1="100" x2="100" y1="7" y2="33" />
+          </svg>
+          <div class="box-range"><span id="cache-min">--</span><span id="cache-max">--</span></div>
+          <p class="box-summary" id="cache-summary">Collecting samples…</p>
+          <p class="metric-bottom" id="cache-bottom">--</p>
         </article>
       </section>
 
       <section class="timeline-panel">
         <div class="timeline-header">
           <div>
-            <h2>Timeline</h2>
+            <h2>Throughput over time</h2>
             <p id="model-source">--</p>
             <p id="bucket-summary">--</p>
           </div>
@@ -83,6 +132,9 @@
           <strong id="observed-at">--</strong>
         </article>
       </section>
+      </div>
+      </div>
+      </div>
     </main>
 
     <script src="/app.js" defer></script>
